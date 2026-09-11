@@ -1,0 +1,10 @@
+#!/usr/bin/env node
+import { main } from '../src/cli.mjs';
+import { redactSecret } from '../src/server.mjs';
+
+main().then((exitCode) => {
+  if (exitCode) process.exitCode = exitCode;
+}).catch((error) => {
+  process.stderr.write(`${redactSecret(error.message)}\n`);
+  process.exitCode = 1;
+});

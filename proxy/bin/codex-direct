@@ -1,0 +1,3 @@
+#!/bin/sh
+exec codex -c 'chatgpt_base_url="https://chatgpt.com/backend-api/"' \
+  -c 'openai_base_url="https://chatgpt.com/backend-api/codex"' "$@"

@@ -1,0 +1,4 @@
+module CMCore {
+    header "cmcore.h"
+    export *
+}

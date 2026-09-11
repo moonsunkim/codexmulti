@@ -1,0 +1,5 @@
+.build/
+dist/
+zig/zig-out/
+zig/.zig-cache/
+mockup/codex-multi-glass.html

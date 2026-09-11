@@ -1,0 +1,18 @@
+zig-out/
+.zig-cache/
+.local-signing/
+dist/CodexMulti.app.backup.*
+.zig-global-cache/
+.DS_Store
+dist/
+# historical AI-lane prompts/results with absolute paths and personal data; kept locally, not versioned
+work/
+
+# defensive credential and signing-artifact patterns
+.env
+.env.*
+!.env.example
+*.p12
+*.pem
+*.key
+/auth.json

@@ -1,0 +1,34 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+  <title>CodexMulti Relay Gate</title>
+  <defs>
+    <linearGradient id="field" x1="512" y1="0" x2="512" y2="1024" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#171A2B"/>
+      <stop offset="0.52" stop-color="#242A45"/>
+      <stop offset="1" stop-color="#282E4C"/>
+    </linearGradient>
+    <radialGradient id="lift" cx="0" cy="0" r="1" gradientTransform="translate(512 474) rotate(90) scale(410)" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#405078" stop-opacity="0.32"/>
+      <stop offset="1" stop-color="#405078" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="leftRail" x1="352" y1="392" x2="512" y2="650" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#A88BFF"/>
+      <stop offset="1" stop-color="#84E6D2"/>
+    </linearGradient>
+    <linearGradient id="rightRail" x1="672" y1="392" x2="512" y2="650" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#6EB8FF"/>
+      <stop offset="1" stop-color="#84E6D2"/>
+    </linearGradient>
+    <filter id="depth" x="174" y="178" width="676" height="688" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
+      <feDropShadow dx="0" dy="12" stdDeviation="12" flood-color="#080A13" flood-opacity="0.42"/>
+    </filter>
+  </defs>
+  <rect width="1024" height="1024" fill="url(#field)"/>
+  <rect width="1024" height="1024" fill="url(#lift)"/>
+  <g fill="none" stroke-width="46" stroke-linecap="round" stroke-linejoin="round" filter="url(#depth)">
+    <rect x="224" y="224" width="256" height="256" rx="72" stroke="#A88BFF"/>
+    <rect x="544" y="224" width="256" height="256" rx="72" stroke="#6EB8FF"/>
+    <rect x="384" y="608" width="256" height="256" rx="72" stroke="#F4F7FF"/>
+    <path d="M352 480v26c0 66 37 126 95 157l65 35" stroke="url(#leftRail)"/>
+    <path d="M672 480v26c0 66-37 126-95 157l-65 35" stroke="url(#rightRail)"/>
+  </g>
+</svg>

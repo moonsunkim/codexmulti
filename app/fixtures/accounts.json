@@ -1,0 +1,30 @@
+{
+  "refreshed_at": "Sep 07 10:35",
+  "refreshed_ago": "12m ago",
+  "active": "dev",
+  "cooling": 5,
+  "groups": [
+    {"provider": "codex", "title": "Codex", "exhausted": 5, "accounts": [
+      {"id": "c1", "local": "agent", "domain": "example.com", "plan": "Pro", "status": "Cooldown 5d 8h",  "window": "Weekly", "used": 100, "reset": "resets in 5d 8h",  "reset_at": "Sep 12 19:17", "credits": 1, "active": false, "failover": "Cooldown until Sep 12 19:17"},
+      {"id": "c2", "local": "ai2",   "domain": "example.com", "plan": "Pro", "status": "Cooldown 5d 4h",  "window": "Weekly", "used": 100, "reset": "resets in 5d 4h",  "reset_at": "Sep 12 15:12", "credits": 0, "active": false, "failover": "Cooldown until Sep 12 15:12"},
+      {"id": "c3", "local": "ai3",   "domain": "example.com", "plan": "Pro", "status": "Cooldown 4d 2h",  "window": "Weekly", "used": 100, "reset": "resets in 4d 2h",  "reset_at": "Sep 11 12:50", "credits": 1, "active": false, "failover": "Cooldown until Sep 11 12:50"},
+      {"id": "c4", "local": "ai4",   "domain": "example.org", "plan": "Pro", "status": "Cooldown 3d 22h", "window": "Weekly", "used": 100, "reset": "resets in 3d 22h", "reset_at": "Sep 11 08:41", "credits": 0, "active": false, "failover": "Cooldown until Sep 11 08:41"},
+      {"id": "c5", "local": "ai5",   "domain": "example.com", "plan": "Pro", "status": "Cooldown 2d 19h", "window": "Weekly", "used": 100, "reset": "resets in 2d 19h", "reset_at": "Sep 10 05:30", "credits": 0, "active": false, "failover": "Cooldown until Sep 10 05:30"},
+      {"id": "c6", "local": "ai6",   "domain": "example.com", "plan": "Pro", "status": "Ready",           "window": "Weekly", "used": 30,  "reset": "resets in 6d 20h", "reset_at": "Sep 14 07:05", "credits": 2, "active": false, "failover": "Ready"},
+      {"id": "c7", "local": "dev",   "domain": "example.com", "plan": "Pro", "status": "Active",          "window": "Weekly", "used": 48,  "reset": "resets in 6d 12h", "reset_at": "Sep 13 22:40", "credits": 1, "active": true,  "failover": "Active"}
+    ]},
+    {"provider": "claude", "title": "Claude", "exhausted": 0, "accounts": []}
+  ],
+  "failover": {
+    "summary": "127.0.0.1:8787 · CLI path set · synced",
+    "rows": [
+      {"n": 1, "local": "agent", "domain": "example.com", "state": "Cooldown", "detail": "until Sep 12 19:17 · 5d 8h",  "in_flight": 0},
+      {"n": 2, "local": "ai2",   "domain": "example.com", "state": "Cooldown", "detail": "until Sep 12 15:12 · 5d 4h",  "in_flight": 0},
+      {"n": 3, "local": "ai3",   "domain": "example.com", "state": "Cooldown", "detail": "until Sep 11 12:50 · 4d 2h",  "in_flight": 0},
+      {"n": 4, "local": "ai4",   "domain": "example.org", "state": "Cooldown", "detail": "until Sep 11 08:41 · 3d 22h", "in_flight": 0},
+      {"n": 5, "local": "ai5",   "domain": "example.com", "state": "Cooldown", "detail": "until Sep 10 05:30 · 2d 19h", "in_flight": 0},
+      {"n": 6, "local": "ai6",   "domain": "example.com", "state": "Ready",    "detail": "token ok · expires 8d",       "in_flight": 0},
+      {"n": 7, "local": "dev",   "domain": "example.com", "state": "Active",   "detail": "token ok · expires 7d",       "in_flight": 16}
+    ]
+  }
+}

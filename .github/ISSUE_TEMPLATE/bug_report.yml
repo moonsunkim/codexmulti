@@ -1,0 +1,81 @@
+name: Bug report
+description: Report a reproducible problem in CodexMulti
+title: "[Bug]: "
+labels:
+  - bug
+body:
+  - type: markdown
+    attributes:
+      value: Thank you for taking the time to report a bug. Search existing issues before submitting a new one.
+  - type: input
+    id: summary
+    attributes:
+      label: Summary
+      description: Briefly describe the problem.
+    validations:
+      required: true
+  - type: input
+    id: macos-version
+    attributes:
+      label: macOS version
+      placeholder: 26.0
+    validations:
+      required: true
+  - type: input
+    id: app-version
+    attributes:
+      label: CodexMulti version and build
+      description: Copy both values from Settings → About.
+    validations:
+      required: true
+  - type: input
+    id: codex-version
+    attributes:
+      label: Codex CLI version
+      description: Run `codex --version` and paste the output.
+    validations:
+      required: true
+  - type: input
+    id: proxy-status
+    attributes:
+      label: Proxy service status
+      description: Copy the status shown in Settings → Proxy.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: List the smallest reliable sequence that reproduces the problem.
+      placeholder: |
+        1. Open…
+        2. Choose…
+        3. Observe…
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs and supporting material
+      description: >-
+        Attach only the relevant excerpt or file. Logs in `~/Library/Logs/CodexMulti/` are redacted to remove tokens and paths, but never attach your complete `auth.json` or `config.toml`.
+      placeholder: Drag relevant log files or screenshots here.
+  - type: checkboxes
+    id: sensitive-data
+    attributes:
+      label: Sensitive data check
+      options:
+        - label: I removed credentials and will not attach a complete `auth.json` or `config.toml`.
+          required: true

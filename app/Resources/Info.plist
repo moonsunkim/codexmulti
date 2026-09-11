@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>CFBundleIdentifier</key>
+    <string>dev.codexmulti.app</string>
+    <key>CFBundleName</key>
+    <string>CodexMulti</string>
+    <key>CFBundleDisplayName</key>
+    <string>CodexMulti</string>
+    <key>CFBundleExecutable</key>
+    <string>CodexMulti</string>
+    <key>CFBundlePackageType</key>
+    <string>APPL</string>
+    <key>CFBundleShortVersionString</key>
+    <string>0.2.0</string>
+    <key>CFBundleVersion</key>
+    <string>BUILD_NUMBER</string>
+    <key>CFBundleIconFile</key>
+    <string>AppIcon.icns</string>
+    <key>LSMinimumSystemVersion</key>
+    <string>26.0</string>
+    <key>LSUIElement</key>
+    <true/>
+    <key>NSHighResolutionCapable</key>
+    <true/>
+    <key>NSHumanReadableCopyright</key>
+    <string>Saved Claude and Codex usage plus explicit, locally verified coding CLI account selection.</string>
+    <key>CodexMultiShellCommit</key>
+    <string>SHELL_COMMIT</string>
+    <key>CodexMultiCoreCommit</key>
+    <string>CORE_COMMIT</string>
+    <key>CodexMultiProxyCommit</key>
+    <string>PROXY_COMMIT</string>
+    <key>CodexMultiNodeVersion</key>
+    <string>NODE_VERSION</string>
+    <key>CodexMultiBridgeSchema</key>
+    <integer>1</integer>
+</dict>
+</plist>

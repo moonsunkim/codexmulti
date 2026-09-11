@@ -1,0 +1,29 @@
+.DS_Store
+
+# Swift shell (app/)
+app/.build/
+app/dist/
+app/zig/
+app/zig/zig-out/
+app/zig/.zig-cache/
+app/mockup/codex-multi-glass.html
+app/.node/
+
+# Zig core (core/)
+core/zig-out/
+core/.zig-cache/
+core/.local-signing/
+core/.zig-global-cache/
+core/dist/
+core/work/
+core/**/.env
+core/**/.env.*
+!core/**/.env.example
+core/**/*.p12
+core/**/*.pem
+core/**/*.key
+core/auth.json
+
+# Node proxy (proxy/)
+proxy/node_modules/
+proxy/test/.tmp-*/

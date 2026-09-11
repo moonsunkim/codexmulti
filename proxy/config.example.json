@@ -1,0 +1,21 @@
+{
+  "listen_host": "127.0.0.1",
+  "port": 8787,
+  "mode": "failover",
+  "accounts": [
+    {"name": "codex-1", "label": "CodexMulti account 1", "auth_file": "~/Library/Application Support/CodexMulti/accounts/codex-00000000000000000000000000000001/codex/auth.json"},
+    {"name": "codex-2", "label": "CodexMulti account 2", "auth_file": "~/Library/Application Support/CodexMulti/accounts/codex-00000000000000000000000000000002/codex/auth.json"},
+    {"name": "codex-3", "label": "CodexMulti account 3", "auth_file": "~/Library/Application Support/CodexMulti/accounts/codex-00000000000000000000000000000003/codex/auth.json"},
+    {"name": "codex-4", "label": "CodexMulti account 4", "auth_file": "~/Library/Application Support/CodexMulti/accounts/codex-00000000000000000000000000000004/codex/auth.json"},
+    {"name": "codex-5", "label": "CodexMulti account 5", "auth_file": "~/Library/Application Support/CodexMulti/accounts/codex-00000000000000000000000000000005/codex/auth.json"},
+    {"name": "codex-6", "label": "CodexMulti account 6", "auth_file": "~/Library/Application Support/CodexMulti/accounts/codex-00000000000000000000000000000006/codex/auth.json"},
+    {"name": "codex-7", "label": "CodexMulti account 7", "auth_file": "~/Library/Application Support/CodexMulti/accounts/codex-00000000000000000000000000000007/codex/auth.json"}
+  ],
+  "upstream_chatgpt_base_url": "https://chatgpt.com/backend-api/",
+  "upstream_openai_base_url": "https://chatgpt.com/backend-api/codex",
+  "request_body_limit_bytes": 67108864,
+  "token_refresh_skew_seconds": 172800,
+  "default_cooldown_seconds": 1800,
+  "cooldown_safety_margin_seconds": 60,
+  "allow_insecure_upstream": false
+}
