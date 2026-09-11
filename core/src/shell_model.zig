@@ -306,6 +306,7 @@ pub const Model = struct {
     view: ui_model.ViewState = .{},
     service: ui_model.ServicePort = .{},
     now_unix_s: i64 = 0,
+    time_zone: ui_model.TimeZone = .system,
     settings_tab: ui_model.SettingsTab = .accounts,
     expanded: ?u32 = null,
     row_menu: ?u32 = null,
@@ -607,8 +608,8 @@ pub const Model = struct {
     }
 };
 
-pub fn initialModel() Model {
-    return .{};
+pub fn initialModel(time_zone: ui_model.TimeZone) Model {
+    return .{ .time_zone = time_zone };
 }
 
 pub fn reproject(model: *Model) void {
@@ -681,7 +682,7 @@ pub fn projectView(model: *Model) void {
         .proxy_row_menu = model.proxy_row_menu,
         .claude_tray_window = model.claude_tray_window,
     };
-    model.service.project(&model.view, model.now_unix_s, options);
+    model.service.project(&model.view, model.now_unix_s, model.time_zone, options);
     model.view.finish(options);
 }
 
@@ -781,7 +782,7 @@ pub fn update(model: *Model, intent: Intent, effects: *Effects) void {
                 return;
             };
             var buffer: [max_effect_text_bytes]u8 = undefined;
-            effects.clipboard(diagnosticsText(row, &buffer));
+            effects.clipboard(diagnosticsText(row, model.time_zone, &buffer));
             reproject(model);
         },
         .diagnostics_copied => |ok| {
@@ -1095,7 +1096,7 @@ pub fn switchTab(model: *Model, tab: ui_model.SettingsTab) void {
     reproject(model);
 }
 
-pub fn diagnosticsText(row: *const ui_model.AccountView, buffer: []u8) []const u8 {
+pub fn diagnosticsText(row: *const ui_model.AccountView, time_zone: ui_model.TimeZone, buffer: []u8) []const u8 {
     var scratch: [ui_model.max_line_bytes]u8 = undefined;
     var duration: [ui_model.max_line_bytes]u8 = undefined;
     var writer = std.Io.Writer.fixed(buffer);
@@ -1106,16 +1107,16 @@ pub fn diagnosticsText(row: *const ui_model.AccountView, buffer: []u8) []const u
     writer.print("plan: {s}\n", .{if (row.plan_label.len != 0) row.plan_label else "not reported"}) catch {};
     writer.print("auth: {s}\n", .{ui_model.authStateText(row.auth_state)}) catch {};
     writer.print("freshness: {s}\n", .{ui_model.freshnessText(row.freshness)}) catch {};
-    if (row.last_success_at_unix_s) |at| writer.print("last success: {s}\n", .{ui_model.formatKst(&scratch, at)}) catch {} else writer.print("last success: none\n", .{}) catch {};
-    if (row.last_attempt_at_unix_s) |at| writer.print("last attempt: {s}\n", .{ui_model.formatKst(&scratch, at)}) catch {} else writer.print("last attempt: none\n", .{}) catch {};
+    if (row.last_success_at_unix_s) |at| writer.print("last success: {s}\n", .{ui_model.formatLocal(&scratch, at, time_zone)}) catch {} else writer.print("last success: none\n", .{}) catch {};
+    if (row.last_attempt_at_unix_s) |at| writer.print("last attempt: {s}\n", .{ui_model.formatLocal(&scratch, at, time_zone)}) catch {} else writer.print("last attempt: none\n", .{}) catch {};
     writer.print("last code: {s}\n", .{if (row.last_attempt_code.len != 0) row.last_attempt_code else "none"}) catch {};
     writer.print("snapshot: {s}\n", .{ui_model.snapshotStatusText(row.snapshot_status)}) catch {};
-    if (row.snapshot_captured_at_unix_s) |at| writer.print("snapshot stored: {s}\n", .{ui_model.formatKst(&scratch, at)}) catch {};
+    if (row.snapshot_captured_at_unix_s) |at| writer.print("snapshot stored: {s}\n", .{ui_model.formatLocal(&scratch, at, time_zone)}) catch {};
     for (row.windows[0..row.window_count]) |window| {
         writer.print("window: {s}", .{window.label}) catch {};
         if (window.duration_minutes) |minutes| writer.print(" · {s}", .{ui_model.durationPhrase(&duration, minutes)}) catch {};
         writer.print(" · {d}%", .{window.used_percent}) catch {};
-        if (window.reset_at_unix_s) |at| writer.print(" · resets {s}\n", .{ui_model.formatKst(&scratch, at)}) catch {} else writer.print(" · reset not reported\n", .{}) catch {};
+        if (window.reset_at_unix_s) |at| writer.print(" · resets {s}\n", .{ui_model.formatLocal(&scratch, at, time_zone)}) catch {} else writer.print(" · reset not reported\n", .{}) catch {};
     }
     return writer.buffered();
 }

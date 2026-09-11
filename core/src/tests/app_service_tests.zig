@@ -697,7 +697,7 @@ test "P6 appearance preference survives an app-owned document round trip" {
     restarted.attach();
     _ = restarted.service.load(testing.io, temp.dir);
     var view: ui_model.ViewState = .{};
-    view.begin(now, restarted.service.capabilities());
+    view.begin(now, restarted.service.capabilities(), .kst);
     restarted.service.project(&view);
     view.finish(.{});
     try testing.expectEqual(ui_model.Appearance.dark, view.settings.appearance);
@@ -738,7 +738,7 @@ test "Codex display settings survive an app-owned document round trip and projec
     restarted.attach();
     _ = restarted.service.load(testing.io, temp.dir);
     var view: ui_model.ViewState = .{};
-    view.begin(now, restarted.service.capabilities());
+    view.begin(now, restarted.service.capabilities(), .kst);
     restarted.service.project(&view);
     view.finish(.{});
     try testing.expectEqual(ui_model.CodexUsageWindow.session, view.settings.codex_usage_window);
@@ -797,7 +797,7 @@ test "C9 launch-at-login preference and shell registration failure survive an ap
     restarted.attach();
     _ = restarted.service.load(testing.io, temp.dir);
     var view: ui_model.ViewState = .{};
-    view.begin(now, restarted.service.capabilities());
+    view.begin(now, restarted.service.capabilities(), .kst);
     restarted.service.project(&view);
     view.finish(.{});
     try testing.expect(view.settings.launch_at_login);
@@ -807,7 +807,7 @@ test "C9 launch-at-login preference and shell registration failure survive an ap
         ui_model.CommandOutcome.accepted_pending,
         restarted.service.submit(.{ .set_launch_at_login = false }),
     );
-    view.begin(now, restarted.service.capabilities());
+    view.begin(now, restarted.service.capabilities(), .kst);
     restarted.service.project(&view);
     view.finish(.{});
     try testing.expect(!view.settings.launch_at_login);
@@ -836,7 +836,7 @@ test "C9 auto-refresh setting accepts only the four policy values and projects h
     try testing.expectEqual(@as(u16, 15), saved.value.auto_refresh_minutes);
 
     var view: ui_model.ViewState = .{};
-    view.begin(now, harness.service.capabilities());
+    view.begin(now, harness.service.capabilities(), .kst);
     harness.service.project(&view);
     view.finish(.{});
     try testing.expectEqual(@as(u16, 15), view.settings.auto_refresh_minutes);
@@ -847,7 +847,7 @@ test "C9 auto-refresh setting accepts only the four policy values and projects h
         ui_model.CommandOutcome.rejected_not_allowed,
         harness.service.submit(.{ .set_auto_refresh = 17 }),
     );
-    view.begin(now, harness.service.capabilities());
+    view.begin(now, harness.service.capabilities(), .kst);
     harness.service.project(&view);
     view.finish(.{});
     try testing.expectEqual(@as(u16, 15), view.settings.auto_refresh_minutes);
@@ -1060,7 +1060,7 @@ fn projectedProxyClear(harness: *Harness) !ui_model.ResetProxyClear {
 fn projectView(service: *app_service.Service) !*ui_model.ViewState {
     const view = try testing.allocator.create(ui_model.ViewState);
     view.* = .{};
-    service.port().project(view, now, .{});
+    service.port().project(view, now, .kst, .{});
     return view;
 }
 
@@ -1788,7 +1788,7 @@ test "C4 startup recovery reads only the Codex auth backup and never queries Cla
     try harness.core.persistLedger(harness.service.live.?.sink);
 
     var view: ui_model.ViewState = .{};
-    view.begin(now, harness.service.capabilities());
+    view.begin(now, harness.service.capabilities(), .kst);
     harness.service.project(&view);
     view.finish(.{});
     var tray_items: [ui_model.max_tray_items]ui_model.TrayItem = @splat(.{});

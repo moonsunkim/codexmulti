@@ -19,6 +19,18 @@ pub const CodexUsageWindow = store.CodexUsageWindow;
 pub const Language = strings.Language;
 pub const AutoUpdateState = enum { unavailable };
 pub const UnifiedOrderSource = enum { registry };
+pub const TimeZone = union(enum) {
+    system,
+    fixed: Fixed,
+
+    pub const Fixed = struct {
+        offset_seconds: i32,
+        abbreviation: []const u8,
+    };
+
+    pub const utc: TimeZone = .{ .fixed = .{ .offset_seconds = 0, .abbreviation = "UTC" } };
+    pub const kst: TimeZone = .{ .fixed = .{ .offset_seconds = 9 * 60 * 60, .abbreviation = "KST" } };
+};
 pub const UnifiedFailoverState = enum {
     not_mapped,
     active,
@@ -658,8 +670,8 @@ pub fn ServicePortFor(comptime ViewState: type) type {
             return call(context);
         }
 
-        pub fn project(self: ServicePort, view: *ViewState, now_unix_s: i64, options: RenderOptions) void {
-            view.begin(now_unix_s, self.capabilities());
+        pub fn project(self: ServicePort, view: *ViewState, now_unix_s: i64, time_zone: TimeZone, options: RenderOptions) void {
+            view.begin(now_unix_s, self.capabilities(), time_zone);
             if (self.context) |context| {
                 if (self.project_fn) |call| call(context, view);
             }

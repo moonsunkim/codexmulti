@@ -23,6 +23,7 @@ const UnifiedRowView = contracts.UnifiedRowView;
 const RowChip = contracts.RowChip;
 const WindowCell = contracts.WindowCell;
 const RenderOptions = contracts.RenderOptions;
+const TimeZone = contracts.TimeZone;
 const max_rows = contracts.max_rows;
 const max_windows_per_row = contracts.max_windows_per_row;
 const max_line_bytes = contracts.max_line_bytes;
@@ -33,6 +34,7 @@ pub const app_version_text = copy.text(.app_version);
 
 pub const ViewState = struct {
     now_unix_s: i64 = 0,
+    time_zone: TimeZone = .system,
     capabilities: ServiceCapabilities = .{},
     appearance: contracts.Appearance = .system,
     codex_usage_window: contracts.CodexUsageWindow = .auto,
@@ -134,8 +136,9 @@ pub const ViewState = struct {
     text: [text_capacity]u8 = @splat(0),
     text_len: usize = 0,
 
-    pub fn begin(self: *ViewState, now_unix_s: i64, capabilities: ServiceCapabilities) void {
+    pub fn begin(self: *ViewState, now_unix_s: i64, capabilities: ServiceCapabilities, time_zone: TimeZone) void {
         self.now_unix_s = now_unix_s;
+        self.time_zone = time_zone;
         self.capabilities = capabilities;
         self.appearance = .system;
         self.codex_usage_window = .auto;
@@ -516,7 +519,7 @@ pub const ViewState = struct {
             else switch (account.state) {
                 .cooldown => if (account.cooldown_until_unix_s) |until|
                     self.fmtText(.proxy_cooldown_until, .{
-                        format.shortKst(&scratch, self.now_unix_s, until),
+                        format.shortLocal(&scratch, self.now_unix_s, until, self.time_zone),
                         format.remainingPhrase(&relative, until - self.now_unix_s),
                     })
                 else
@@ -601,7 +604,7 @@ pub const ViewState = struct {
         };
 
         if (self.proxy_last_success_at_unix_s) |last_seen| {
-            const seen = format.formatKst(&scratch, last_seen);
+            const seen = format.formatLocal(&scratch, last_seen, self.time_zone);
             self.proxy_tray_text = switch (self.proxy_reachability) {
                 .reachable => self.fmtText(.tray_failover_last_seen, .{ localPart(active_label), cooling, seen }),
                 .@"unreachable" => self.fmtText(.tray_proxy_unreachable_last_seen, .{seen}),
@@ -628,7 +631,7 @@ pub const ViewState = struct {
         self.proxy_banner_text = switch (self.proxy_reachability) {
             .@"unreachable" => if (self.proxy_last_success_at_unix_s) |at|
                 self.fmtText(.proxy_unreachable_banner, .{
-                    format.shortKst(&scratch, self.now_unix_s, at),
+                    format.shortLocal(&scratch, self.now_unix_s, at, self.time_zone),
                 })
             else
                 self.internText(copy.text(.proxy_unreachable_never_seen)),
@@ -978,7 +981,7 @@ pub const ViewState = struct {
         var relative: [max_line_bytes]u8 = undefined;
         self.header_fresh_text = if (self.newest_success_at_unix_s) |at|
             self.fmtText(.last_refresh, .{
-                format.shortKst(&absolute, self.now_unix_s, at),
+                format.shortLocal(&absolute, self.now_unix_s, at, self.time_zone),
                 format.agoPhrase(&relative, self.now_unix_s, at),
             })
         else
@@ -1069,12 +1072,12 @@ pub const ViewState = struct {
             var line: [max_line_bytes]u8 = undefined;
             var writer = std.Io.Writer.fixed(&line);
             if (row.last_success_at_unix_s) |at| {
-                copy.write(&writer, .evidence_last_success, .{format.formatKst(&scratch, at)});
+                copy.write(&writer, .evidence_last_success, .{format.formatLocal(&scratch, at, self.time_zone)});
             } else {
                 writer.writeAll(copy.text(.evidence_no_success)) catch {};
             }
             if (row.last_attempt_at_unix_s) |at| {
-                copy.write(&writer, .evidence_last_attempt, .{format.formatKst(&scratch, at)});
+                copy.write(&writer, .evidence_last_attempt, .{format.formatLocal(&scratch, at, self.time_zone)});
             } else {
                 writer.writeAll(copy.text(.evidence_no_attempt)) catch {};
             }
@@ -1119,7 +1122,7 @@ pub const ViewState = struct {
             });
         };
         row.tray_updated_text = if (row.last_success_at_unix_s) |at|
-            self.fmtText(.updated, .{format.formatKst(&scratch, at)})
+            self.fmtText(.updated, .{format.formatLocal(&scratch, at, self.time_zone)})
         else
             self.internText(copy.text(.not_refreshed_yet));
 
@@ -1154,7 +1157,7 @@ pub const ViewState = struct {
                 copy.write(&writer, .header_in_progress, .{self.busy_count});
             }
             if (self.newest_success_at_unix_s) |at| {
-                copy.write(&writer, .header_updated, .{format.formatKst(&scratch, at)});
+                copy.write(&writer, .header_updated, .{format.formatLocal(&scratch, at, self.time_zone)});
             } else if (self.snapshot_count == 0) {
                 writer.writeAll(copy.text(.header_not_refreshed_suffix)) catch {};
             }
@@ -1196,7 +1199,7 @@ pub const ViewState = struct {
             writer.writeAll(wording) catch {};
         }
         if (row.last_success_at_unix_s) |at| {
-            copy.write(&writer, .last_good_reading, .{format.formatKst(&scratch, at)});
+            copy.write(&writer, .last_good_reading, .{format.formatLocal(&scratch, at, self.time_zone)});
         }
         return self.internText(writer.buffered());
     }
@@ -1224,7 +1227,7 @@ pub const ViewState = struct {
         inspector.freshness_line = blk: {
             if (row.last_success_at_unix_s) |at| {
                 break :blk self.fmtText(.updated_freshness, .{
-                    format.mediumKst(&absolute, at),
+                    format.mediumLocal(&absolute, at, self.time_zone),
                     format.freshnessPhrase(row.freshness),
                 });
             }
@@ -1258,7 +1261,7 @@ pub const ViewState = struct {
             else switch (row.proxy_state) {
                 .cooldown => if (row.proxy_cooldown_until_unix_s) |until|
                     self.fmtText(.cooldown_until, .{
-                        format.shortKst(&absolute, self.now_unix_s, until),
+                        format.shortLocal(&absolute, self.now_unix_s, until, self.time_zone),
                         format.remainingPhrase(&relative, until - self.now_unix_s),
                     })
                 else
@@ -1287,7 +1290,7 @@ pub const ViewState = struct {
             };
             if (!listed) continue;
             const reset_line = if (window.reset_at_unix_s) |at|
-                self.fmtText(.reset_phrase, .{format.mediumKst(&absolute, at)})
+                self.fmtText(.reset_phrase, .{format.mediumLocal(&absolute, at, self.time_zone)})
             else
                 self.internText(copy.text(.reset_time_not_reported_title));
             var label_scratch: [max_line_bytes]u8 = undefined;
@@ -1338,16 +1341,16 @@ pub const ViewState = struct {
                 const failed = row.needsAttention() or row.last_attempt_code.len != 0 or row.freshness == .refresh_deferred;
                 if (newer and failed and !row.operation_in_flight) {
                     if (row.freshness == .refresh_deferred) {
-                        break :blk self.fmtText(.evidence_deferred, .{format.mediumKst(&absolute, attempt)});
+                        break :blk self.fmtText(.evidence_deferred, .{format.mediumLocal(&absolute, attempt, self.time_zone)});
                     }
                     const reason = if (row.last_attempt_code.len != 0)
                         format.attemptReason(row.last_attempt_code)
                     else
                         format.freshnessPhrase(row.freshness);
-                    break :blk self.fmtText(.evidence_failed, .{ format.mediumKst(&absolute, attempt), reason });
+                    break :blk self.fmtText(.evidence_failed, .{ format.mediumLocal(&absolute, attempt, self.time_zone), reason });
                 }
             }
-            if (row.last_success_at_unix_s) |at| break :blk self.internText(format.mediumKst(&absolute, at));
+            if (row.last_success_at_unix_s) |at| break :blk self.internText(format.mediumLocal(&absolute, at, self.time_zone));
             break :blk self.internText(copy.text(.freshness_never));
         };
         inspector.plan_line = if (row.plan_label.len != 0)

@@ -164,7 +164,7 @@ pub fn codexFact() ui_model.AccountFact {
 
 fn newModel(service: *RecordingService) *shell.Model {
     const model = testing.allocator.create(shell.Model) catch unreachable;
-    model.* = shell.initialModel();
+    model.* = shell.initialModel(.kst);
     model.now_unix_s = now;
     model.service = service.port();
     shell.reproject(model);

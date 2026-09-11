@@ -14,7 +14,7 @@ fn renderBand(
     accounts: []const contracts.ProxyAccountFact,
     in_flight: u32,
 ) !void {
-    view.begin(band_now, .{ .connected = true, .proxy_control = true });
+    view.begin(band_now, .{ .connected = true, .proxy_control = true }, .kst);
     _ = try view.pushAccount(.{
         .account_id = "freshness-only",
         .label = "Freshness only",
@@ -42,7 +42,7 @@ fn renderBand(
 }
 
 fn renderAccountFreshness(view: *projection.ViewState) !void {
-    view.begin(band_now, .{ .connected = true, .proxy_control = true });
+    view.begin(band_now, .{ .connected = true, .proxy_control = true }, .kst);
     _ = try view.pushAccount(.{
         .account_id = "freshness-only",
         .label = "Freshness only",
@@ -57,7 +57,7 @@ fn renderAccountFreshness(view: *projection.ViewState) !void {
 test "ui facade preserves extracted contract and projection types" {
     var view: projection.ViewState = .{};
     const facade_view: *ui_model.ViewState = &view;
-    facade_view.begin(0, .{});
+    facade_view.begin(0, .{}, .kst);
 
     const direct_command: contracts.Command = .refresh_all;
     const facade_command: ui_model.Command = direct_command;
@@ -121,7 +121,7 @@ test "band status replaces freshness with the authoritative in-flight total" {
 
 test "band status says No accounts before proxy lifecycle state" {
     var view: projection.ViewState = .{};
-    view.begin(band_now, .{ .connected = true, .proxy_control = true });
+    view.begin(band_now, .{ .connected = true, .proxy_control = true }, .kst);
     view.applyProxyService(.{
         .state = .@"unreachable",
         .routing_state = .on,

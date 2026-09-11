@@ -741,14 +741,14 @@ test "nothing rendered anywhere looks like a credential or a raw provider error"
     try testing.expect(coordinator.isPublicCode(coordinator.public_code_refresh_failed));
 }
 
-test "KST timestamps are exact and the countdown covers a passed reset" {
+test "local timestamps are exact and the countdown covers a passed reset" {
     var buffer: [ui_model.max_line_bytes]u8 = undefined;
 
-    try testing.expectEqualStrings("2026-Jul-25 12:00 KST", ui_model.formatKst(&buffer, now));
+    try testing.expectEqualStrings("2026-Jul-25 12:00 KST", ui_model.formatLocal(&buffer, now, .kst));
 
-    try testing.expectEqualStrings("2026-Jul-26 05:30 KST", ui_model.formatKst(&buffer, now + 17 * 3600 + 30 * 60));
+    try testing.expectEqualStrings("2026-Jul-26 05:30 KST", ui_model.formatLocal(&buffer, now + 17 * 3600 + 30 * 60, .kst));
 
-    try testing.expectEqualStrings("1970-Jan-01 09:00 KST", ui_model.formatKst(&buffer, 0));
+    try testing.expectEqualStrings("1970-Jan-01 09:00 KST", ui_model.formatLocal(&buffer, 0, .kst));
 
     try testing.expectEqualStrings("in 2d 3h", ui_model.formatCountdown(&buffer, 2 * 86400 + 3 * 3600 + 59));
     try testing.expectEqualStrings("in 3h 18m", ui_model.formatCountdown(&buffer, 3 * 3600 + 18 * 60));
@@ -803,7 +803,7 @@ test "a passed reset is reported, not refreshed away" {
     try testing.expectEqual(@as(usize, 0), service.submissions);
 }
 
-test "relative age phrases and short KST times derive from now without inventing values" {
+test "relative age phrases and short local times derive from now without inventing values" {
     var buffer: [ui_model.max_line_bytes]u8 = undefined;
     try testing.expectEqualStrings("just now", ui_model.agoPhrase(&buffer, now, now - 30));
     try testing.expectEqualStrings("2m ago", ui_model.agoPhrase(&buffer, now, now - 2 * 60 - 5));
@@ -812,15 +812,15 @@ test "relative age phrases and short KST times derive from now without inventing
 
     try testing.expectEqualStrings("just now", ui_model.agoPhrase(&buffer, now, now + 5));
 
-    try testing.expectEqualStrings("09:30", ui_model.shortKst(&buffer, now, now - 2 * 3600 - 30 * 60));
-    try testing.expectEqualStrings("Jul 24 23:50", ui_model.shortKst(&buffer, now, now - 12 * 3600 - 10 * 60));
-    try testing.expectEqualStrings("Jul 26 05:30", ui_model.shortKst(&buffer, now, now + 17 * 3600 + 30 * 60));
+    try testing.expectEqualStrings("09:30", ui_model.shortLocal(&buffer, now, now - 2 * 3600 - 30 * 60, .kst));
+    try testing.expectEqualStrings("Jul 24 23:50", ui_model.shortLocal(&buffer, now, now - 12 * 3600 - 10 * 60, .kst));
+    try testing.expectEqualStrings("Jul 26 05:30", ui_model.shortLocal(&buffer, now, now + 17 * 3600 + 30 * 60, .kst));
 
-    try testing.expectEqualStrings("Jul 05 12:00", ui_model.shortKst(&buffer, now, now - 20 * 86400));
+    try testing.expectEqualStrings("Jul 05 12:00", ui_model.shortLocal(&buffer, now, now - 20 * 86400, .kst));
 
-    try testing.expectEqualStrings("Jul 25 12:00 KST", ui_model.mediumKst(&buffer, now));
-    try testing.expectEqualStrings("Jul 05 09:30 KST", ui_model.mediumKst(&buffer, now - 20 * 86400 - 2 * 3600 - 30 * 60));
-    try testing.expectEqualStrings("Jan 01 09:00 KST", ui_model.mediumKst(&buffer, 0));
+    try testing.expectEqualStrings("Jul 25 12:00 KST", ui_model.mediumLocal(&buffer, now, .kst));
+    try testing.expectEqualStrings("Jul 05 09:30 KST", ui_model.mediumLocal(&buffer, now - 20 * 86400 - 2 * 3600 - 30 * 60, .kst));
+    try testing.expectEqualStrings("Jan 01 09:00 KST", ui_model.mediumLocal(&buffer, 0, .kst));
 }
 
 test "the authoritative count is used and count-only details say so" {

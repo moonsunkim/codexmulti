@@ -1,8 +1,4 @@
 const std = @import("std");
-const c = @cImport({
-    @cInclude("stdlib.h");
-    @cInclude("time.h");
-});
 const bridge = @import("bridge_json");
 const shell = bridge.shell;
 const domain = shell.domain;
@@ -280,7 +276,7 @@ fn claudeFact() ui_model.AccountFact {
 }
 
 fn attach(model: *shell.Model, service: *FixtureService) void {
-    model.* = shell.initialModel();
+    model.* = shell.initialModel(.utc);
     model.now_unix_s = now;
     model.service = service.port();
     shell.reproject(model);
@@ -316,10 +312,8 @@ fn addMapped(service: *FixtureService) void {
 }
 
 fn makeProjection(allocator: std.mem.Allocator, name: []const u8) ![]u8 {
-    if (c.setenv("TZ", "UTC", 1) != 0) return error.SetFixtureTimezoneFailed;
-    c.tzset();
     var service: FixtureService = .{};
-    var model = shell.initialModel();
+    var model = shell.initialModel(.utc);
     var effects: shell.Effects = .{};
     var runtime: bridge.RuntimeProjection = .{ .started = true };
 

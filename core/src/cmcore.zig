@@ -322,7 +322,7 @@ pub export fn cm_service_create() callconv(.c) ?*cm_service {
     };
     service.runtime = null;
     service.runtime_projection = .{};
-    service.model = shell.initialModel();
+    service.model = shell.initialModel(.system);
     service.effects = .{};
     service.generation = 0;
     service.projection = null;

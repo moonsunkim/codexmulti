@@ -164,7 +164,7 @@ pub fn codexFact() ui_model.AccountFact {
 
 pub fn newModel() !*shell.Model {
     const model = try testing.allocator.create(shell.Model);
-    model.* = shell.initialModel();
+    model.* = shell.initialModel(.kst);
     model.now_unix_s = now;
     return model;
 }

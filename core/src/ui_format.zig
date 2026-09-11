@@ -13,6 +13,7 @@ const WindowView = contracts.WindowView;
 const AccountView = contracts.AccountView;
 const ServiceCapabilities = contracts.ServiceCapabilities;
 const CommandOutcome = contracts.CommandOutcome;
+const TimeZone = contracts.TimeZone;
 const TrayItem = contracts.TrayItem;
 const max_tray_items = contracts.max_tray_items;
 const max_line_bytes = contracts.max_line_bytes;
@@ -318,14 +319,28 @@ const LocalInstant = struct {
     day: u32,
     hour: u32,
     minute: u32,
-    gmtoff_s: c_long,
+    gmtoff_s: i64,
     zone: []const u8,
 };
 
-fn localInstant(unix_s: i64) ?LocalInstant {
-    var timestamp = std.math.cast(c.time_t, unix_s) orelse return null;
+fn localInstant(unix_s: i64, time_zone: TimeZone) ?LocalInstant {
     var local: c.struct_tm = undefined;
-    if (c.localtime_r(&timestamp, &local) == null or local.tm_zone == null) return null;
+    var gmtoff_s: i64 = 0;
+    const zone = switch (time_zone) {
+        .system => blk: {
+            var timestamp = std.math.cast(c.time_t, unix_s) orelse return null;
+            if (c.localtime_r(&timestamp, &local) == null or local.tm_zone == null) return null;
+            gmtoff_s = local.tm_gmtoff;
+            break :blk std.mem.span(local.tm_zone);
+        },
+        .fixed => |fixed| blk: {
+            const shifted = std.math.add(i64, unix_s, fixed.offset_seconds) catch return null;
+            var timestamp = std.math.cast(c.time_t, shifted) orelse return null;
+            if (c.gmtime_r(&timestamp, &local) == null) return null;
+            gmtoff_s = fixed.offset_seconds;
+            break :blk fixed.abbreviation;
+        },
+    };
     if (local.tm_year < -1900 or
         local.tm_mon < 0 or local.tm_mon >= strings.month_count or
         local.tm_mday < 1 or local.tm_mday > 31 or
@@ -340,18 +355,18 @@ fn localInstant(unix_s: i64) ?LocalInstant {
         .day = @intCast(local.tm_mday),
         .hour = @intCast(local.tm_hour),
         .minute = @intCast(local.tm_min),
-        .gmtoff_s = local.tm_gmtoff,
-        .zone = std.mem.span(local.tm_zone),
+        .gmtoff_s = gmtoff_s,
+        .zone = zone,
     };
 }
 
-fn localDayIndex(unix_s: i64, gmtoff_s: c_long) ?i64 {
+fn localDayIndex(unix_s: i64, gmtoff_s: i64) ?i64 {
     const shifted = std.math.add(i64, unix_s, gmtoff_s) catch return null;
     return @divFloor(shifted, std.time.s_per_day);
 }
 
-pub fn formatKst(buffer: []u8, unix_s: i64) []const u8 {
-    const local = localInstant(unix_s) orelse return copy.text(.unrepresentable_local_time);
+pub fn formatLocal(buffer: []u8, unix_s: i64, time_zone: TimeZone) []const u8 {
+    const local = localInstant(unix_s, time_zone) orelse return copy.text(.unrepresentable_local_time);
     var writer = std.Io.Writer.fixed(buffer);
     copy.write(&writer, .absolute_datetime, .{
         local.year,
@@ -396,9 +411,9 @@ pub fn agoPhrase(buffer: []u8, now_unix_s: i64, at_unix_s: i64) []const u8 {
     return writer.buffered();
 }
 
-pub fn shortKst(buffer: []u8, now_unix_s: i64, at_unix_s: i64) []const u8 {
-    const local = localInstant(at_unix_s) orelse return copy.text(.unrepresentable_local_time);
-    const now_local = localInstant(now_unix_s) orelse return copy.text(.unrepresentable_local_time);
+pub fn shortLocal(buffer: []u8, now_unix_s: i64, at_unix_s: i64, time_zone: TimeZone) []const u8 {
+    const local = localInstant(at_unix_s, time_zone) orelse return copy.text(.unrepresentable_local_time);
+    const now_local = localInstant(now_unix_s, time_zone) orelse return copy.text(.unrepresentable_local_time);
     const day_index = localDayIndex(at_unix_s, local.gmtoff_s) orelse return copy.text(.unrepresentable_local_time);
     const now_day_index = localDayIndex(now_unix_s, now_local.gmtoff_s) orelse return copy.text(.unrepresentable_local_time);
     var writer = std.Io.Writer.fixed(buffer);
@@ -412,8 +427,8 @@ pub fn shortKst(buffer: []u8, now_unix_s: i64, at_unix_s: i64) []const u8 {
     return writer.buffered();
 }
 
-pub fn mediumKst(buffer: []u8, unix_s: i64) []const u8 {
-    const local = localInstant(unix_s) orelse return copy.text(.unrepresentable_local_time);
+pub fn mediumLocal(buffer: []u8, unix_s: i64, time_zone: TimeZone) []const u8 {
+    const local = localInstant(unix_s, time_zone) orelse return copy.text(.unrepresentable_local_time);
     var writer = std.Io.Writer.fixed(buffer);
     copy.write(&writer, .medium_datetime, .{
         copy.monthName(local.month_index),
@@ -578,10 +593,10 @@ const projection_attemptReason = attemptReason;
 const projection_authStateText = authStateText;
 const projection_countdownPhrase = countdownPhrase;
 const projection_durationPhrase = durationPhrase;
-const projection_formatKst = formatKst;
+const projection_formatLocal = formatLocal;
 const projection_agoPhrase = agoPhrase;
-const projection_shortKst = shortKst;
-const projection_mediumKst = mediumKst;
+const projection_shortLocal = shortLocal;
+const projection_mediumLocal = mediumLocal;
 const projection_freshnessText = freshnessText;
 const projection_freshnessPhrase = freshnessPhrase;
 const projection_humanizeWindowLabel = humanizeWindowLabel;
@@ -601,10 +616,10 @@ pub const ProjectionFormat = struct {
     pub const authStateText = projection_authStateText;
     pub const countdownPhrase = projection_countdownPhrase;
     pub const durationPhrase = projection_durationPhrase;
-    pub const formatKst = projection_formatKst;
+    pub const formatLocal = projection_formatLocal;
     pub const agoPhrase = projection_agoPhrase;
-    pub const shortKst = projection_shortKst;
-    pub const mediumKst = projection_mediumKst;
+    pub const shortLocal = projection_shortLocal;
+    pub const mediumLocal = projection_mediumLocal;
     pub const freshnessText = projection_freshnessText;
     pub const freshnessPhrase = projection_freshnessPhrase;
     pub const humanizeWindowLabel = projection_humanizeWindowLabel;
@@ -619,36 +634,13 @@ pub const ProjectionFormat = struct {
     pub const snapshotStatusText = projection_snapshotStatusText;
 };
 
-test "absolute times follow runtime TZ and zone abbreviation" {
+test "the same instant formats in supplied KST and UTC time zones" {
     const testing = std.testing;
     const unix_s: i64 = 1_784_948_400;
 
-    const previous_tz = if (c.getenv("TZ")) |value|
-        try testing.allocator.dupeZ(u8, std.mem.span(value))
-    else
-        null;
-    defer {
-        if (previous_tz) |value| {
-            defer testing.allocator.free(value);
-            _ = c.setenv("TZ", value, 1);
-        } else {
-            _ = c.unsetenv("TZ");
-        }
-        c.tzset();
-    }
-
-    try testing.expectEqual(@as(c_int, 0), c.setenv("TZ", "UTC", 1));
-    c.tzset();
-    try testing.expectEqual(@as(c_long, 0), localInstant(unix_s).?.gmtoff_s);
     var utc_buffer: [max_line_bytes]u8 = undefined;
-    const utc = formatKst(&utc_buffer, unix_s);
-    try testing.expectEqualStrings("2026-Jul-25 03:00 UTC", utc);
+    try testing.expectEqualStrings("2026-Jul-25 03:00 UTC", formatLocal(&utc_buffer, unix_s, .utc));
 
-    try testing.expectEqual(@as(c_int, 0), c.setenv("TZ", "America/New_York", 1));
-    c.tzset();
-    try testing.expectEqual(@as(c_long, -4 * 60 * 60), localInstant(unix_s).?.gmtoff_s);
-    var new_york_buffer: [max_line_bytes]u8 = undefined;
-    const new_york = formatKst(&new_york_buffer, unix_s);
-    try testing.expectEqualStrings("2026-Jul-24 23:00 EDT", new_york);
-    try testing.expect(!std.mem.eql(u8, utc, new_york));
+    var kst_buffer: [max_line_bytes]u8 = undefined;
+    try testing.expectEqualStrings("2026-Jul-25 12:00 KST", formatLocal(&kst_buffer, unix_s, .kst));
 }

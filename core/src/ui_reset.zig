@@ -9,7 +9,7 @@ const AccountView = contracts.AccountView;
 const Command = contracts.Command;
 const CommandOutcome = contracts.CommandOutcome;
 const max_line_bytes = contracts.max_line_bytes;
-const formatKst = format.formatKst;
+const formatLocal = format.formatLocal;
 const countdownPhrase = format.countdownPhrase;
 
 pub const ResetStage = enum {
@@ -145,7 +145,7 @@ pub const ResetFlow = struct {
             var reset_writer = std.Io.Writer.fixed(&reset_line);
             if (window.reset_at_unix_s) |at| {
                 reset_writer.print("{s} ({s})", .{
-                    formatKst(&absolute, at),
+                    formatLocal(&absolute, at, view.time_zone),
                     countdownPhrase(&relative, at, view.now_unix_s),
                 }) catch {};
             } else {

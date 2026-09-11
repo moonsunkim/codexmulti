@@ -125,9 +125,9 @@ test "C4 core startup and worker have no Claude route" {
 }
 
 test "cm.bridge schema 1 projects Swift shell wording additions and enabled behavior" {
-    var model = shell.initialModel();
+    var model = shell.initialModel(.kst);
     model.now_unix_s = 1_784_948_400;
-    model.view.begin(model.now_unix_s, .{ .connected = true, .refresh = true, .accounts = true, .reset = true });
+    model.view.begin(model.now_unix_s, .{ .connected = true, .refresh = true, .accounts = true, .reset = true }, .kst);
     _ = try model.view.pushAccount(.{
         .account_id = "acct-codex-disabled",
         .label = "Disabled Codex",
@@ -219,7 +219,7 @@ test "cm.bridge schema 1 projects Swift shell wording additions and enabled beha
     defer busy_parsed.deinit();
     try testing.expectEqualStrings(" · refreshing", busy_parsed.value.object.get("view").?.object.get("busy_suffix_text").?.string);
 
-    model.view.begin(model.now_unix_s, .{ .connected = true, .proxy_control = true });
+    model.view.begin(model.now_unix_s, .{ .connected = true, .proxy_control = true }, .kst);
     model.view.finish(.{});
     const attached_bytes = try bridge.serialize(testing.allocator, 5, .{ .started = true }, &model, &effects);
     defer testing.allocator.free(attached_bytes);
@@ -232,7 +232,7 @@ test "cm.bridge schema 1 projects Swift shell wording additions and enabled beha
 }
 
 test "C11 add-account flow projects core-owned dialog fields" {
-    var model = shell.initialModel();
+    var model = shell.initialModel(.kst);
     model.add_account.open = true;
     var effects: shell.Effects = .{};
 
@@ -906,7 +906,7 @@ test "real cmcore ABI accepts and rejects fixtures with stable generation and on
 }
 
 test "projection starts with schema and contains exact top-level sections" {
-    var model = shell.initialModel();
+    var model = shell.initialModel(.kst);
     model.now_unix_s = 1_784_948_400;
     shell.reproject(&model);
     var effects: shell.Effects = .{};
@@ -923,7 +923,7 @@ test "projection starts with schema and contains exact top-level sections" {
 }
 
 test "projection emits counted arrays at their logical length" {
-    var model = shell.initialModel();
+    var model = shell.initialModel(.kst);
     shell.reproject(&model);
     var effects: shell.Effects = .{};
     const bytes = try bridge.serialize(testing.allocator, 0, .{}, &model, &effects);
@@ -937,9 +937,9 @@ test "projection emits counted arrays at their logical length" {
 }
 
 test "non-empty projection deep round-trips through the named wire DTO tree" {
-    var model = shell.initialModel();
+    var model = shell.initialModel(.kst);
     model.now_unix_s = 1_784_948_400;
-    model.view.begin(model.now_unix_s, .{ .connected = true, .refresh = true, .accounts = true, .reset = true, .proxy_control = true });
+    model.view.begin(model.now_unix_s, .{ .connected = true, .refresh = true, .accounts = true, .reset = true, .proxy_control = true }, .kst);
     const row = try model.view.pushAccount(.{
         .account_id = "acct-deep",
         .label = "Deep account",
@@ -1048,8 +1048,8 @@ test "non-empty projection deep round-trips through the named wire DTO tree" {
 }
 
 test "source-to-wire sibling fields use distinguishable sentinels and complementary booleans" {
-    var model = shell.initialModel();
-    model.view.begin(9_001, .{ .connected = true, .refresh = true, .accounts = true, .reset = true, .proxy_control = true });
+    var model = shell.initialModel(.kst);
+    model.view.begin(9_001, .{ .connected = true, .refresh = true, .accounts = true, .reset = true, .proxy_control = true }, .kst);
     const row = try model.view.pushAccount(.{
         .account_id = "account-id-input",
         .label = "account-label-input",
@@ -1249,7 +1249,7 @@ test "source-to-wire sibling fields use distinguishable sentinels and complement
 }
 
 test "effects are serialized in order and drain exactly once" {
-    var model = shell.initialModel();
+    var model = shell.initialModel(.kst);
     shell.reproject(&model);
     var effects: shell.Effects = .{};
     shell.update(&model, .open_details, &effects);
@@ -1265,7 +1265,7 @@ test "effects are serialized in order and drain exactly once" {
 }
 
 test "serialization allocation failure preserves queued effects" {
-    var model = shell.initialModel();
+    var model = shell.initialModel(.kst);
     shell.reproject(&model);
     var effects: shell.Effects = .{};
     shell.update(&model, .open_details, &effects);
