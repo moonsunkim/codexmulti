@@ -2,7 +2,7 @@
   "name": "codexmulti-proxy",
   "version": "1.0.0",
   "private": true,
-  "description": "Loopback-only HTTP/SSE failover proxy for Codex CLI OAuth accounts",
+  "description": "Loopback-only HTTP/SSE/WebSocket failover proxy for Codex CLI OAuth accounts",
   "type": "module",
   "bin": {
     "codexmulti-proxy": "bin/codexmulti-proxy",

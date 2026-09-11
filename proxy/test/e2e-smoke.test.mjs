@@ -328,6 +328,9 @@ async function setupSmoke(testContext, mode) {
     res.writeHead(400, { 'content-type': 'application/json' });
     res.end('{}');
   });
+  upstream.server.on('upgrade', (_req, socket) => {
+    socket.end('HTTP/1.1 426 Upgrade Required\r\nConnection: close\r\nContent-Length: 0\r\n\r\n');
+  });
   const started = await startTestProxy(testContext, {
     temp: path.join(root, 'proxy'),
     upstreamOrigin: upstream.origin,
@@ -349,7 +352,7 @@ async function setupSmoke(testContext, mode) {
   return { ...started, captures, internal, root };
 }
 
-test('Codex CLI smoke: initial Upgrade gets 426, then HTTP/SSE prints ok', { timeout: 45_000 }, async (t) => {
+test('Codex CLI smoke: upstream 426 falls back to HTTP/SSE and prints ok', { timeout: 45_000 }, async (t) => {
   if (!await requireCodex(t)) return;
   const setup = await setupSmoke(t, 'normal');
   const codex = await prepareCodexHome(setup.root);
@@ -382,7 +385,7 @@ test('Codex CLI smoke: account A 429 fails over to B and status reports cooldown
   assert.doesNotMatch(JSON.stringify(status), /synthetic-signature|synthetic-refresh|synthetic-account/);
 });
 
-test('Codex CLI app-server smoke: 426 fallback stays sticky across two turns', { timeout: 60_000 }, async (t) => {
+test('Codex CLI app-server smoke: upstream 426 fallback stays sticky across two turns', { timeout: 60_000 }, async (t) => {
   if (!await requireCodex(t)) return;
   const setup = await setupSmoke(t, 'normal');
   const codex = await prepareCodexHome(setup.root);
@@ -393,7 +396,7 @@ test('Codex CLI app-server smoke: 426 fallback stays sticky across two turns', {
   assert.doesNotMatch(JSON.stringify(responseCaptures), /synthetic-signature|synthetic-refresh|Bearer\s+eyJ/);
 });
 
-test('Codex CLI smoke: parent and spawned child each get one initial 426', { timeout: 60_000 }, async (t) => {
+test('Codex CLI smoke: parent and spawned child each relay one Upgrade before upstream 426', { timeout: 60_000 }, async (t) => {
   if (!await requireCodex(t)) return;
   const setup = await setupSmoke(t, 'multi-agent');
   const codex = await prepareCodexHome(setup.root);

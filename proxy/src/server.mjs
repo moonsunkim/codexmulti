@@ -5,6 +5,7 @@ import { appendFileSync, existsSync, renameSync, statSync } from 'node:fs';
 import { chmod, mkdir, readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { randomUUID } from 'node:crypto';
+import { pipeline } from 'node:stream/promises';
 import { isDeepStrictEqual } from 'node:util';
 import {
   AccountRegistry,
@@ -18,10 +19,13 @@ import { AccountState, FailoverManager } from './failover.mjs';
 import {
   bufferForClassification,
   buildUpstreamHeaders,
+  buildUpstreamUpgradeHeaders,
   classify429,
   createUpstreamAgents,
   discardResponse,
   openUpstream,
+  openUpstreamUpgrade,
+  responseHeaders,
   sendBuffered,
   streamResponse,
 } from './upstream.mjs';
@@ -43,6 +47,7 @@ const LOG_FIELDS = new Set([
   'timestamp', 'level', 'event', 'request_id', 'method', 'route', 'status',
   'duration_ms', 'account_name', 'attempt', 'cooldown_until', 'error_code',
   'error_message', 'relayed_bytes', 'upstream_status', 'terminal_seen',
+  'client_to_upstream_bytes', 'upstream_to_client_bytes',
   'added', 'removed', 'renamed', 'migrated',
 ]);
 
@@ -236,6 +241,105 @@ function json(response, status, value) {
     'cache-control': 'no-store',
   });
   response.end(body);
+}
+
+function responseHead(statusCode, statusMessage, headers) {
+  let raw = `HTTP/1.1 ${statusCode} ${statusMessage || http.STATUS_CODES[statusCode] || ''}\r\n`;
+  for (const [name, values] of Object.entries(headers)) {
+    for (const value of Array.isArray(values) ? values : [values]) {
+      if (value !== undefined) raw += `${name}: ${value}\r\n`;
+    }
+  }
+  return Buffer.from(`${raw}\r\n`, 'latin1');
+}
+
+function switchingHead(response) {
+  let raw = `HTTP/${response.httpVersion || '1.1'} ${response.statusCode ?? 101} ${response.statusMessage || 'Switching Protocols'}\r\n`;
+  for (let index = 0; index < response.rawHeaders.length; index += 2) {
+    raw += `${response.rawHeaders[index]}: ${response.rawHeaders[index + 1]}\r\n`;
+  }
+  return Buffer.from(`${raw}\r\n`, 'latin1');
+}
+
+function rejectUpgrade(socket) {
+  socket.end('HTTP/1.1 426 Upgrade Required\r\nConnection: close\r\nContent-Length: 0\r\n\r\n');
+}
+
+function endUpgradeError(socket, statusCode, error) {
+  const body = Buffer.from(JSON.stringify({ error }));
+  const head = responseHead(statusCode, http.STATUS_CODES[statusCode], {
+    connection: 'close',
+    'content-type': 'application/json; charset=utf-8',
+    'content-length': String(body.length),
+  });
+  socket.end(Buffer.concat([head, body]));
+}
+
+async function relayUpgradeResponse(socket, response, buffered = null) {
+  if (socket.destroyed) {
+    response.destroy();
+    return;
+  }
+  const headers = responseHeaders(response);
+  headers.connection = 'close';
+  if (buffered?.complete) headers['content-length'] = String(buffered.raw.length);
+  socket.write(responseHead(
+    response.statusCode ?? 502,
+    response.statusMessage,
+    headers,
+  ));
+  if (buffered?.complete) {
+    socket.end(buffered.raw);
+    return;
+  }
+  if (buffered?.prefix?.length) socket.write(buffered.prefix);
+  try {
+    await pipeline(response, socket);
+  } catch {
+    socket.destroy();
+  }
+}
+
+function tunnelWebSocket(clientSocket, upstreamResponse, upstreamSocket, clientHead, upstreamHead) {
+  return new Promise((resolve) => {
+    let clientToUpstreamBytes = clientHead.length;
+    let upstreamToClientBytes = upstreamHead.length;
+    let settled = false;
+    const countClient = (chunk) => { clientToUpstreamBytes += chunk.length; };
+    const countUpstream = (chunk) => { upstreamToClientBytes += chunk.length; };
+    const finish = () => {
+      if (settled) return;
+      settled = true;
+      clientSocket.off('data', countClient);
+      upstreamSocket.off('data', countUpstream);
+      if (!clientSocket.destroyed) clientSocket.destroy();
+      if (!upstreamSocket.destroyed) upstreamSocket.destroy();
+      resolve({ clientToUpstreamBytes, upstreamToClientBytes });
+    };
+    clientSocket.on('data', countClient);
+    upstreamSocket.on('data', countUpstream);
+    clientSocket.once('error', finish);
+    upstreamSocket.once('error', finish);
+    clientSocket.once('end', finish);
+    upstreamSocket.once('end', finish);
+    clientSocket.once('close', finish);
+    upstreamSocket.once('close', finish);
+    if (clientSocket.destroyed || upstreamSocket.destroyed) {
+      finish();
+      return;
+    }
+    clientSocket.write(switchingHead(upstreamResponse));
+    if (upstreamHead.length) clientSocket.write(upstreamHead);
+    if (clientHead.length) upstreamSocket.write(clientHead);
+    clientSocket.pipe(upstreamSocket);
+    upstreamSocket.pipe(clientSocket);
+  });
+}
+
+function isWebSocketUpgrade(request) {
+  const value = Array.isArray(request.headers.upgrade)
+    ? request.headers.upgrade[0] : request.headers.upgrade;
+  return String(value ?? '').trim().toLowerCase() === 'websocket';
 }
 
 function isLoopbackRemote(address) {
@@ -544,6 +648,32 @@ export async function createProxy(configInput, options = {}) {
     }
   }
 
+  async function attemptUpstreamUpgrade(current, request, target, name) {
+    const admitted = await admissionMutex.run(async () => {
+      if (reconfiguring || generation !== current) return false;
+      changeInFlight(current, name, 1);
+      return true;
+    });
+    if (!admitted) throw new Error('proxy_reconfiguring');
+    try {
+      const credentials = await current.registry.ensureFresh(name);
+      const headers = buildUpstreamUpgradeHeaders(
+        request.headers,
+        credentials,
+        new URL(target),
+      );
+      return await openUpstreamUpgrade({
+        method: request.method,
+        target,
+        headers,
+        agents,
+      });
+    } catch (error) {
+      changeInFlight(current, name, -1);
+      throw error;
+    }
+  }
+
   async function finishAttempt(release, work) {
     try {
       return await work();
@@ -712,6 +842,179 @@ export async function createProxy(configInput, options = {}) {
     }
   }
 
+  async function proxyUpgradeAdmitted(current, request, socket, head, route) {
+    const { config, failover } = current;
+    const attempted = new Set();
+    let accountName = await failover.selectReady(attempted);
+    if (!accountName) {
+      endUpgradeError(socket, 503, 'proxy_no_eligible_account');
+      return;
+    }
+    let attemptNumber = 0;
+    while (accountName && attemptNumber < 2) {
+      attemptNumber += 1;
+      attempted.add(accountName);
+      const started = Date.now();
+      let opened;
+      try {
+        opened = await attemptUpstreamUpgrade(current, request, route.target, accountName);
+      } catch (error) {
+        if (error?.message === 'proxy_reconfiguring') {
+          endUpgradeError(socket, 503, 'proxy_reconfiguring');
+          return;
+        }
+        if (String(error?.message).startsWith('credential_')) {
+          await failover.markInvalid(accountName);
+          endUpgradeError(socket, 503, 'proxy_account_invalid');
+          return;
+        }
+        logger({
+          timestamp: new Date().toISOString(),
+          level: 'error',
+          event: 'upstream_transport_error',
+          request_id: request.proxyRequestId,
+          method: request.method,
+          route: route.route,
+          status: 502,
+          duration_ms: Date.now() - started,
+          account_name: accountName,
+          attempt: attemptNumber,
+        });
+        endUpgradeError(socket, 502, 'proxy_upstream_transport_error');
+        return;
+      }
+      const currentAccount = accountName;
+      let released = false;
+      const releaseAttempt = () => {
+        if (released) return;
+        released = true;
+        changeInFlight(current, currentAccount, -1);
+      };
+      try {
+        if (opened.kind === 'upgrade') {
+          const connectedAt = Date.now();
+          logger({
+            timestamp: new Date().toISOString(),
+            level: 'info',
+            event: 'ws_open',
+            request_id: request.proxyRequestId,
+            method: request.method,
+            route: route.route,
+            upstream_status: opened.response.statusCode ?? 101,
+            account_name: currentAccount,
+            attempt: attemptNumber,
+          });
+          const counts = await tunnelWebSocket(
+            socket,
+            opened.response,
+            opened.socket,
+            head,
+            opened.head,
+          );
+          releaseAttempt();
+          logger({
+            timestamp: new Date().toISOString(),
+            level: 'info',
+            event: 'ws_close',
+            request_id: request.proxyRequestId,
+            duration_ms: Date.now() - connectedAt,
+            client_to_upstream_bytes: counts.clientToUpstreamBytes,
+            upstream_to_client_bytes: counts.upstreamToClientBytes,
+          });
+          return;
+        }
+        const status = opened.response.statusCode ?? 502;
+        if (status === 429) {
+          let buffered;
+          try {
+            buffered = await bufferForClassification(opened.response);
+          } catch {
+            releaseAttempt();
+            endUpgradeError(socket, 502, 'proxy_upstream_stream_error');
+            return;
+          }
+          const classification = buffered.complete
+            ? classify429(buffered.raw, opened.response.headers, {
+              now: options.now ? options.now() : Date.now(),
+              defaultSeconds: config.default_cooldown_seconds,
+              marginSeconds: config.cooldown_safety_margin_seconds,
+            })
+            : { usageLimit: false };
+          if (classification.usageLimit) {
+            await failover.markCooldown(currentAccount, classification.cooldownUntil);
+            logger({
+              timestamp: new Date().toISOString(),
+              level: 'info',
+              event: 'account_cooldown',
+              request_id: request.proxyRequestId,
+              method: request.method,
+              route: route.route,
+              status,
+              duration_ms: Date.now() - started,
+              account_name: currentAccount,
+              attempt: attemptNumber,
+              cooldown_until: new Date(classification.cooldownUntil).toISOString(),
+            });
+            const nextAccount = attemptNumber === 1
+              ? await failover.selectReady(attempted) : null;
+            if (nextAccount) {
+              releaseAttempt();
+              accountName = nextAccount;
+              continue;
+            }
+          }
+          await relayUpgradeResponse(socket, opened.response, buffered);
+          releaseAttempt();
+          return;
+        }
+        await relayUpgradeResponse(socket, opened.response);
+        releaseAttempt();
+        return;
+      } catch (error) {
+        releaseAttempt();
+        throw error;
+      }
+    }
+  }
+
+  async function proxyUpgrade(request, socket, head) {
+    request.proxyRequestId = randomUUID();
+    request.proxyStarted = Date.now();
+    const current = generation;
+    const route = routeFor(request.url, current.config);
+    if (!isWebSocketUpgrade(request) || route.kind !== 'upstream') {
+      rejectUpgrade(socket);
+      return;
+    }
+    const admitted = await admissionMutex.run(async () => {
+      if (reconfiguring || generation !== current) return false;
+      current.activeRequests += 1;
+      return true;
+    });
+    if (!admitted) {
+      endUpgradeError(socket, 503, 'proxy_reconfiguring');
+      return;
+    }
+    try {
+      await proxyUpgradeAdmitted(current, request, socket, head, route);
+    } catch (error) {
+      if (!socket.destroyed) endUpgradeError(socket, 500, 'proxy_internal_error');
+      logger({
+        timestamp: new Date().toISOString(),
+        level: 'error',
+        event: 'request_error',
+        request_id: request.proxyRequestId,
+        method: request.method,
+        route: route.route,
+        status: 500,
+        error_code: error?.code ?? null,
+        duration_ms: Date.now() - request.proxyStarted,
+      });
+    } finally {
+      current.activeRequests -= 1;
+    }
+  }
+
   const server = http.createServer(async (request, response) => {
     request.proxyRequestId = randomUUID();
     request.proxyStarted = Date.now();
@@ -755,8 +1058,9 @@ export async function createProxy(configInput, options = {}) {
         upstream_status: request.proxyUpstreamStatus ?? null, duration_ms: Date.now() - (request.proxyStarted ?? Date.now()) });
     }
   });
-  server.on('upgrade', (request, socket) => {
-    socket.end('HTTP/1.1 426 Upgrade Required\r\nConnection: close\r\nContent-Length: 0\r\n\r\n');
+  server.on('upgrade', (request, socket, head) => {
+    socket.on('error', () => {});
+    void proxyUpgrade(request, socket, head);
   });
 
   async function listen() {

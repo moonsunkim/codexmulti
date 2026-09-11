@@ -48,6 +48,21 @@ export function buildUpstreamHeaders(inbound, credentials, target, bodyLength) {
   return headers;
 }
 
+export function buildUpstreamUpgradeHeaders(inbound, credentials, target) {
+  const headers = stripHopByHop(inbound);
+  for (const key of Object.keys(headers)) {
+    const lower = key.toLowerCase();
+    if (lower === 'authorization' || lower === 'chatgpt-account-id'
+        || lower === 'host' || lower === 'content-length') delete headers[key];
+  }
+  headers.authorization = `Bearer ${credentials.accessToken}`;
+  headers['chatgpt-account-id'] = credentials.accountId;
+  headers.host = target.host;
+  headers.connection = 'Upgrade';
+  headers.upgrade = Array.isArray(inbound.upgrade) ? inbound.upgrade[0] : inbound.upgrade;
+  return headers;
+}
+
 export function decodeForClassification(raw, encoding, maximumBytes = 1024 * 1024) {
   const normalized = String(encoding ?? 'identity').trim().toLowerCase();
   if (!normalized || normalized === 'identity') {
@@ -123,6 +138,44 @@ export async function openUpstream({ method, target, headers, body, agents, conn
       if (!settled) reject(error);
     });
     request.end(body);
+  });
+}
+
+export async function openUpstreamUpgrade({ method, target, headers, agents, connectTimeoutMs = 10_000 }) {
+  const url = target instanceof URL ? target : new URL(target);
+  const transport = url.protocol === 'https:' ? https : url.protocol === 'http:' ? http : null;
+  if (!transport) throw new Error('unsupported_upstream_protocol');
+  return await new Promise((resolve, reject) => {
+    let settled = false;
+    let timer = null;
+    const finish = (value) => {
+      if (settled) return;
+      settled = true;
+      if (timer) clearTimeout(timer);
+      resolve(value);
+    };
+    const request = transport.request(url, {
+      method,
+      headers,
+      agent: url.protocol === 'https:' ? agents.https : agents.http,
+    }, (response) => finish({ kind: 'response', request, response }));
+    request.once('upgrade', (response, socket, head) => {
+      finish({ kind: 'upgrade', request, response, socket, head });
+    });
+    request.once('socket', (socket) => {
+      if (!socket.connecting) return;
+      timer = setTimeout(() => request.destroy(new Error('upstream_connect_timeout')), connectTimeoutMs);
+      const event = url.protocol === 'https:' ? 'secureConnect' : 'connect';
+      socket.once(event, () => {
+        if (timer) clearTimeout(timer);
+        timer = null;
+      });
+    });
+    request.once('error', (error) => {
+      if (timer) clearTimeout(timer);
+      if (!settled) reject(error);
+    });
+    request.end();
   });
 }
 

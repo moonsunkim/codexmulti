@@ -710,14 +710,14 @@ test('control pause returns 202 immediately, blocks new selection, and exposes d
   assert.equal(JSON.parse(reloaded.body).accounts.find((account) => account.name === 'a').state, 'READY');
 });
 
-test('Upgrade requests receive exact 426 without reaching upstream', async (t) => {
+test('Control API Upgrade requests receive exact 426 without reaching upstream', async (t) => {
   let upstreamCalls = 0;
   const upstream = await startHttpServer(t, (_req, res) => { upstreamCalls += 1; res.end(); });
   const { proxy } = await startTestProxy(t, { upstreamOrigin: upstream.origin, accountNames: ['a'] });
   const { port } = proxy.server.address();
   const raw = await new Promise((resolve, reject) => {
     const socket = net.connect(port, '127.0.0.1', () => {
-      socket.write('GET /backend-api/codex/responses HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: Upgrade\r\nUpgrade: websocket\r\n\r\n');
+      socket.write('GET /_proxy/status HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: Upgrade\r\nUpgrade: websocket\r\n\r\n');
     });
     const chunks = [];
     socket.on('data', (chunk) => chunks.push(chunk));

@@ -103,6 +103,7 @@ test('logger keeps only allowlisted fields, retains safe account names, rotates,
   logger({
     timestamp: new Date(0).toISOString(), level: 'info', event: 'fixture',
     account_name: 'a', upstream_status: 200, relayed_bytes: 123,
+    client_to_upstream_bytes: 17, upstream_to_client_bytes: 19,
     terminal_seen: true, error_code: 'SYNTHETIC_STREAM_CODE',
     error_message: 'bounded synthetic diagnostic',
     authorization: 'Bearer secret', body: 'must-not-log', tail: 'must-not-log-tail',
@@ -113,6 +114,8 @@ test('logger keeps only allowlisted fields, retains safe account names, rotates,
   assert.match(combined, /"account_name":"a"/);
   assert.match(combined, /"account_name":"b"/);
   assert.match(combined, /"upstream_status":200/);
+  assert.match(combined, /"client_to_upstream_bytes":17/);
+  assert.match(combined, /"upstream_to_client_bytes":19/);
   assert.match(combined, /"terminal_seen":true/);
   assert.doesNotMatch(combined, /authorization|must-not-log|Bearer secret|tail/);
 });

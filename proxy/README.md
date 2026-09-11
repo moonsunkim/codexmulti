@@ -2,7 +2,7 @@
 
 `codexmulti-proxy` is a local failover proxy that sits in front of multiple Codex ChatGPT OAuth accounts. It is single-user and loopback-only. The proxy keeps an ordered pool of account-specific `auth.json` files, replaces only the two identity headers, and moves to the next account only after a pre-stream `429` whose JSON error type is `usage_limit_reached`.
 
-Transport version 1 deliberately rejects every WebSocket Upgrade with `426 Upgrade Required`. A compatible Codex CLI then keeps that thread on its full-input HTTP Responses/SSE transport. The local control API is version 2. This project is not a general forward proxy, TLS MITM, account creator, or `codex cloud` proxy.
+WebSocket Upgrades to upstream routes use the active account's identity headers, relay the upstream handshake, and then tunnel bytes in both directions without interpreting frames. Only a handshake-level `429 usage_limit_reached` may retry once with the next ready account. The `/_proxy` control API continues to reject Upgrades with `426 Upgrade Required`. The local control API is version 2. This project is not a general forward proxy, TLS MITM, account creator, or `codex cloud` proxy.
 
 ## Requirements
 
@@ -127,7 +127,7 @@ chatgpt_base_url = "http://127.0.0.1:8787/backend-api/"
 openai_base_url = "http://127.0.0.1:8787/backend-api/codex"
 ```
 
-Codex may print `failed to connect to websocket: HTTP error: 426` once per thread at ERROR level; this is the expected signal that it switched to the HTTP/SSE fallback, not a failed turn.
+Codex WebSocket handshakes are relayed to the configured upstream. If the upstream rejects a handshake, that status and body are returned unchanged and Codex may choose its HTTP/SSE fallback.
 
 When a tool or script runs `codex exec` without a terminal on stdin, append `</dev/null`; otherwise Codex can wait indefinitely at `Reading additional input from stdin`.
 
@@ -141,7 +141,7 @@ When a tool or script runs `codex exec` without a terminal on stdin, append `</d
 
 Do not load the template as-is. Copy `launchd/dev.codexmulti.app.proxy.plist.template`, replace `/ABSOLUTE/INSTALL`, `/Users/USER`, and the Node path with pinned absolute paths, then place the rendered file at `~/Library/LaunchAgents/dev.codexmulti.app.proxy.plist`.
 
-Before loading it, confirm foreground `serve`, `status`, and an HTTP/SSE smoke test. The service validates config, state, and every auth file before binding. A corrupt state file fails startup rather than silently bypassing cooldown. `RunAtLoad`, `KeepAlive`, and persisted atomic state restore the cursor, pauses, invalid markers, and cooldown deadlines after a restart.
+Before loading it, confirm foreground `serve`, `status`, and local HTTP/SSE and WebSocket smoke tests. The service validates config, state, and every auth file before binding. A corrupt state file fails startup rather than silently bypassing cooldown. `RunAtLoad`, `KeepAlive`, and persisted atomic state restore the cursor, pauses, invalid markers, and cooldown deadlines after a restart.
 
 Typical user-agent commands, run only after reviewing the rendered plist, are:
 
@@ -159,6 +159,7 @@ The standalone repository does not install or load the agent automatically. The 
 - `error.resets_at` wins over the active rate-limit header family's reached primary/secondary `reset-at`; otherwise the default is 30 minutes. The configured safety margin is added in every case.
 - A request tries each `READY` account at most once. A 401 is the only same-account retry: reload a changed disk token, otherwise refresh once, then retry that account once.
 - DNS, connect/TLS errors, 5xx, interrupted streams, plan mismatch, `usage_not_included`, and unrecognized 429 responses are terminal. They never cause an account switch.
+- A WebSocket handshake may switch accounts only once, and only after a complete `429 usage_limit_reached` response. A successful `101` starts an opaque byte tunnel; later errors and closes are never retried.
 - A downstream client closing a stream is an informational `client_closed`, not a proxy error; a genuine upstream interruption remains `upstream_stream_error` and is not retried.
 - When every usable account is cooling down, the earliest deadline receives exactly one probe. There is no cached limit response and no 401 retry in this mode.
 - Only a 2xx probe on the Responses route (`/backend-api/codex/responses`) clears that account's cooldown. A 2xx on any other route, such as `/backend-api/wham/usage` or `/backend-api/ps/plugins/**`, is relayed unchanged with the cooldown left in place: those routes answer 200 while the model quota is still exhausted, so treating them as recovery would flip the account between `READY` and `COOLDOWN`.
@@ -182,7 +183,7 @@ Default runtime files are:
 ~/Library/Logs/CodexMulti/proxy.log
 ```
 
-State contains account names, each normalized `auth_file`, cursor, pause/cooldown reason, and timestamps—never tokens or account IDs. A legacy state file without `auth_file` is loaded once by name and atomically rewritten in the new form. Logs are mode `0600`, rotate at a bounded size, and allow only bounded request, account, cooldown, and streaming-termination diagnostics. A successful config reload adds one `config_reloaded` info event containing only added/removed/renamed/migrated counts. Error messages are secret-redacted and limited to 200 characters. Labels, paths, authorization, cookies, token/account IDs, attestation values, bodies, tail buffers, and query strings are never logged.
+State contains account names, each normalized `auth_file`, cursor, pause/cooldown reason, and timestamps—never tokens or account IDs. A legacy state file without `auth_file` is loaded once by name and atomically rewritten in the new form. Logs are mode `0600`, rotate at a bounded size, and allow only bounded request, account, cooldown, streaming-termination, and `ws_open`/`ws_close` diagnostics. WebSocket close events contain only duration and directional byte counts besides event metadata. A successful config reload adds one `config_reloaded` info event containing only added/removed/renamed/migrated counts. Error messages are secret-redacted and limited to 200 characters. Labels, paths, authorization, cookies, token/account IDs, attestation values, bodies, tail buffers, and query strings are never logged.
 
 The service binds only `127.0.0.1` and accepts control requests only from loopback. It intentionally has no additional authentication because it trusts the same local macOS user boundary.
 
@@ -192,7 +193,7 @@ The service binds only `127.0.0.1` and accepts control requests only from loopba
 npm test
 ```
 
-Tests use `node:test`, port `0`, synthetic JWT-shaped tokens, a synthetic CodexMulti store, fake HTTP/SSE upstreams, and a fake refresh service. The Codex binary smoke uses only an isolated temporary `CODEX_HOME` and loopback base overrides. It must never be pointed at real ChatGPT or OAuth endpoints.
+Tests use `node:test`, port `0`, synthetic JWT-shaped tokens, a synthetic CodexMulti store, fake HTTP/SSE/WebSocket upstreams, and a fake refresh service. The Codex binary smoke uses only an isolated temporary `CODEX_HOME` and loopback base overrides. It must never be pointed at real ChatGPT or OAuth endpoints.
 
 ## Rollback
 
@@ -206,4 +207,4 @@ Do not delete, copy, or otherwise modify CodexMulti account directories during r
 
 ## Version boundary
 
-The transport behavior is guarded by the local 426 → POST/SSE smoke against the installed compatible Codex CLI. If the CLI is unavailable, that smoke is skipped with its reason. Version 1 does not implement round-robin or WebSocket termination.
+The transport behavior is guarded by local raw WebSocket pass-through tests plus an upstream-426 → POST/SSE fallback smoke against the installed compatible Codex CLI. If the CLI is unavailable, that smoke is skipped with its reason. Version 1 does not implement round-robin or WebSocket frame termination.

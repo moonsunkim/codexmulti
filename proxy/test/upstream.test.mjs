@@ -1,7 +1,13 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { gzipSync, zstdCompressSync } from 'node:zlib';
-import { buildUpstreamHeaders, classify429, decodeForClassification, stripHopByHop } from '../src/upstream.mjs';
+import {
+  buildUpstreamHeaders,
+  buildUpstreamUpgradeHeaders,
+  classify429,
+  decodeForClassification,
+  stripHopByHop,
+} from '../src/upstream.mjs';
 
 test('only identity headers and Host are replaced while end-to-end Codex headers survive', () => {
   const target = new URL('https://chatgpt.com/backend-api/codex/responses');
@@ -43,6 +49,32 @@ test('response hop-by-hop headers are stripped without dropping end-to-end heade
     'x-request-id': 'synthetic-request',
     'content-type': 'text/event-stream',
   });
+});
+
+test('WebSocket handshake replaces identity headers and preserves upgrade metadata', () => {
+  const target = new URL('https://chatgpt.com/backend-api/codex/responses?fixture=1');
+  const headers = buildUpstreamUpgradeHeaders({
+    authorization: 'Bearer inbound-secret',
+    'chatgpt-account-id': 'inbound-account',
+    host: '127.0.0.1:8787',
+    connection: 'keep-alive, Upgrade, x-remove-me',
+    upgrade: 'websocket',
+    'x-remove-me': 'hop-value',
+    'sec-websocket-key': 'synthetic-key',
+    'sec-websocket-version': '13',
+    'openai-beta': 'responses_websockets=2026-02-06',
+    'content-length': '99',
+  }, { accessToken: 'selected-token', accountId: 'selected-account' }, target);
+  assert.equal(headers.authorization, 'Bearer selected-token');
+  assert.equal(headers['chatgpt-account-id'], 'selected-account');
+  assert.equal(headers.host, 'chatgpt.com');
+  assert.equal(headers.connection, 'Upgrade');
+  assert.equal(headers.upgrade, 'websocket');
+  assert.equal(headers['sec-websocket-key'], 'synthetic-key');
+  assert.equal(headers['sec-websocket-version'], '13');
+  assert.equal(headers['openai-beta'], 'responses_websockets=2026-02-06');
+  assert.equal(headers['content-length'], undefined);
+  assert.equal(headers['x-remove-me'], undefined);
 });
 
 for (const [encoding, compress] of [['gzip', gzipSync], ['zstd', zstdCompressSync]]) {
