@@ -56,9 +56,15 @@ From then on the Codex CLI talks to the loopback proxy. Quitting the menu-bar ap
 healthy proxy service. Account order is the failover rotation order — drag rows to change it.
 
 <picture>
+  <source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/accounts-expanded-dark.png">
+  <source media="(prefers-color-scheme: light)" srcset="assets/screenshots/accounts-expanded-light.png">
+  <img alt="CodexMulti expanded account view showing weekly usage, connection and failover status, last refresh, one available reset credit, and update time" src="assets/screenshots/accounts-expanded-light.png">
+</picture>
+
+<picture>
   <source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/accounts-dark.png">
   <source media="(prefers-color-scheme: light)" srcset="assets/screenshots/accounts-light.png">
-  <img alt="CodexMulti accounts view showing active, ready, cooldown, and paused accounts with weekly usage" src="assets/screenshots/accounts-light.png">
+  <img alt="CodexMulti account list showing active, ready, cooldown, and paused synthetic accounts with varied weekly usage" src="assets/screenshots/accounts-light.png">
 </picture>
 
 <img alt="CodexMulti dark settings view with system, Codex, proxy, and version controls" src="assets/screenshots/settings-dark.png">

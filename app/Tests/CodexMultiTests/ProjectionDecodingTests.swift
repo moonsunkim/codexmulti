@@ -4,6 +4,46 @@ import XCTest
 
 final class ProjectionDecodingTests: XCTestCase {
 
+    func testShowcaseExpandedAccountFixture() throws {
+        let file = Fixtures.bridgeDirectory
+            .deletingLastPathComponent()
+            .appending(path: "showcase/accounts-expanded.json")
+        let projection = try JSONDecoder().decode(Projection.self, from: Data(contentsOf: file))
+        let accountRows = projection.view.account_rows
+        let unifiedRows = projection.view.unified_rows
+        let emails = accountRows.map { $0.email_local + $0.email_domain }
+
+        XCTAssertEqual(accountRows.count, 7)
+        XCTAssertEqual(Set(emails).count, 7)
+        XCTAssertTrue(accountRows.allSatisfy { $0.has_domain && $0.email_domain.hasPrefix("@example.") })
+        XCTAssertEqual(accountRows.map(\.plan).filter { $0 == "Plus" }.count, 1)
+        XCTAssertEqual(unifiedRows.map(\.usage_percent_text), ["8%", "24%", "39%", "57%", "76%", "91%", "100%"])
+        XCTAssertEqual(unifiedRows.filter { $0.failover_state == .active }.count, 1)
+        XCTAssertEqual(unifiedRows.filter { $0.failover_state == .ready }.count, 2)
+        XCTAssertEqual(unifiedRows.filter { $0.failover_state == .cooldown }.count, 3)
+        XCTAssertEqual(unifiedRows.filter { $0.failover_state == .paused }.count, 1)
+        XCTAssertEqual(projection.view.toolbar_status_text, "3 ready · 9 in flight")
+        XCTAssertEqual(projection.shell.expanded, 6)
+        XCTAssertTrue(accountRows.dropLast().allSatisfy { !$0.expanded })
+        XCTAssertEqual(accountRows.last?.index, 6)
+        XCTAssertEqual(accountRows.last?.expanded, true)
+        XCTAssertEqual(unifiedRows.last?.inspector_index, 6)
+        XCTAssertEqual(unifiedRows.last?.expanded, true)
+        XCTAssertEqual(projection.view.usage_rows.first?.label, "Weekly")
+        XCTAssertEqual(projection.view.usage_rows.first?.percent_text, "100%")
+        XCTAssertEqual(projection.view.usage_rows.first?.reset_line, "resets Sep 16 12:47 KST")
+        XCTAssertEqual(projection.view.inspector.index, 6)
+        XCTAssertTrue(projection.view.inspector.present)
+        XCTAssertEqual(projection.view.inspector.connection_line, "Connected")
+        XCTAssertEqual(projection.view.inspector.failover_state, "Cooldown until Sep 16 12:48 · 4d 15h")
+        XCTAssertEqual(projection.view.inspector.evidence_line, "Sep 11 20:59 KST")
+        XCTAssertEqual(projection.view.inspector.credit_value, "1 available")
+        XCTAssertEqual(projection.view.inspector.reset_label, "Use one reset (1 left)…")
+        XCTAssertEqual(projection.view.inspector.updated_ago_text, "just now")
+        XCTAssertEqual(accountRows.last?.reset_label, "Use one reset (1 left)…")
+        XCTAssertEqual(unifiedRows.last?.reset_label, "Use one reset (1 left)…")
+    }
+
     func testEveryFixtureDecodes() throws {
         let files = try Fixtures.projectionFiles()
         XCTAssertFalse(files.isEmpty, "no fixtures under \(Fixtures.bridgeDirectory.path)")
