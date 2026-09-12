@@ -138,7 +138,7 @@ install_committed=yes
 if printf '%s\n' "$release_body" | grep -F '**Notarization: NOTARIZED**' >/dev/null; then
     printf 'Notarization status: notarized.\n'
 else
-    printf 'This release is not notarized. On first launch, Control-click CodexMulti.app, choose Open, then Open.\n'
+    printf 'This release is not notarized, so macOS blocks the first launch. Open CodexMulti once, dismiss the dialog, then in System Settings > Privacy & Security press Open Anyway next to CodexMulti and confirm.\n'
 fi
 printf 'Installed CodexMulti %s at %s\n' "$version" "$TARGET_APP"
 if test -e "$PREVIOUS_APP"; then

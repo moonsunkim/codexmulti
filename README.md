@@ -60,7 +60,7 @@ release. A Developer ID signature additionally identifies the Apple developer an
 Apple's automated review and a stapled ticket. The release notes state `DEVELOPER ID`,
 `LOCAL SELF-SIGNED`, or `UNSIGNED` and state `NOTARIZED` or `NOT NOTARIZED`; a self-signed release
 provides integrity but not an Apple-verified publisher identity. For any release marked
-`NOT NOTARIZED`, first launch with Control-click → **Open** → **Open**. Neither the installer nor the
+`NOT NOTARIZED`, the first launch is blocked by Gatekeeper: open the app once, dismiss the dialog, then go to **System Settings → Privacy & Security**, press **Open Anyway** next to CodexMulti, and confirm. That approves this one app; Gatekeeper stays on. Neither the installer nor the
 manual procedure removes quarantine. There is no automatic updater yet.
 
 ## Use
