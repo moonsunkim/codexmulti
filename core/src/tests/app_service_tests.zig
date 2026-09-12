@@ -924,6 +924,15 @@ test "C9 auto-refresh pump stays idle before the interval and starts the shared 
         ui_model.CommandOutcome.accepted_pending,
         harness.service.submit(.{ .set_auto_refresh = 15 }),
     );
+    harness.service.proxy_service.initialized = true;
+    harness.service.proxy_service.discovery.routing.state = .on;
+    for ([_]i64{ 2, 3, 60, 899 }) |offset| {
+        harness.service.pump(now + offset);
+        try testing.expect(!harness.service.proxyWorkerBusy());
+        try testing.expectEqual(@as(usize, 1), harness.proxy_exchange.calls);
+        try testing.expectEqual(@as(usize, 1), harness.codex_launcher.opens);
+    }
+
     harness.codex_launcher.stream = .{ .chunks = &.{.{ .bytes = script_read }} };
     harness.codex_launcher.lifecycle = .{};
 
