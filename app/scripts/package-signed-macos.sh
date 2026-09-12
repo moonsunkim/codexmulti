@@ -42,6 +42,9 @@ layout and prints the inside-out signing plan without reading the Keychain.
 --package replaces only dist/CodexMulti.app,
 with a timestamped dist backup and rollback on failed final verification.
 
+Set SIGNING_IDENTITY to use a Developer ID Application identity with a secure
+timestamp. Without it, signing uses the pinned local identity.
+
 --initialize-requirement is always refused. This shell must reproduce the
 already accepted designated requirement byte-for-byte.
 EOF
@@ -241,20 +244,33 @@ verify_signed_node() {
 }
 
 verify_signed_app() {
-    local app identity_hash pinned_requirement require_clean actual_id actual_requirement
+    local app identity_hash pinned_requirement require_clean signing_mode actual_id actual_requirement details
     app="$1"
     identity_hash="$2"
     pinned_requirement="$3"
     require_clean="${4:-no}"
+    signing_mode="${5:-local}"
     actual_id="$(bundle_id "$app" || true)"
     test "$actual_id" = "$BUNDLE_ID" || die "bundle id changed: expected $BUNDLE_ID, got ${actual_id:-unreadable}"
     if ! "$CODESIGN_BIN" --verify --deep --strict --verbose=2 "$app"; then
         die "strict code-sign verification failed: $app"
     fi
     actual_requirement="$(designated_requirement "$app")" || die "cannot read the signed designated requirement"
-    validate_requirement_shape "$actual_requirement" "$identity_hash"
-    test "$actual_requirement" = "$pinned_requirement" ||
-        die "designated requirement drifted; pinned='$pinned_requirement' new='$actual_requirement'"
+    if test "$signing_mode" = developer; then
+        case "$actual_requirement" in
+            *"identifier \"$BUNDLE_ID\""*"anchor apple generic"*) ;;
+            *) die "Developer ID designated requirement is invalid: $actual_requirement" ;;
+        esac
+        details="$($CODESIGN_BIN -d --verbose=4 "$app" 2>&1)" || die "cannot inspect Developer ID signature: $app"
+        printf '%s\n' "$details" | grep -F 'Authority=Developer ID Application:' >/dev/null ||
+            die "Developer ID Application authority is missing: $app"
+        printf '%s\n' "$details" | grep -Eq '^TeamIdentifier=[A-Z0-9]+$' ||
+            die "Developer ID TeamIdentifier is missing: $app"
+    else
+        validate_requirement_shape "$actual_requirement" "$identity_hash"
+        test "$actual_requirement" = "$pinned_requirement" ||
+            die "designated requirement drifted; pinned='$pinned_requirement' new='$actual_requirement'"
+    fi
     require_hardened_runtime "$app" "$BUNDLE_ID"
     verify_signed_node "$app"
     if test "$require_clean" = yes; then
@@ -298,15 +314,18 @@ record_signed_node_sha256() {
 }
 
 build_and_sign() {
-    local output identity_hash pinned_requirement require_clean validate_stage_path
+    local output identity_hash pinned_requirement require_clean validate_stage_path signing_mode timestamp_option
     output="$1"
     identity_hash="$2"
     pinned_requirement="$3"
     require_clean="${4:-no}"
     validate_stage_path="${5:-no}"
+    signing_mode="${6:-local}"
     test ! -e "$output" || die "signing staging path already exists: $output"
 
-    "$BUILD_APP_BIN"
+    if test "${CODEXMULTI_USE_EXISTING_BUILD:-no}" != yes; then
+        "$BUILD_APP_BIN"
+    fi
     test -d "$UNSIGNED_APP" || die "build script did not produce $UNSIGNED_APP"
     if test "$validate_stage_path" = yes; then
         output="$(canonical_stage_output "$output")"
@@ -314,12 +333,17 @@ build_and_sign() {
     /usr/bin/ditto "$UNSIGNED_APP" "$output"
     require_unsigned_nested_layout "$output"
     validate_node_entitlements "$NODE_ENTITLEMENTS"
-    "$CODESIGN_BIN" --force --sign "$identity_hash" --options runtime --timestamp=none \
+    if test "$signing_mode" = developer; then
+        timestamp_option="--timestamp"
+    else
+        timestamp_option="--timestamp=none"
+    fi
+    "$CODESIGN_BIN" --force --sign "$identity_hash" --options runtime "$timestamp_option" \
         --entitlements "$NODE_ENTITLEMENTS" "$output/$NESTED_NODE_RELATIVE"
     record_signed_node_sha256 "$output"
-    "$CODESIGN_BIN" --force --sign "$identity_hash" --options runtime --timestamp=none \
+    "$CODESIGN_BIN" --force --sign "$identity_hash" --options runtime "$timestamp_option" \
         --identifier "$BUNDLE_ID" "$output"
-    verify_signed_app "$output" "$identity_hash" "$pinned_requirement" "$require_clean"
+    verify_signed_app "$output" "$identity_hash" "$pinned_requirement" "$require_clean" "$signing_mode"
 }
 
 audit() {
@@ -378,12 +402,19 @@ dry_run() {
 }
 
 stage_app() {
-    local requested_output output identity_hash pinned_requirement
+    local requested_output output identity_hash pinned_requirement signing_mode
     requested_output="$1"
     output="$(canonical_stage_output "$requested_output")"
-    identity_hash="$(resolve_identity)"
-    pinned_requirement="$(read_pinned_requirement)"
-    validate_requirement_shape "$pinned_requirement" "$identity_hash"
+    if test -n "${SIGNING_IDENTITY:-}"; then
+        identity_hash="$SIGNING_IDENTITY"
+        pinned_requirement=""
+        signing_mode=developer
+    else
+        identity_hash="$(resolve_identity)"
+        pinned_requirement="$(read_pinned_requirement)"
+        validate_requirement_shape "$pinned_requirement" "$identity_hash"
+        signing_mode=local
+    fi
 
     cleanup_stage() {
         if test -e "$output" && test "${stage_complete:-no}" != yes; then
@@ -394,13 +425,14 @@ stage_app() {
     }
     stage_complete=no
     trap cleanup_stage EXIT HUP INT TERM
-    build_and_sign "$output" "$identity_hash" "$pinned_requirement" no yes
+    build_and_sign "$output" "$identity_hash" "$pinned_requirement" no yes "$signing_mode"
     stage_complete=yes
     trap - EXIT HUP INT TERM
 
     printf 'CodexMulti fresh signed staging bundle: %s\n' "$output"
     printf '  executable SHA-256: %s\n' "$("$SHASUM_BIN" -a 256 "$output/Contents/MacOS/CodexMulti" | awk '{print $1}')"
-    printf '  signing identity SHA-1: %s\n' "$identity_hash"
+    printf '  signing identity: %s\n' "$identity_hash"
+    printf '  signing mode: %s\n' "$signing_mode"
     printf '  designated requirement: %s\n' "$(designated_requirement "$output")"
     printf '  strict signature: valid\n'
     printf '  hardened runtime: present\n'

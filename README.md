@@ -35,13 +35,33 @@ Proxy transport compatibility tracks the Codex CLI. Check the release notes befo
 
 ## Install
 
-1. Download the latest release zip and expand it.
-2. Move `CodexMulti.app` to `/Applications`.
-3. Open it from Finder.
+The installer fetches the latest GitHub release, verifies its published SHA-256, keeps an existing app
+as `CodexMulti.app.previous`, installs to `/Applications`, does not remove Gatekeeper quarantine
+attributes, and opens the app in the background:
 
-Releases are **not notarized yet**, so the first launch needs Control-click → **Open** → **Open**
-rather than a double-click. That approves this one app; Gatekeeper stays on. There is no automatic
-updater yet: to upgrade, quit the app and replace it in `/Applications`.
+```sh
+curl -fsSL https://raw.githubusercontent.com/moonsunkim/codexmulti/main/install.sh | bash
+```
+
+After the separate `moonsunkim/homebrew-tap` repository is published, Homebrew installation is one
+line:
+
+```sh
+brew install --cask moonsunkim/tap/codexmulti
+```
+
+For a manual install, download `CodexMulti-<version>.zip` and its matching `.sha256` file from the
+[latest release](https://github.com/moonsunkim/codexmulti/releases/latest), put both in one directory,
+run `shasum -a 256 -c CodexMulti-<version>.zip.sha256`, expand the verified zip, move
+`CodexMulti.app` to `/Applications`, and open it.
+
+The SHA-256 check detects a download that differs from the checksum published with the GitHub
+release. A Developer ID signature additionally identifies the Apple developer and notarization adds
+Apple's automated review and a stapled ticket. The release notes state `DEVELOPER ID`,
+`LOCAL SELF-SIGNED`, or `UNSIGNED` and state `NOTARIZED` or `NOT NOTARIZED`; a self-signed release
+provides integrity but not an Apple-verified publisher identity. For any release marked
+`NOT NOTARIZED`, first launch with Control-click → **Open** → **Open**. Neither the installer nor the
+manual procedure removes quarantine. There is no automatic updater yet.
 
 ## Use
 
