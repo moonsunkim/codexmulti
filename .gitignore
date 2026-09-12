@@ -27,3 +27,5 @@ core/auth.json
 # Node proxy (proxy/)
 proxy/node_modules/
 proxy/test/.tmp-*/
+
+dist/
