@@ -87,7 +87,6 @@ struct MenuLine: View {
             .padding(.vertical, 6)
             .background(RoundedRectangle(cornerRadius: 7, style: .continuous).fill(highlighted && item.enabled ? tone.pillHover : .clear))
             .contentShape(Rectangle())
-            .opacity(item.enabled ? 1 : Tone.disabledOpacity)
         }
         .buttonStyle(.plain)
         .disabled(!item.enabled)
