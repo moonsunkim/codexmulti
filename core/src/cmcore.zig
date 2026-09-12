@@ -451,8 +451,6 @@ pub export fn cm_service_provenance() callconv(.c) [*:0]const u8 {
 pub export fn cm_service_keychain_probe(service: ?*cm_service, out: ?[*]u8, cap: usize) callconv(.c) i32 {
     const self = service orelse return -1;
     const runtime = self.runtime orelse return -3;
-    // Runtime creation has actually passed signer validation. Do not inspect
-    // credential values, and never report success for the detached shell.
     var buffer: [192]u8 = undefined;
     const bytes = std.fmt.bufPrint(
         &buffer,

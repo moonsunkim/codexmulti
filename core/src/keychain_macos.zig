@@ -670,9 +670,6 @@ pub fn Module(
                     if (!std.mem.eql(u8, service, v2_service)) return error.ForeignKeychainService;
 
                     if (!sec.stableSignerValid()) return error.UntrustedBuild;
-                    // These are background backups in the legacy login keychain. The
-                    // per-query authentication flag alone does not suppress its ACL UI.
-                    // This setting affects only this process; Codex login runs in a child.
                     if (sec.SecKeychainSetUserInteractionAllowed(0) != status_success)
                         return error.InteractionPolicyUnavailable;
                     return .{

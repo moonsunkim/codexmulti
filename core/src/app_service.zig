@@ -1509,8 +1509,6 @@ pub const Service = struct {
         } else |err| switch (err) {
             error.NotFound => false,
             else => {
-                // Denied or unavailable is not an absent backup. Do not turn a
-                // failed read into an overwrite or another authorization request.
                 logAuthFailure("backup load", account.storage_key, err);
                 return;
             },
