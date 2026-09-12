@@ -6,6 +6,7 @@ import { createInterface } from 'node:readline';
 import { chmod, mkdir, rm, writeFile } from 'node:fs/promises';
 import { createHash, randomUUID } from 'node:crypto';
 import { zstdDecompressSync } from 'node:zlib';
+import { completed, responsesFixture, usageLimit } from './responses-websocket-helpers.mjs';
 import {
   SCRATCH_ROOT,
   request,
@@ -109,7 +110,7 @@ async function runCodex(testContext, { home, work, proxyOrigin, prompt = 'reply 
 
 async function runAppServerTurns(testContext, {
   home, work, proxyOrigin, turnCount = 2, prompt = 'reply with the single word ok', beforeStop = async () => {},
-  extraConfig = [],
+  extraConfig = [], beforeTurn = async () => {},
 }) {
   const args = [
     'app-server', '--listen', 'stdio://',
@@ -174,6 +175,7 @@ async function runAppServerTurns(testContext, {
   const threadStarted = await waitFor((message) => message.id === 2 && message.result?.thread?.id, 'thread_start');
   const threadId = threadStarted.result.thread.id;
   for (let offset = 0; offset < turnCount; offset += 1) {
+    await beforeTurn(offset);
     const id = 3 + offset;
     send({ id, method: 'turn/start', params: {
       threadId,
@@ -394,6 +396,85 @@ test('Codex CLI app-server smoke: upstream 426 fallback stays sticky across two 
   assert.deepEqual(responseCaptures.map(({ kind }) => kind), ['upgrade', 'http', 'http']);
   assert.match(JSON.stringify(result.messages), /\bok\b/i);
   assert.doesNotMatch(JSON.stringify(responseCaptures), /synthetic-signature|synthetic-refresh|Bearer\s+eyJ/);
+});
+
+test('Codex app-server continues the same WebSocket after manual switching and an in-band usage limit', { timeout: 60_000 }, async (t) => {
+  if (!await requireCodex(t)) return;
+  let serial = 0;
+  const fixture = await responsesFixture(t, ({ name, event, send }) => {
+    assert.equal(event.type, 'response.create');
+    if (name === 'b' && event.generate !== false) return send(usageLimit(event));
+    const id = `smoke-websocket-${serial += 1}`;
+    const output = event.generate === false ? [] : [{
+      type: 'message', role: 'assistant', id: `${id}-message`,
+      content: [{ type: 'output_text', text: 'ok' }],
+    }];
+    send({ type: 'response.created', response: { id } });
+    for (const item of output) send({ type: 'response.output_item.done', output_index: 0, item });
+    const terminal = completed(id, event, output);
+    terminal.response.usage = {
+      input_tokens: 0, input_tokens_details: null, output_tokens: 0,
+      output_tokens_details: null, total_tokens: 0,
+    };
+    send(terminal);
+  }, { accountNames: ['a', 'b', 'c'] });
+  const codex = await prepareCodexHome(fixture.root);
+  let upgrades = 0;
+  fixture.proxy.server.on('upgrade', () => { upgrades += 1; });
+  const result = await runAppServerTurns(t, {
+    ...codex, proxyOrigin: fixture.origin,
+    beforeTurn: async (index) => {
+      if (index === 1) await fixture.proxy.failover.switchTo('b');
+    },
+  });
+  const generated = fixture.calls.filter(({ event }) => event.generate !== false);
+  assert.deepEqual(generated.map(({ name }) => name), ['a', 'b', 'c']);
+  assert.equal(upgrades, 1);
+  assert.match(JSON.stringify(result.messages), /\bok\b/i);
+  assert.equal(fixture.proxy.failover.stateOf('b'), 'COOLDOWN');
+  assert.equal(generated[2].event.previous_response_id, null);
+  assert.ok(generated[2].event.input.length >= generated[0].event.input.length);
+});
+
+test('Codex app-server automatically recovers a missing continuation with full input', { timeout: 60_000 }, async (t) => {
+  if (!await requireCodex(t)) return;
+  let rejectNext = false;
+  let rejected = false;
+  let serial = 0;
+  const fixture = await responsesFixture(t, ({ event, send }) => {
+    if (rejectNext && event.generate !== false) {
+      rejectNext = false;
+      rejected = true;
+      send({ type: 'error', status: 400, error: {
+        type: 'invalid_request_error', code: 'previous_response_not_found',
+        param: 'previous_response_id', message: 'Synthetic missing continuation',
+      } });
+      return;
+    }
+    const id = `smoke-recovery-${serial += 1}`;
+    const output = event.generate === false ? [] : [{
+      type: 'message', role: 'assistant', id: `${id}-message`,
+      content: [{ type: 'output_text', text: 'ok' }],
+    }];
+    send({ type: 'response.created', response: { id } });
+    for (const item of output) send({ type: 'response.output_item.done', item });
+    const terminal = completed(id, event, output);
+    terminal.response.usage = {
+      input_tokens: 0, input_tokens_details: null, output_tokens: 0,
+      output_tokens_details: null, total_tokens: 0,
+    };
+    send(terminal);
+  }, { accountNames: ['a'] });
+  const codex = await prepareCodexHome(fixture.root);
+  await runAppServerTurns(t, {
+    ...codex, proxyOrigin: fixture.origin,
+    beforeTurn: async (index) => { if (index === 1) rejectNext = true; },
+  });
+  assert.equal(rejected, true);
+  const generated = fixture.calls.filter(({ event }) => event.generate !== false);
+  assert.equal(generated.length, 3);
+  assert.ok(generated[2].event.previous_response_id == null);
+  assert.ok(generated[2].event.input.length > generated[0].event.input.length);
 });
 
 test('Codex CLI smoke: parent and spawned child each relay one Upgrade before upstream 426', { timeout: 60_000 }, async (t) => {

@@ -21,6 +21,7 @@ import { authorizedControlRequest, controlTokenPath, loadOrCreateControlToken, l
 import { UpdateGate } from './update-gate.mjs';
 import { loadRuntimeContext } from './runtime-context.mjs';
 import { AccountState, FailoverManager } from './failover.mjs';
+import { tunnelResponsesWebSocket } from './responses-websocket.mjs';
 import {
   bufferForClassification,
   buildUpstreamHeaders,
@@ -931,6 +932,7 @@ export async function createProxy(configInput, options = {}) {
         request.headers,
         credentials,
         new URL(target),
+        { inspectMessages: isResponsesTarget(target) },
       );
       return await openUpstreamUpgrade({
         method: request.method,
@@ -1110,6 +1112,59 @@ export async function createProxy(configInput, options = {}) {
       return;
     }
     let attemptNumber = 0;
+    const markUsageLimit = async (name, event, headers = {}) => {
+      const classification = classify429(Buffer.from(JSON.stringify(event)), { ...headers, 'content-encoding': 'identity' }, {
+        now: options.now ? options.now() : Date.now(),
+        defaultSeconds: config.default_cooldown_seconds,
+        marginSeconds: config.cooldown_safety_margin_seconds,
+      });
+      if (!classification.usageLimit) return false;
+      await failover.markCooldown(name, classification.cooldownUntil);
+      logger({
+        timestamp: new Date().toISOString(), level: 'info', event: 'account_cooldown',
+        request_id: request.proxyRequestId, method: request.method, route: route.route,
+        status: 429, account_name: name,
+        cooldown_until: new Date(classification.cooldownUntil).toISOString(),
+      });
+      return true;
+    };
+    const connectAccount = async (name, excluded) => {
+      while (name) {
+        excluded.add(name);
+        const connected = await attemptUpstreamUpgrade(current, request, route.target, name);
+        const owner = name;
+        let released = false;
+        const release = () => {
+          if (released) return;
+          released = true;
+          changeInFlight(current, owner, -1);
+        };
+        if (connected.kind === 'upgrade') {
+          if (connected.response.headers['sec-websocket-extensions']) {
+            connected.socket.destroy();
+            release();
+            throw new Error('websocket_extensions_not_negotiated');
+          }
+          return { ...connected, name, release };
+        }
+        try {
+          const buffered = await bufferForClassification(connected.response);
+          const classification = buffered.complete
+            ? classify429(buffered.raw, connected.response.headers)
+            : { usageLimit: false };
+          if (connected.response.statusCode === 429 && classification.usageLimit
+              && await markUsageLimit(name, classification.body, connected.response.headers)) {
+            name = await failover.selectReady(excluded);
+            continue;
+          }
+          throw new Error('websocket_upstream_handshake_rejected');
+        } finally {
+          connected.response.destroy();
+          release();
+        }
+      }
+      return null;
+    };
     while (accountName) {
       attemptNumber += 1;
       attempted.add(accountName);
@@ -1168,13 +1223,28 @@ export async function createProxy(configInput, options = {}) {
             account_name: currentAccount,
             attempt: attemptNumber,
           });
-          const counts = await tunnelWebSocket(
-            socket,
-            opened.response,
-            opened.socket,
-            head,
-            opened.head,
-          );
+          const inspectMessages = isResponsesTarget(route.target);
+          if (inspectMessages && opened.response.headers['sec-websocket-extensions']) {
+            opened.socket.destroy();
+            throw new Error('websocket_extensions_not_negotiated');
+          }
+          const counts = inspectMessages
+            ? await tunnelResponsesWebSocket({
+              clientSocket: socket,
+              clientHead: head,
+              initialPeer: { ...opened, name: currentAccount, release: releaseAttempt },
+              handshake: switchingHead(opened.response),
+              maximumBytes: config.request_body_limit_bytes,
+              selectAccount: (excluded) => failover.selectReady(excluded),
+              connectAccount,
+              markUsageLimit,
+              onRetry: (_previous, name, attempt) => logger({
+                timestamp: new Date().toISOString(), level: 'info', event: 'ws_failover',
+                request_id: request.proxyRequestId, method: request.method, route: route.route,
+                account_name: name, attempt,
+              }),
+            })
+            : await tunnelWebSocket(socket, opened.response, opened.socket, head, opened.head);
           releaseAttempt();
           logger({
             timestamp: new Date().toISOString(),

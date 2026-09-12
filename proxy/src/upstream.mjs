@@ -48,7 +48,7 @@ export function buildUpstreamHeaders(inbound, credentials, target, bodyLength) {
   return headers;
 }
 
-export function buildUpstreamUpgradeHeaders(inbound, credentials, target) {
+export function buildUpstreamUpgradeHeaders(inbound, credentials, target, { inspectMessages = false } = {}) {
   const headers = stripHopByHop(inbound);
   for (const key of Object.keys(headers)) {
     const lower = key.toLowerCase();
@@ -60,6 +60,7 @@ export function buildUpstreamUpgradeHeaders(inbound, credentials, target) {
   headers.host = target.host;
   headers.connection = 'Upgrade';
   headers.upgrade = Array.isArray(inbound.upgrade) ? inbound.upgrade[0] : inbound.upgrade;
+  if (inspectMessages) delete headers['sec-websocket-extensions'];
   return headers;
 }
 

@@ -125,8 +125,13 @@ All screenshots use synthetic accounts.
 ## When will it switch accounts?
 
 Only after a confirmed usage-limit response: a pre-stream HTTP `429` with error type
-`usage_limit_reached`, or that same response during a WebSocket handshake. Each eligible account
-is tried at most once for the request.
+`usage_limit_reached`, that same response during a WebSocket handshake, or a `usage_limit_reached`
+error inside a Responses WebSocket before any response event reaches the client. Each eligible
+account is tried at most once for the request.
+
+Manual switching applies to the next request even when Codex reuses an existing WebSocket.
+Responses already running finish on their original account. Conversation context is carried
+forward when an account changes; independent streams can continue without being interrupted.
 
 Network failures, `5xx`, interrupted streams, plan mismatches, `usage_not_included` and unrecognized
 `429` responses stop the request. A response that has already started is not replayed on another account.

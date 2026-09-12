@@ -6,6 +6,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.2.8]
+
+### Fixed
+
+- Retry a confirmed usage-limit error inside a Responses WebSocket on the next eligible account before any response event reaches the client.
+- Apply manual account switches to the next request on an existing WebSocket while preserving responses already running on the previous account.
+- Restore full conversation input when a continued response moves accounts, including completed tool calls and encrypted reasoning items.
+- Preserve independent conversation streams and stop retrying after output, cancellation, or an unrelated failure.
+
 ## [0.2.7]
 
 ### Added

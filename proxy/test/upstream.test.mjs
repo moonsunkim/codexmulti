@@ -77,6 +77,18 @@ test('WebSocket handshake replaces identity headers and preserves upgrade metada
   assert.equal(headers['x-remove-me'], undefined);
 });
 
+test('inspected Responses WebSockets do not negotiate opaque compressed messages', () => {
+  const headers = buildUpstreamUpgradeHeaders({
+    upgrade: 'websocket', 'sec-websocket-extensions': 'permessage-deflate',
+    'sec-websocket-key': 'synthetic-key', 'openai-beta': 'responses_websockets=2026-02-06',
+  }, { accessToken: 'synthetic-token', accountId: 'synthetic-account' }, new URL('https://example.test/codex/responses'), {
+    inspectMessages: true,
+  });
+  assert.equal(headers['sec-websocket-extensions'], undefined);
+  assert.equal(headers['sec-websocket-key'], 'synthetic-key');
+  assert.equal(headers['openai-beta'], 'responses_websockets=2026-02-06');
+});
+
 for (const [encoding, compress] of [['gzip', gzipSync], ['zstd', zstdCompressSync]]) {
   test(`${encoding} compressed usage limit is classified from a decoded copy`, () => {
     const json = Buffer.from(JSON.stringify({ error: { type: 'usage_limit_reached', resets_at: 2_000_000_000 } }));

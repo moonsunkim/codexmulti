@@ -223,7 +223,7 @@ test('WebSocket logs open and close with duration and directional byte counts on
   );
   t.after(() => opened.socket.destroy());
   assert.match(opened.header, /^HTTP\/1\.1 101 Switching Protocols\r\n/);
-  const payload = Buffer.from('synthetic-frame');
+  const payload = Buffer.concat([Buffer.from([0x81, 15]), Buffer.from('synthetic-frame')]);
   const echoed = readExactly(opened.socket, opened.head, payload.length);
   opened.socket.write(payload);
   assert.deepEqual(await echoed, payload);
