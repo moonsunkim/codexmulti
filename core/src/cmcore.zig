@@ -311,7 +311,6 @@ pub export fn cm_service_version() callconv(.c) u32 {
     return 1;
 }
 
-/// Pure catalog access for shell labels; no service, credentials, or I/O is involved.
 pub export fn cm_copy_text(language: u8, key: ?[*]const u8, key_len: usize, out: ?[*]u8, capacity: usize) callconv(.c) usize {
     const input = key orelse return 0;
     if (key_len > 128) return 0;

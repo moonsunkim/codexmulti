@@ -87,7 +87,6 @@ async function controlRequest(config, method, requestPath, body = null) {
     try {
       token = await readControlToken(config.control_token_file);
     } catch (error) {
-      // Old daemons and an offline first login have no token file yet.
       if (error.code !== 'ENOENT') throw error;
     }
   }

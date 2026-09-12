@@ -831,7 +831,6 @@ fn exchangeOnce(
 fn readControlAuthorization(io: std.Io, path: []const u8, buffer: *[71]u8) TransportError!?[]const u8 {
     if (path.len == 0) return null;
     const file = std.Io.Dir.cwd().openFile(io, path, .{ .allow_directory = false, .follow_symlinks = false }) catch |err| {
-        // A pre-0.2.2 daemon has no token file. New daemons reject unauthenticated requests.
         if (err == error.FileNotFound) return null;
         return error.RequestRejected;
     };

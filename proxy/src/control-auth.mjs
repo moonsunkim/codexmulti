@@ -58,7 +58,6 @@ export function localRequestError(request) {
     allowedHosts.add('localhost');
   }
   if (hosts.length !== 1 || !allowedHosts.has(request.headers.host)) return 'invalid_local_host';
-  // This is a CLI endpoint. Browsers must never borrow the pooled OAuth identity.
   if (request.headers.origin !== undefined
       || Object.keys(request.headers).some((name) => name.startsWith('sec-fetch-'))) {
     return 'browser_request_forbidden';

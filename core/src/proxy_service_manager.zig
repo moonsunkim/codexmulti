@@ -454,7 +454,6 @@ pub const ProxyServiceWorker = struct {
 
     fn setEnabledOff(self: *ProxyServiceWorker, before: Discovery) bool {
         if (before.routing.state == .conflicting) return false;
-        // Restoring the user's routing does not require control of a broken or unknown process.
         if (before.new_presence != .loaded or before.health.state != .healthy or
             !before.new_arguments_match) return self.disableRouting();
         if (!switchCanMutate(before)) return false;
@@ -504,9 +503,6 @@ pub const ProxyServiceWorker = struct {
     }
 };
 
-/// Restore shared Codex routing before removing only this app's verified service.
-/// Callers must quiesce clients. Healthy requests drain; an unresponsive owned job
-/// may be stopped because uninstall was explicitly requested.
 pub fn prepareUninstall(live: Live) !void {
     const restored = live.routing.disable(live.paths.routing_config_path.slice());
     if (restored.state != .off or (restored.status != .success and restored.status != .no_change))
@@ -527,7 +523,6 @@ pub fn prepareUninstall(live: Live) !void {
             if (attempts >= drain_poll_limit) return error.RequestsStillRunning;
             try live.io.sleep(.fromMilliseconds(drain_poll_ms), .awake);
         }
-        // Recheck launch ownership immediately before stopping the job.
         var target_buffer: [192]u8 = undefined;
         const target = domainTarget(&target_buffer, live.paths.uid, new_label) orelse return error.InvalidTarget;
         const arguments = live.paths.programArguments();

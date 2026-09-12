@@ -285,7 +285,6 @@ fn validateDisplayText(value: []const u8) !void {
 
 pub fn writeAtomically(io: std.Io, dir: std.Io.Dir, final_path: []const u8, temp_path: []const u8, bytes: []const u8) !void {
     if (std.mem.eql(u8, final_path, temp_path)) return error.TempPathMatchesFinalPath;
-    // A unique exclusive file preserves stale crash remnants and cannot follow a symlink.
     var nonce: [16]u8 = undefined;
     io.random(&nonce);
     var path_buffer: [std.Io.Dir.max_path_bytes]u8 = undefined;
