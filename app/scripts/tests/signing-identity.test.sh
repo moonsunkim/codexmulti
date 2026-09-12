@@ -86,7 +86,7 @@ run_package_audit() {
     TEST_KEYCHAIN="$temp_root/login.keychain-db" \
     TEST_IDENTITY_HASH="$PINNED_HASH" \
     TEST_IDENTITY_NAME="$RENAMED_IDENTITY" \
-    "$PACKAGE_SCRIPT" audit
+    bash -c '. "$1"; TARGET_APP="$2"; audit' package-audit "$PACKAGE_SCRIPT" "$temp_root/CodexMulti.app"
 }
 
 assert_hash() {

@@ -188,10 +188,32 @@ bundle whose provenance or designated requirement does not match.
 | [SwiftUI app](app/) | Windows, menus, accessibility and macOS integration. |
 | [Zig core](core/) | Accounts, background work, guarded routing changes, and all UI text. |
 | [Node proxy](proxy/) | Local request forwarding and failover across eligible accounts. |
+| [Native updater](updater/) | Signed runtime staging, request admission fencing and crash recovery. |
 
 The app sends typed intents to the core and renders its returned state. The proxy runs independently
 as a per-user LaunchAgent, so requests can continue after the menu-bar app closes. Both the proxy and
-its pinned Node runtime are bundled in the app.
+its pinned Node runtime are bundled in the app. After one-time update setup, the running proxy uses a
+verified immutable copy under `~/Library/Application Support/CodexMulti/runtimes/`.
+
+### In-app updates
+
+Open Settings and use **Software update**. The first setup asks you to close Codex clients because
+older installations do not have the atomic request admission fence. Later updates preserve the
+running proxy while the app is replaced. A changed proxy runtime waits until HTTP requests,
+WebSocket connections and credential refreshes have finished. A UI-only update keeps the current
+proxy process. New connections can fail briefly during a runtime switch; active requests are never
+forcefully cut or replayed.
+
+Account changes pause during an update. Settings shows the pending update and offers cancellation
+before the stop is committed, or **Turn off when requests finish**. The update agent survives the
+menu-bar app closing. If the new runtime cannot start, it restores the previous compatible runtime.
+A live but unreachable process requires recovery rather than being forcibly stopped. **Show previous
+app** opens the retained signed app when app installation needs manual recovery.
+
+Update checking is enabled in release builds with an HTTPS feed and pinned Sparkle public key.
+Local unsigned builds show that distribution configuration is unavailable. See the
+[update design and implementation constraints](docs/update-design.md) and
+[release configuration](docs/updater-release.md).
 
 <details>
 <summary>Recovery, removal and manual routing repair</summary>
@@ -199,14 +221,26 @@ its pinned Node runtime are bundled in the app.
 The app retries recovery while Failover is enabled. If a change must wait for active requests,
 its status explains the wait. Turn Failover off to restore direct Codex routing after those requests finish.
 
-Before removing the app, quit Codex clients and run:
+For an installation with safe updates configured, quit Codex clients and the CodexMulti menu-bar app, then run:
 
 ```sh
-"/Applications/CodexMulti.app/Contents/Helpers/codexmulti-maintenance" prepare-uninstall
+"/Applications/CodexMulti.app/Contents/Helpers/codexmulti-update-agent" prepare-removal \
+  --app "/Applications/CodexMulti.app" \
+  --config "$HOME/.config/codexmulti/proxy.json"
 brew uninstall --cask codexmulti
 ```
 
-The bundled helper restores only CodexMulti's two managed routing entries, drains healthy requests, checks the LaunchAgent's exact program arguments, and removes its plist and service receipt. Account credentials, usage history and reset records remain available for reinstall. Homebrew runs this helper automatically on removal; if it reports a conflict or a busy service, resolve that condition and retry before deleting the app. Homebrew upgrades and reinstalls also run the cleanup: reopen CodexMulti and turn the proxy on again afterward. `--zap` additionally removes the app's saved account data.
+Use your configured proxy config path if it differs. Preparation waits for requests to finish, restores
+only CodexMulti's routing entries, and removes its automatic-start registration. If it reports
+`proxy_busy`, the agent continues waiting; retry preparation after clients have finished. Account
+credentials, usage history and reset records remain available for reinstall.
+
+The cask verifies explicit removal preparation before deleting the app. It is marked `auto_updates`;
+use the in-app updater for normal upgrades. Homebrew does not give its uninstall script a reliable
+upgrade-versus-removal signal, so unprepared `--greedy` upgrades and reinstalls stop before replacing
+the app. They do not silently turn Failover off. `--zap` additionally removes saved account data.
+For an older installation without the native update helper, keep using its bundled
+`codexmulti-maintenance prepare-uninstall` procedure before removal.
 
 If the app or helper cannot run, open `~/.codex/config.toml` in a text editor. Remove only these exact root-level entries when present, preserving all other settings:
 

@@ -31,6 +31,8 @@ STAGED_APP=""
 ZIP_PATH=""
 SHA_PATH=""
 NOTES_PATH=""
+APPCAST_PATH=""
+RUNTIME_MANIFEST_PATH=""
 ARTIFACT_SHA256=""
 SIGNING_STATUS=""
 NOTARIZATION_STATUS=""
@@ -174,6 +176,10 @@ check_distribution_credentials() {
     test -n "${SIGNING_IDENTITY:-}" || die "public releases require a Developer ID signing identity"
     test "$(notary_credential_count)" = 3 || die "public releases require all three Apple notarization credentials"
     test -f "$APPLE_NOTARY_KEY_PATH" || die "notary key file is missing"
+    test -n "${SPARKLE_PUBLIC_KEY:-}" || die "Sparkle public key is required"
+    test -f "${SPARKLE_PRIVATE_KEY_FILE:-}" || die "Sparkle private key file is required"
+    export SPARKLE_PUBLIC_KEY
+    export SPARKLE_FEED_URL="${SPARKLE_FEED_URL:-https://github.com/$RELEASE_REPOSITORY/releases/latest/download/appcast.xml}"
 }
 
 notarize_app() {
@@ -254,12 +260,33 @@ write_release_notes() {
     printf 'Release notes: %s\n' "$NOTES_PATH"
 }
 
+create_appcast() {
+    if test "$RELEASE_MODE" = dry-run && test -z "${SPARKLE_PRIVATE_KEY_FILE:-}"; then
+        printf 'Appcast signing skipped: no Sparkle key was supplied for this local dry run.\n'
+        return
+    fi
+    local node signer temporary
+    node="$STAGED_APP/Contents/Helpers/node"
+    signer="$REPO_ROOT/app/.build/artifacts/sparkle/Sparkle/bin/sign_update"
+    temporary="$STAGE_ROOT/appcast.xml"
+    "$node" "$REPO_ROOT/app/scripts/create-appcast.mjs" "$STAGED_APP" "$ZIP_PATH" "$temporary" \
+        "https://github.com/$RELEASE_REPOSITORY/releases/download/$TAG/CodexMulti-$VERSION.zip" \
+        "$SPARKLE_PRIVATE_KEY_FILE" "$signer"
+    APPCAST_PATH="$DIST_DIR/appcast.xml"
+    RUNTIME_MANIFEST_PATH="$DIST_DIR/runtime-manifest.json"
+    /bin/cp -f "$temporary" "$APPCAST_PATH"
+    /bin/cp -f "$STAGED_APP/Contents/Resources/runtime-manifest.json" "$RUNTIME_MANIFEST_PATH"
+}
+
 publish_release() {
     test "$SIGNING_STATUS" = "DEVELOPER ID" && test "$NOTARIZATION_STATUS" = "NOTARIZED" || die "refusing to publish an unverified distribution"
     "$GIT_BIN" -C "$REPO_ROOT" tag -a "$TAG" -m "CodexMulti $VERSION"
     "$GIT_BIN" -C "$REPO_ROOT" push origin "refs/tags/$TAG"
-    "$GH_BIN" release create "$TAG" "$ZIP_PATH" "$SHA_PATH" --repo "$RELEASE_REPOSITORY" \
-        --title "CodexMulti $VERSION" --notes-file "$NOTES_PATH" --verify-tag
+    test -f "$APPCAST_PATH" && test -f "$RUNTIME_MANIFEST_PATH" || die "signed update feed is missing"
+    "$GH_BIN" release create "$TAG" "$ZIP_PATH" "$SHA_PATH" "$RUNTIME_MANIFEST_PATH" --repo "$RELEASE_REPOSITORY" \
+        --title "CodexMulti $VERSION" --notes-file "$NOTES_PATH" --verify-tag --draft
+    "$GH_BIN" release upload "$TAG" "$APPCAST_PATH" --repo "$RELEASE_REPOSITORY"
+    "$GH_BIN" release edit "$TAG" --draft=false --repo "$RELEASE_REPOSITORY"
 }
 
 cleanup_stage() {
@@ -324,6 +351,8 @@ main() {
     notarize_app
     begin_stage packaging
     package_artifact
+    begin_stage appcast
+    create_appcast
     begin_stage cask
     update_cask
     begin_stage notes

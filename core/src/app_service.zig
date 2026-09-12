@@ -513,7 +513,14 @@ pub const Service = struct {
         return self.submit(command);
     }
 
+    pub fn updateFrozen(self: *Service) bool {
+        const live = self.live orelse return false;
+        const service = live.proxy_service orelse return false;
+        return @import("update_guard.zig").isFrozen(live.allocator, live.io, service.paths.app_data_root.slice());
+    }
+
     pub fn submit(self: *Service, command: ui_model.Command) ui_model.CommandOutcome {
+        if (self.updateFrozen()) return .rejected_busy;
         return switch (command) {
             .set_appearance => |appearance| self.submitAppearance(appearance),
             .set_language => |request| self.submitLanguage(request),
@@ -1192,6 +1199,7 @@ pub const Service = struct {
 
     pub fn pump(self: *Service, now_unix_s: i64) void {
         self.now_unix_s = now_unix_s;
+        if (self.updateFrozen()) return;
         if (self.live) |live| if (live.proxy_service) |service_live| self.proxy_service.drain(service_live.io);
         self.drainProxy(now_unix_s);
         self.maybeSynchronizeCodexAuthBackups(now_unix_s);
@@ -1600,6 +1608,7 @@ pub const Service = struct {
     }
 
     pub fn restoreCodexAuthBackups(self: *Service) void {
+        if (self.updateFrozen()) return;
         const live = self.live orelse return;
         var index: usize = 0;
         while (index < self.core.accountCount()) : (index += 1) {

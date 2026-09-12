@@ -1,5 +1,6 @@
 import Dispatch
 import Foundation
+import UpdaterKit
 import os
 
 enum CoreBridgeError: Error, Equatable {
@@ -78,6 +79,17 @@ actor CoreBridge: CoreProtocol {
     }
 
     func submit(_ intent: Intent) {
+        if let runtime = try? RuntimeStore(root: RuntimeStore.defaultRoot),
+           let journal = try? runtime.current(), ![.complete, .cancelled, .rolledBack].contains(journal.phase) {
+            if intent == .quit_app {
+                Task { @MainActor in QuitRequest.post() }
+            } else if intent == .open_details {
+                Task { @MainActor in WindowPresenter.shared.showSettings(activation: .userInitiated) }
+            } else if case .set_proxy_enabled(on: false) = intent {
+                _ = try? AgentConnection.send(AgentRequest("off", transactionID: journal.transactionID), store: runtime)
+            }
+            return
+        }
         guard let handle else {
             log.error("intent dropped before start: \(intent.name, privacy: .public)")
             return
@@ -97,6 +109,7 @@ actor CoreBridge: CoreProtocol {
             abi.destroy(handle)
         }
         handle = nil
+        pipeline = ProjectionPipeline()
     }
 
 

@@ -17,7 +17,9 @@ import {
   expandHome,
   refreshErrorKind,
 } from './accounts.mjs';
-import { authorizedControlRequest, controlTokenPath, loadOrCreateControlToken, localRequestError } from './control-auth.mjs';
+import { authorizedControlRequest, controlTokenPath, loadOrCreateControlToken, localRequestError, readControlToken } from './control-auth.mjs';
+import { UpdateGate } from './update-gate.mjs';
+import { loadRuntimeContext } from './runtime-context.mjs';
 import { AccountState, FailoverManager } from './failover.mjs';
 import {
   bufferForClassification,
@@ -418,8 +420,11 @@ export async function createProxy(configInput, options = {}) {
     ? configInput : validateConfig(configInput, { allowPortZero: true, home: options.home });
   const configPath = options.configPath ? path.resolve(options.configPath) : null;
   initialConfig.control_token_file = configPath ? controlTokenPath(configPath) : null;
-  const controlToken = options.controlToken ?? await loadOrCreateControlToken(initialConfig.control_token_file);
-  if (initialConfig.log_file) {
+  const updateGate = new UpdateGate({ context: options.updateContext, now: options.updateNow });
+  const initiallyGated = updateGate.mode === 'gated';
+  const controlToken = options.controlToken ?? await (initiallyGated
+    ? readControlToken(initialConfig.control_token_file) : loadOrCreateControlToken(initialConfig.control_token_file));
+  if (initialConfig.log_file && !initiallyGated) {
     await mkdir(path.dirname(initialConfig.log_file), { recursive: true, mode: 0o700 });
     await chmod(path.dirname(initialConfig.log_file), 0o700);
     if (existsSync(initialConfig.log_file)) await chmod(initialConfig.log_file, 0o600);
@@ -436,14 +441,14 @@ export async function createProxy(configInput, options = {}) {
     skewSeconds: config.token_refresh_skew_seconds,
     refreshUrl: options.refreshUrl,
     refreshRequest: options.refreshRequest,
-    enforcePermissions: options.enforcePermissions,
+    enforcePermissions: initiallyGated ? false : options.enforcePermissions,
     onState: (name, state) => failover.setRefreshing(name, state === AccountState.REFRESHING),
   });
   const initialRegistry = options.registry ?? new AccountRegistry(
     initialConfig.accounts, registryOptions(initialConfig, initialFailover),
   );
   await initialRegistry.initialize();
-  for (const duplicate of initialRegistry.duplicateIdentityNames()) {
+  for (const duplicate of initiallyGated ? [] : initialRegistry.duplicateIdentityNames()) {
     logger({
       timestamp: new Date().toISOString(),
       level: 'warn',
@@ -451,7 +456,7 @@ export async function createProxy(configInput, options = {}) {
       account_name: duplicate.duplicate,
     });
   }
-  await initialFailover.initialize();
+  await initialFailover.initialize({ readOnly: initiallyGated });
   const agents = options.agents ?? createUpstreamAgents();
   let generation = {
     config: initialConfig,
@@ -468,6 +473,12 @@ export async function createProxy(configInput, options = {}) {
   let renewalTimer = null;
   let renewalStopped = false;
   let renewalRun = Promise.resolve();
+  if (options.updateContext) {
+    options.updateContext.beforeActivate = async () => {
+      await generation.failover.initialize();
+      scheduleTokenRenewal();
+    };
+  }
 
   function emit(event) {
     try {
@@ -530,7 +541,10 @@ export async function createProxy(configInput, options = {}) {
   }
 
   async function runTokenRenewalCycle() {
-    return await renewalMutex.run(async () => {
+    const releaseWork = updateGate.enter('renewal');
+    if (!releaseWork) return [];
+    try {
+      return await renewalMutex.run(async () => {
       const current = generation;
       const results = [];
       for (const { name } of current.config.accounts) {
@@ -601,7 +615,10 @@ export async function createProxy(configInput, options = {}) {
         }
       }
       return results;
-    });
+      });
+    } finally {
+      releaseWork();
+    }
   }
 
   function nextRenewalWakeDelay() {
@@ -633,13 +650,14 @@ export async function createProxy(configInput, options = {}) {
     current.inFlight.set(name, (current.inFlight.get(name) ?? 0) + delta);
   }
 
-  async function statusPayload(current = generation) {
+  async function statusPayload(current = generation, { readOnly = false } = {}) {
     const { config, registry, failover, inFlight, tokenRefresh } = current;
-    await failover.expireCooldowns();
+    if (!readOnly) await failover.expireCooldowns();
     const state = failover.snapshot();
-    const active = await failover.active();
+    const active = readOnly ? failover.peekActive() : await failover.active();
     return {
       version: 2,
+      update_protocol: 1,
       config_path: configPath,
       active,
       cursor: state.cursor,
@@ -764,6 +782,29 @@ export async function createProxy(configInput, options = {}) {
   async function control(request, response, route) {
     if (!isLoopbackRemote(request.socket.remoteAddress)) return json(response, 403, { error: 'loopback_only' });
     if (!authorizedControlRequest(request, controlToken)) return json(response, 401, { error: 'control_auth_required' });
+    if (route === '/_proxy/update/v1/health' && request.method === 'GET') {
+      return json(response, 200, { ...updateGate.health(), config_path: configPath });
+    }
+    if (route.startsWith('/_proxy/update/v1/') && request.method === 'POST') {
+      const body = await readControlJson(request, { requireBody: true });
+      const result = await updateGate.command(route.slice('/_proxy/update/v1/'.length), body);
+      return json(response, result.status, result.body);
+    }
+    const releaseWork = updateGate.enter('control');
+    if (!releaseWork) {
+      if (request.method === 'GET' && route === '/_proxy/status') {
+        return json(response, 200, await statusPayload(generation, { readOnly: true }));
+      }
+      return json(response, 503, { error: 'proxy_updating' });
+    }
+    try {
+      return await controlAdmitted(request, response, route);
+    } finally {
+      releaseWork();
+    }
+  }
+
+  async function controlAdmitted(request, response, route) {
     const current = generation;
     if (request.method === 'GET' && route === '/_proxy/status') {
       return json(response, 200, await statusPayload(current));
@@ -910,20 +951,6 @@ export async function createProxy(configInput, options = {}) {
       return await work();
     } finally {
       release();
-    }
-  }
-
-  async function proxyRequest(current, request, response, route, body) {
-    const admitted = await admissionMutex.run(async () => {
-      if (reconfiguring || generation !== current) return false;
-      current.activeRequests += 1;
-      return true;
-    });
-    if (!admitted) return json(response, 503, { error: 'proxy_reconfiguring' });
-    try {
-      return await proxyRequestAdmitted(current, request, response, route, body);
-    } finally {
-      current.activeRequests -= 1;
     }
   }
 
@@ -1229,12 +1256,18 @@ export async function createProxy(configInput, options = {}) {
       rejectUpgrade(socket);
       return;
     }
+    const releaseWork = updateGate.enter('websocket');
+    if (!releaseWork) {
+      endUpgradeError(socket, 503, 'proxy_updating');
+      return;
+    }
     const admitted = await admissionMutex.run(async () => {
       if (reconfiguring || generation !== current) return false;
       current.activeRequests += 1;
       return true;
     });
     if (!admitted) {
+      releaseWork();
       endUpgradeError(socket, 503, 'proxy_reconfiguring');
       return;
     }
@@ -1255,6 +1288,7 @@ export async function createProxy(configInput, options = {}) {
       });
     } finally {
       current.activeRequests -= 1;
+      releaseWork();
       socket.off('close', cancel);
       socket.off('end', cancel);
     }
@@ -1272,11 +1306,21 @@ export async function createProxy(configInput, options = {}) {
     request.proxyStarted = Date.now();
     const current = generation;
     const route = routeFor(request.url, current.config);
+    let releaseWork = null;
+    let counted = false;
+    const responseDone = new Promise((resolve) => {
+      response.once('finish', resolve);
+      response.once('close', resolve);
+    });
     try {
       if (route.kind === 'invalid') return json(response, 400, { error: 'invalid_request_target' });
       if (route.kind === 'not_found') return json(response, 404, { error: 'not_found' });
       if (route.kind === 'control') return await control(request, response, route.route);
+      releaseWork = updateGate.enter('http');
+      if (!releaseWork) return json(response, 503, { error: 'proxy_updating' });
       if (reconfiguring) return json(response, 503, { error: 'proxy_reconfiguring' });
+      current.activeRequests += 1;
+      counted = true;
       let body;
       try {
         body = await readRequestBody(request, current.config.request_body_limit_bytes);
@@ -1287,7 +1331,7 @@ export async function createProxy(configInput, options = {}) {
       if (reconfiguring || generation !== current) {
         return json(response, 503, { error: 'proxy_reconfiguring' });
       }
-      return await proxyRequest(current, request, response, route, body);
+      return await proxyRequestAdmitted(current, request, response, route, body);
     } catch (error) {
       const clientErrors = new Map([
         ['content_type_required', 415],
@@ -1309,6 +1353,11 @@ export async function createProxy(configInput, options = {}) {
         error_message: redactSecret(String(error?.message ?? error)).slice(0, 200),
         upstream_status: request.proxyUpstreamStatus ?? null, duration_ms: Date.now() - (request.proxyStarted ?? Date.now()) });
     } finally {
+      if (releaseWork) {
+        await responseDone;
+        if (counted) current.activeRequests -= 1;
+        releaseWork();
+      }
       request.off('aborted', cancel);
       response.off('close', cancel);
     }
@@ -1331,12 +1380,14 @@ export async function createProxy(configInput, options = {}) {
   }
 
   async function close() {
+    updateGate.beginShutdown();
     renewalStopped = true;
     if (renewalTimer !== null) {
       (options.clearTimeout ?? clearTimeout)(renewalTimer);
       renewalTimer = null;
     }
     await renewalRun.catch(() => {});
+    await updateGate.whenIdle();
     await new Promise((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));
     agents.http.destroy();
     agents.https.destroy();
@@ -1351,13 +1402,15 @@ export async function createProxy(configInput, options = {}) {
     close,
     statusPayload,
     runTokenRenewalCycle,
+    updateGate,
   };
 }
 
 export async function serveFromConfig(configPath) {
   const normalizedConfigPath = path.resolve(configPath);
+  const updateContext = loadRuntimeContext(normalizedConfigPath);
   const config = await loadConfig(normalizedConfigPath);
-  const proxy = await createProxy(config, { validated: true, configPath: normalizedConfigPath });
+  const proxy = await createProxy(config, { validated: true, configPath: normalizedConfigPath, updateContext });
   const address = await proxy.listen();
   process.stdout.write(`codexmulti-proxy listening on 127.0.0.1:${address.port}\n`);
   return proxy;
@@ -1370,7 +1423,16 @@ function configArg(argv) {
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
-  serveFromConfig(configArg(process.argv.slice(2))).catch((error) => {
+  serveFromConfig(configArg(process.argv.slice(2))).then((proxy) => {
+    let stopping = false;
+    const stop = () => {
+      if (stopping) return;
+      stopping = true;
+      void proxy.close().catch(() => { process.exitCode = 1; });
+    };
+    process.on('SIGTERM', stop);
+    process.on('SIGINT', stop);
+  }).catch((error) => {
     process.stderr.write(`${redactSecret(error.message)}\n`);
     process.exitCode = 1;
   });

@@ -11,6 +11,10 @@ let package = Package(
     products: [
         .executable(name: "CodexMulti", targets: ["CodexMulti"]),
     ],
+    dependencies: [
+        .package(path: "../updater"),
+        .package(url: "https://github.com/sparkle-project/Sparkle.git", exact: "2.9.6"),
+    ],
     targets: [
         .systemLibrary(name: "CMCore", path: "Sources/CMCore"),
         .target(
@@ -26,10 +30,12 @@ let package = Package(
         ),
         .executableTarget(
             name: "CodexMulti",
-            dependencies: ["CMCore", "CodexMultiResources"],
+            dependencies: ["CMCore", "CodexMultiResources",
+                           .product(name: "UpdaterKit", package: "updater"),
+                           .product(name: "Sparkle", package: "Sparkle")],
             path: "Sources/CodexMulti",
             linkerSettings: [
-                .unsafeFlags([coreObject]),
+                .unsafeFlags([coreObject, "-Xlinker", "-rpath", "-Xlinker", "@executable_path/../Frameworks"]),
                 .linkedFramework("Security"),
                 .linkedFramework("Foundation"),
                 .linkedFramework("AppKit"),

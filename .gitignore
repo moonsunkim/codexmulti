@@ -29,3 +29,4 @@ proxy/node_modules/
 proxy/test/.tmp-*/
 
 dist/
+updater/.build/

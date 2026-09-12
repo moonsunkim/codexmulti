@@ -76,6 +76,12 @@ require_unsigned_nested_layout() {
     test -x "$app/$NESTED_NODE_RELATIVE" || die "unsigned candidate is missing bundled Node: $app/$NESTED_NODE_RELATIVE"
     test ! -L "$app/$NESTED_NODE_RELATIVE" || die "bundled Node must not be a symlink"
     test -x "$app/Contents/Helpers/codexmulti-maintenance" && test ! -L "$app/Contents/Helpers/codexmulti-maintenance" || die "maintenance helper is missing or unsafe"
+    local helper
+    for helper in codexmulti-update-agent codexmulti-runtime-launcher; do
+        test -x "$app/Contents/Helpers/$helper" && test ! -L "$app/Contents/Helpers/$helper" || die "updater helper is missing or unsafe: $helper"
+    done
+    test -f "$app/Contents/Resources/runtime-manifest.json" || die "runtime manifest is missing"
+    test -d "$app/Contents/Frameworks/Sparkle.framework" || die "Sparkle framework is missing"
     test -f "$app/Contents/Resources/proxy/package.json" || die "unsigned candidate is missing proxy package.json"
     test -x "$app/Contents/Resources/proxy/bin/codexmulti-proxy" || die "unsigned candidate is missing the proxy entrypoint"
     test -f "$app/Contents/Resources/proxy/src/server.mjs" || die "unsigned candidate is missing proxy src/server.mjs"
@@ -311,6 +317,9 @@ verify_signed_app() {
     require_hardened_runtime "$app" "$BUNDLE_ID"
     verify_signed_node "$app"
     require_hardened_runtime "$app/Contents/Helpers/codexmulti-maintenance" "codexmulti-maintenance"
+    require_hardened_runtime "$app/Contents/Helpers/codexmulti-update-agent" "codexmulti-update-agent"
+    require_hardened_runtime "$app/Contents/Helpers/codexmulti-runtime-launcher" "codexmulti-runtime-launcher"
+    "$CODESIGN_BIN" --verify --strict --deep "$app/Contents/Frameworks/Sparkle.framework" || die "Sparkle signature verification failed"
     if test "$require_clean" = yes; then
         if ! "$PROVENANCE_AUDIT_BIN" --require-clean "$app"; then
             die "clean-checkout provenance verification failed: $app"
@@ -380,7 +389,17 @@ build_and_sign() {
         --entitlements "$NODE_ENTITLEMENTS" "$output/$NESTED_NODE_RELATIVE"
     "$CODESIGN_BIN" --force --sign "$identity_hash" --options runtime "$timestamp_option" \
         "$output/Contents/Helpers/codexmulti-maintenance"
+    local helper sparkle
+    for helper in codexmulti-update-agent codexmulti-runtime-launcher; do
+        "$CODESIGN_BIN" --force --sign "$identity_hash" --options runtime "$timestamp_option" "$output/Contents/Helpers/$helper"
+    done
+    sparkle="$output/Contents/Frameworks/Sparkle.framework"
+    for helper in Versions/B/Autoupdate Versions/B/Updater.app Versions/B/XPCServices/Installer.xpc Versions/B/XPCServices/Downloader.xpc; do
+        "$CODESIGN_BIN" --force --sign "$identity_hash" --options runtime "$timestamp_option" --preserve-metadata=entitlements "$sparkle/$helper"
+    done
+    "$CODESIGN_BIN" --force --sign "$identity_hash" --options runtime "$timestamp_option" "$sparkle"
     record_signed_node_sha256 "$output"
+    "$output/Contents/Helpers/node" "$SCRIPT_DIR/runtime-manifest.mjs" "$output" signed
     "$CODESIGN_BIN" --force --sign "$identity_hash" --options runtime "$timestamp_option" \
         --identifier "$BUNDLE_ID" "$output"
     verify_signed_app "$output" "$identity_hash" "$pinned_requirement" "$require_clean" "$signing_mode"

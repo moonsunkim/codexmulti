@@ -97,6 +97,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         Task {
             do {
                 try await core.start()
+                if self.options.fixturePath == nil && !self.options.headless {
+                    await UpdateController.shared.start(core: core, store: self.store)
+                }
                 log.notice("core started fixture=\(self.options.fixturePath != nil, privacy: .public)")
                 if let capturePath = self.options.capturePath {
                     do {

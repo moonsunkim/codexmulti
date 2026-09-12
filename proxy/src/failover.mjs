@@ -125,7 +125,7 @@ export class FailoverManager {
     this.mutex = new Mutex();
   }
 
-  async initialize() {
+  async initialize({ readOnly = false } = {}) {
     if (!this.stateFile) return;
     try {
       const raw = await readFile(this.stateFile, 'utf8');
@@ -135,10 +135,10 @@ export class FailoverManager {
       });
       this.#restoreInvalid();
       const normalized = JSON.stringify(this.state);
-      if (validated.legacy || normalized !== JSON.stringify(validated.state)) await this.#saveLocked();
+      if (!readOnly && (validated.legacy || normalized !== JSON.stringify(validated.state))) await this.#saveLocked();
     } catch (error) {
       if (error?.code !== 'ENOENT') throw new Error('invalid_state_file');
-      await this.#saveLocked();
+      if (!readOnly) await this.#saveLocked();
     }
   }
 
@@ -213,6 +213,10 @@ export class FailoverManager {
 
   async active() {
     return await this.selectReady();
+  }
+
+  peekActive() {
+    return this.#orderedFromCursor().find((name) => this.#readyForSelection(name)) ?? null;
   }
 
   async earliestCooldown() {

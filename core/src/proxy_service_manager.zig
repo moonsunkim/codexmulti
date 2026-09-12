@@ -95,6 +95,9 @@ pub const Paths = struct {
     stdout_path: runtime_paths.Path,
     stderr_path: runtime_paths.Path,
     uid: u32,
+    managed: bool = false,
+    launcher_path: runtime_paths.Path = .{},
+    gui_app_path: runtime_paths.Path = .{},
 
     pub fn init(home: []const u8, app_path: []const u8, app_data_root: []const u8, config_path: []const u8, uid: u32) !Paths {
         const home_path = try runtime_paths.Path.init(home);
@@ -128,6 +131,7 @@ pub const Paths = struct {
         return .{
             .home = home_path,
             .app_path = app,
+            .gui_app_path = app,
             .app_data_root = data,
             .node_path = node,
             .cli_path = cli,
@@ -146,7 +150,14 @@ pub const Paths = struct {
         };
     }
 
+    pub fn useManagedLauncher(self: *Paths) !void {
+        self.launcher_path = self.app_path;
+        try appendMany(&self.launcher_path, &.{ "Contents", "Helpers", "codexmulti-runtime-launcher" });
+        self.managed = true;
+    }
+
     pub fn programArguments(self: *const Paths) [4][]const u8 {
+        if (self.managed) return .{ self.launcher_path.slice(), "--config", self.config_path.slice(), "--managed" };
         return .{ self.node_path.slice(), self.server_path.slice(), "--config", self.config_path.slice() };
     }
 
@@ -351,7 +362,31 @@ pub const ProxyServiceWorker = struct {
         self.result.discovery = discoverNow(self.live, self.plistBytes(), &self.plist_digest_hex);
     }
 
+    fn runManagedJob(self: *ProxyServiceWorker) bool {
+        if (@import("update_guard.zig").isFrozen(self.live.allocator, self.live.io, self.live.paths.app_data_root.slice())) return false;
+        const enabled = switch (self.kind) {
+            .stop, .disable_routing, .set_enabled_off => false,
+            else => true,
+        };
+        if (enabled and !self.eligible_account) return false;
+        if (enabled and !isRegular(self.live.io, self.live.paths.config_path.slice()) and !self.runImporter()) return false;
+        var helper = self.live.paths.app_path;
+        Paths.appendMany(&helper, &.{ "Contents", "Helpers", "codexmulti-update-agent" }) catch return false;
+        const result = std.process.run(self.live.allocator, self.live.io, .{
+            .argv = &.{ helper.slice(), "service", "--app", self.live.paths.gui_app_path.slice(), "--config", self.live.paths.config_path.slice(), "--enabled", if (enabled) "true" else "false" },
+            .stdout_limit = .limited(4096),
+            .stderr_limit = .limited(4096),
+        }) catch return false;
+        defer self.live.allocator.free(result.stdout);
+        defer self.live.allocator.free(result.stderr);
+        return switch (result.term) {
+            .exited => |status| status == 0,
+            else => false,
+        };
+    }
+
     fn runJob(self: *ProxyServiceWorker) bool {
+        if (self.live.paths.managed) return self.runManagedJob();
         const before = discoverNow(self.live, self.plistBytes(), &self.plist_digest_hex);
         return switch (self.kind) {
             .install => self.install(before),

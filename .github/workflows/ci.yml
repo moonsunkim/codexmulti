@@ -101,6 +101,9 @@ jobs:
         run: ./app/scripts/fetch-node.sh
       - name: Build complete macOS app
         run: ./app/scripts/build-app.sh
+      - name: Test update coordinator
+        working-directory: updater
+        run: CODEXMULTI_TEST_HEADLESS=1 swift test
       - name: Test Swift shell
         working-directory: app
         run: CODEXMULTI_TEST_HEADLESS=1 swift test
@@ -109,6 +112,7 @@ jobs:
           ./app/scripts/tests/build-version.test.sh
           ./app/scripts/tests/release.test.sh
           ./app/scripts/tests/signing-identity.test.sh
+          app/dist/staging/CodexMulti.app/Contents/Helpers/node --test app/scripts/tests/appcast.test.mjs
           ./app/scripts/verify-provenance.sh app/dist/staging/CodexMulti.app
           ./app/scripts/verify-bundled-proxy.sh app/dist/staging/CodexMulti.app
           app/dist/staging/CodexMulti.app/Contents/Helpers/codexmulti-maintenance --help

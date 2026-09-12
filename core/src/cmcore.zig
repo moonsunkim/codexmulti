@@ -192,14 +192,19 @@ pub const Runtime = struct {
         self.load_report = self.service.load(io, self.data_dir);
         const expanded_config = proxy_import_runner.expandConfigPath(self.service.proxyState().settings.config_path.slice(), home) catch return error.InvalidRoot;
         self.proxy_http.useConfigPath(expanded_config.slice()) catch return error.InvalidRoot;
+        const managed_app = @import("update_guard.zig").managedApp(runtime_allocator, io, layout.rootPath()) catch return error.InvalidRoot;
+        defer if (managed_app) |value| runtime_allocator.free(value);
+        const runtime_app = managed_app orelse app_path;
         self.proxy_service_paths = proxy_service_manager.Paths.init(
             home,
-            app_path,
+            runtime_app,
             layout.rootPath(),
             expanded_config.slice(),
             @intCast(std.c.getuid()),
         ) catch return error.InvalidRoot;
-        self.proxy_bundle_identity = proxy_service_manager.loadBundleIdentity(runtime_allocator, io, app_path) catch
+        if (managed_app != null) self.proxy_service_paths.useManagedLauncher() catch return error.InvalidRoot;
+        self.proxy_service_paths.gui_app_path = runtime_paths.Path.init(app_path) catch return error.InvalidRoot;
+        self.proxy_bundle_identity = proxy_service_manager.loadBundleIdentity(runtime_allocator, io, runtime_app) catch
             proxy_service_manager.BundleIdentity.init(
                 "0000000000000000000000000000000000000000",
                 "0000000000000000000000000000000000000000000000000000000000000000",

@@ -62,6 +62,7 @@ runner="$runner_root/CodexMulti"
 
 
 /bin/cp -f "$EXECUTABLE" "$runner"
+/bin/ln -s "$BUNDLE/Contents/Frameworks/Sparkle.framework" "$runner_root/Sparkle.framework"
 chmod 0755 "$runner"
 cleanup() {
     /bin/rm -f -- "$lifecycle_log"

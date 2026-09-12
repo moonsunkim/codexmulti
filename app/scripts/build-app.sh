@@ -182,6 +182,7 @@ assemble_bundle() {
     if test "${CODEXMULTI_SWIFT_DISABLE_SANDBOX:-no}" = yes; then
         swift_build_args=(--disable-sandbox "${swift_build_args[@]}")
     fi
+    "$SWIFT" build --package-path "$REPO_ROOT/updater" -c release
     "$SWIFT" build "${swift_build_args[@]}"
     swift_bin_path="$("$SWIFT" build "${swift_build_args[@]}" --show-bin-path)"
     executable="$swift_bin_path/CodexMulti"
@@ -216,6 +217,15 @@ assemble_bundle() {
         "$temp_bundle/Contents/Resources/Licenses" "$proxy_output"
     /bin/cp -f "$executable" "$temp_bundle/Contents/MacOS/CodexMulti"
 
+    local updater_bin sparkle_framework
+    updater_bin="$("$SWIFT" build --package-path "$REPO_ROOT/updater" -c release --show-bin-path)"
+    /bin/cp -f "$updater_bin/codexmulti-update-agent" "$temp_bundle/Contents/Helpers/codexmulti-update-agent"
+    /bin/cp -f "$updater_bin/codexmulti-runtime-launcher" "$temp_bundle/Contents/Helpers/codexmulti-runtime-launcher"
+    sparkle_framework="$PROJECT_DIR/.build/artifacts/sparkle/Sparkle/Sparkle.xcframework/macos-arm64_x86_64/Sparkle.framework"
+    test -d "$sparkle_framework" || die "Sparkle framework is missing"
+    mkdir -p "$temp_bundle/Contents/Frameworks"
+    "$DITTO_BIN" "$sparkle_framework" "$temp_bundle/Contents/Frameworks/Sparkle.framework"
+    /bin/cp -f "$PROJECT_DIR/.build/artifacts/sparkle/Sparkle/LICENSE" "$temp_bundle/Contents/Resources/Licenses/Sparkle.LICENSE"
     /bin/cp -f "$CORE_DIR/zig-out/bin/codexmulti-maintenance" "$temp_bundle/Contents/Helpers/codexmulti-maintenance"
     /bin/cp -fL "$NODE_SRC" "$temp_bundle/Contents/Helpers/node"
     /bin/cp -f "$NODE_LICENSE_SRC" "$temp_bundle/Contents/Resources/Licenses/Node.LICENSE"
@@ -246,6 +256,13 @@ assemble_bundle() {
         /bin/cp -f "$PROJECT_DIR/Resources/$tray_icon" "$temp_bundle/Contents/Resources/$tray_icon"
     done
     printf 'APPL????' > "$temp_bundle/Contents/PkgInfo"
+    if test -n "${SPARKLE_PUBLIC_KEY:-}" || test -n "${SPARKLE_FEED_URL:-}"; then
+        test -n "${SPARKLE_PUBLIC_KEY:-}" && test -n "${SPARKLE_FEED_URL:-}" || die "both Sparkle public key and feed URL are required"
+        case "$SPARKLE_FEED_URL" in https://*) ;; *) die "Sparkle feed must use HTTPS" ;; esac
+        "$PLUTIL_BIN" -insert SUPublicEDKey -string "$SPARKLE_PUBLIC_KEY" "$temp_bundle/Contents/Info.plist"
+        "$PLUTIL_BIN" -insert SUFeedURL -string "$SPARKLE_FEED_URL" "$temp_bundle/Contents/Info.plist"
+    fi
+    "$NODE_SRC" "$SCRIPT_DIR/runtime-manifest.mjs" "$temp_bundle" create
 
     if test -e "$BUNDLE_OUTPUT"; then
         /bin/rm -rf -- "$BUNDLE_OUTPUT"

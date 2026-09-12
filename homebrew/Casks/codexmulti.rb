@@ -8,15 +8,17 @@ cask "codexmulti" do
   homepage "https://github.com/moonsunkim/codexmulti"
 
   depends_on arch: :arm64
-  depends_on macos: ">= :tahoe"
+  depends_on macos: :tahoe
+
+  auto_updates true
 
   app "CodexMulti.app"
 
   uninstall quit: "dev.codexmulti.app",
             on_upgrade: :quit,
-            script: {
-              executable: "#{appdir}/CodexMulti.app/Contents/Helpers/codexmulti-maintenance",
-              args: ["prepare-uninstall"],
+            early_script: {
+              executable: "#{appdir}/CodexMulti.app/Contents/Helpers/codexmulti-update-agent",
+              args: ["homebrew-uninstall", "--app", "#{appdir}/CodexMulti.app"],
               sudo: false,
               must_succeed: true,
             }

@@ -38,3 +38,4 @@ src/ui_format.zig
 src/ui_model.zig
 src/ui_projection.zig
 src/ui_reset.zig
+src/update_guard.zig

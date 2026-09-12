@@ -260,14 +260,17 @@ struct SettingsPage: View {
                     LanguageSettingsRow(settings: projection.view.settings)
                 }
             }
+            .disabled(UpdateController.shared.isFrozen)
             SettingsSection(title: PreferencesModel.sectionLayout[1].title(settings: projection.view.settings)) {
                 CodexSettingsPanel(settings: projection.view.settings)
             }
+            .disabled(UpdateController.shared.isFrozen)
             SettingsSection(title: PreferencesModel.sectionLayout[2].title(settings: projection.view.settings)) {
                 VStack(spacing: Grid.betweenContainers) {
                     ProxyLifecyclePanel(settings: projection.view.settings)
                 }
             }
+            .disabled(UpdateController.shared.isFrozen)
             SettingsSection(title: PreferencesModel.sectionLayout[3].title(settings: projection.view.settings)) {
                 Container {
                     SettingsRow(label: PreferencesModel.Row.version.label(settings: projection.view.settings)) {
@@ -275,6 +278,8 @@ struct SettingsPage: View {
                             .font(Face.secondary)
                             .foregroundStyle(tone.text2)
                     }
+                    Hairline()
+                    UpdateSettingsRow()
                 }
             }
         }

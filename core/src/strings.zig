@@ -62,6 +62,34 @@ pub const StaticKey = enum {
     shell_auto_refresh,
     shell_about,
     shell_version,
+    shell_update_title,
+    shell_update_check,
+    shell_update_install,
+    shell_update_available,
+    shell_update_current,
+    shell_update_ready,
+    shell_update_pending,
+    shell_update_apply,
+    shell_update_check_failed,
+    shell_update_no_compatible,
+    shell_update_checking,
+    shell_update_preparing,
+    shell_update_downloading,
+    shell_update_installing,
+    shell_update_waiting,
+    shell_update_applying,
+    shell_update_complete,
+    shell_update_rollback,
+    shell_update_failed,
+    shell_update_recovery,
+    shell_update_unconfigured,
+    shell_update_migration,
+    shell_update_migration_detail,
+    shell_update_migration_confirm,
+    shell_update_cancel,
+    shell_update_off,
+    shell_update_frozen,
+
     shell_failover_state,
     shell_failover_detail,
     shell_in_flight,
@@ -709,6 +737,34 @@ const English = struct {
     const shell_auto_refresh = "Auto refresh";
     const shell_about = "About";
     const shell_version = "Version";
+    const shell_update_title = "Software update";
+    const shell_update_check = "Check for updates";
+    const shell_update_install = "Update and relaunch";
+    const shell_update_available = "An update is available.";
+    const shell_update_current = "You’re up to date.";
+    const shell_update_ready = "Check for a newer version.";
+    const shell_update_pending = "Engine update cancelled. The previous engine is still in use.";
+    const shell_update_apply = "Apply engine update";
+    const shell_update_check_failed = "Could not check for updates. Try again.";
+    const shell_update_no_compatible = "No compatible update is available.";
+    const shell_update_checking = "Checking for updates…";
+    const shell_update_preparing = "Preparing update…";
+    const shell_update_downloading = "Downloading update…";
+    const shell_update_installing = "Installing and relaunching…";
+    const shell_update_waiting = "Waiting for requests and connections to finish.";
+    const shell_update_applying = "Applying proxy update…";
+    const shell_update_complete = "Update complete.";
+    const shell_update_rollback = "The previous proxy version was restored.";
+    const shell_update_failed = "The update needs recovery.";
+    const shell_update_recovery = "Show previous app";
+    const shell_update_unconfigured = "Update checks will be available in a release build.";
+    const shell_update_migration = "Set up safe updates";
+    const shell_update_migration_detail = "One-time setup requires closing all Codex clients.";
+    const shell_update_migration_confirm = "I’ve closed all Codex clients";
+    const shell_update_cancel = "Cancel pending update";
+    const shell_update_off = "Turn off when requests finish";
+    const shell_update_frozen = "Account changes are paused while the update finishes.";
+
     const shell_failover_state = "Failover state";
     const shell_failover_detail = "Failover detail";
     const shell_in_flight = "In flight";
@@ -1207,6 +1263,34 @@ const Korean = struct {
     const shell_auto_refresh = "자동 새로 고침";
     const shell_about = "앱 정보";
     const shell_version = "버전";
+    const shell_update_title = "소프트웨어 업데이트";
+    const shell_update_check = "업데이트 확인";
+    const shell_update_install = "업데이트 후 다시 열기";
+    const shell_update_available = "새 업데이트가 있습니다.";
+    const shell_update_current = "최신 버전입니다.";
+    const shell_update_ready = "새 버전이 있는지 확인할 수 있습니다.";
+    const shell_update_pending = "엔진 적용을 취소했습니다. 기존 엔진을 사용 중입니다.";
+    const shell_update_apply = "엔진 업데이트 적용";
+    const shell_update_check_failed = "업데이트를 확인하지 못했습니다. 다시 시도해 주세요.";
+    const shell_update_no_compatible = "이 Mac에서 사용할 수 있는 새 버전이 없습니다.";
+    const shell_update_checking = "업데이트 확인 중…";
+    const shell_update_preparing = "업데이트 준비 중…";
+    const shell_update_downloading = "업데이트 다운로드 중…";
+    const shell_update_installing = "설치 후 다시 여는 중…";
+    const shell_update_waiting = "진행 중인 요청과 연결이 끝나기를 기다립니다.";
+    const shell_update_applying = "프록시 업데이트 적용 중…";
+    const shell_update_complete = "업데이트가 완료되었습니다.";
+    const shell_update_rollback = "이전 프록시 버전으로 복구했습니다.";
+    const shell_update_failed = "업데이트를 복구해야 합니다.";
+    const shell_update_recovery = "이전 앱 보기";
+    const shell_update_unconfigured = "업데이트 확인은 정식 배포 빌드에서 사용할 수 있습니다.";
+    const shell_update_migration = "안전한 업데이트 설정";
+    const shell_update_migration_detail = "처음 한 번은 모든 Codex 클라이언트를 종료한 뒤 설정해야 합니다.";
+    const shell_update_migration_confirm = "모든 Codex 클라이언트를 종료했습니다";
+    const shell_update_cancel = "대기 중인 업데이트 취소";
+    const shell_update_off = "요청 완료 후 끄기";
+    const shell_update_frozen = "업데이트가 끝날 때까지 계정 변경을 잠시 멈춥니다.";
+
     const shell_failover_state = "자동 계정 전환 상태";
     const shell_failover_detail = "자동 계정 전환 상세";
     const shell_in_flight = "진행 중";

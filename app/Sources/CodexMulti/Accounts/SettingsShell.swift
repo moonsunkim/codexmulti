@@ -126,6 +126,12 @@ struct SettingsShell: View {
                             .padding(.horizontal, Grid.L)
                             .padding(.top, Grid.noticeBelowBand)
                     }
+                    if UpdateController.shared.isFrozen {
+                        Text(UpdateController.text("frozen"))
+                            .font(Face.secondary)
+                            .padding(.horizontal, Grid.L)
+                            .padding(.top, Grid.noticeBelowBand)
+                    }
                     content
                         .padding(.top, Grid.contentTop)
                         .frame(maxWidth: .infinity, alignment: .leading)
@@ -138,6 +144,7 @@ struct SettingsShell: View {
                projection.view.onboarding_visible,
                projection.view.unified_rows.isEmpty {
                 EmptyAccountsPage(projection: projection)
+                    .disabled(UpdateController.shared.isFrozen)
             }
         }
         .overlay(alignment: .top) {
@@ -151,6 +158,7 @@ struct SettingsShell: View {
                         HStack {
                             Spacer(minLength: 0)
                             BandControls(projection: projection)
+                            .disabled(UpdateController.shared.isFrozen)
                         }
                     }
                 }
@@ -182,6 +190,7 @@ struct SettingsShell: View {
                 ToolbarItem(placement: .primaryAction) {
                     if let projection = store.projection {
                         BandControls(projection: projection)
+                            .disabled(UpdateController.shared.isFrozen)
                             .environment(\.tone, tone)
                             .environment(\.submit, submit)
                     }
@@ -222,6 +231,7 @@ struct SettingsShell: View {
         case .accounts:
             if let projection = store.projection {
                 UnifiedPage(projection: projection)
+                    .disabled(UpdateController.shared.isFrozen)
             } else {
                 starting
             }

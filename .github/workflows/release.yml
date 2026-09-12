@@ -21,6 +21,9 @@ jobs:
       APPLE_NOTARY_KEY_ID_SECRET: ${{ secrets.APPLE_NOTARY_KEY_ID }}
       APPLE_NOTARY_ISSUER_SECRET: ${{ secrets.APPLE_NOTARY_ISSUER }}
       APPLE_NOTARY_KEY_SECRET: ${{ secrets.APPLE_NOTARY_KEY }}
+      SPARKLE_PUBLIC_KEY: ${{ vars.SPARKLE_PUBLIC_KEY }}
+      SPARKLE_FEED_URL: ${{ vars.SPARKLE_FEED_URL }}
+      SPARKLE_PRIVATE_KEY_SECRET: ${{ secrets.SPARKLE_PRIVATE_KEY }}
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
@@ -30,7 +33,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          for name in RELEASE_SIGNING_IDENTITY_SECRET MACOS_CERTIFICATE_SECRET MACOS_CERTIFICATE_PASSWORD_SECRET KEYCHAIN_PASSWORD_SECRET APPLE_NOTARY_KEY_ID_SECRET APPLE_NOTARY_ISSUER_SECRET APPLE_NOTARY_KEY_SECRET; do
+          for name in RELEASE_SIGNING_IDENTITY_SECRET MACOS_CERTIFICATE_SECRET MACOS_CERTIFICATE_PASSWORD_SECRET KEYCHAIN_PASSWORD_SECRET APPLE_NOTARY_KEY_ID_SECRET APPLE_NOTARY_ISSUER_SECRET APPLE_NOTARY_KEY_SECRET SPARKLE_PUBLIC_KEY SPARKLE_PRIVATE_KEY_SECRET; do
             test -n "${!name}" || { printf 'Missing required release credential: %s\n' "$name" >&2; exit 1; }
           done
       - name: Install Zig 0.16.0
@@ -91,6 +94,13 @@ jobs:
           printf 'APPLE_NOTARY_KEY_ID=%s\n' "$APPLE_NOTARY_KEY_ID_SECRET" >> "$GITHUB_ENV"
           printf 'APPLE_NOTARY_ISSUER=%s\n' "$APPLE_NOTARY_ISSUER_SECRET" >> "$GITHUB_ENV"
           printf 'APPLE_NOTARY_KEY_PATH=%s\n' "$key_path" >> "$GITHUB_ENV"
+      - name: Prepare update signing key
+        shell: bash
+        run: |
+          set -euo pipefail
+          key_path="$RUNNER_TEMP/codexmulti-sparkle.key"
+          (umask 077; printf '%s' "$SPARKLE_PRIVATE_KEY_SECRET" > "$key_path")
+          printf 'SPARKLE_PRIVATE_KEY_FILE=%s\n' "$key_path" >> "$GITHUB_ENV"
       - name: Build release artifacts
         env:
           GH_TOKEN: ${{ github.token }}
@@ -108,18 +118,18 @@ jobs:
           zip="dist/CodexMulti-$version.zip"
           checksum="$zip.sha256"
           notes="dist/CodexMulti-$version-release-notes.md"
+          feed="dist/appcast.xml"
+          manifest="dist/runtime-manifest.json"
           if gh release view "$GITHUB_REF_NAME" --repo "$RELEASE_REPOSITORY" >/dev/null 2>&1; then
-            zip_exists="$(gh release view "$GITHUB_REF_NAME" --repo "$RELEASE_REPOSITORY" --json assets --jq ".assets | any(.name == \"CodexMulti-$version.zip\")")"
-            checksum_exists="$(gh release view "$GITHUB_REF_NAME" --repo "$RELEASE_REPOSITORY" --json assets --jq ".assets | any(.name == \"CodexMulti-$version.zip.sha256\")")"
-            if test "$zip_exists" = true && test "$checksum_exists" = true; then
-              printf 'Release assets already exist; retaining the previously published pair.\n'
-            elif test "$zip_exists" = false && test "$checksum_exists" = false; then
-              gh release upload "$GITHUB_REF_NAME" "$zip" "$checksum" --repo "$RELEASE_REPOSITORY"
-              gh release edit "$GITHUB_REF_NAME" --repo "$RELEASE_REPOSITORY" --notes-file "$notes"
-            else
-              printf 'Release has an incomplete zip/checksum pair; refusing to mix build outputs.\n' >&2
-              exit 1
-            fi
+            complete="$(gh release view "$GITHUB_REF_NAME" --repo "$RELEASE_REPOSITORY" --json assets --jq "[.assets[].name] | contains([\"CodexMulti-$version.zip\", \"CodexMulti-$version.zip.sha256\", \"runtime-manifest.json\", \"appcast.xml\"])")"
+            test "$complete" = true || { printf 'Release has incomplete update artifacts; refusing to mix builds.\n' >&2; exit 1; }
+            printf 'Retaining the previously published update artifacts.\n'
           else
-            gh release create "$GITHUB_REF_NAME" "$zip" "$checksum" --repo "$RELEASE_REPOSITORY" --title "CodexMulti $version" --notes-file "$notes" --verify-tag
+            gh release create "$GITHUB_REF_NAME" "$zip" "$checksum" "$manifest" --repo "$RELEASE_REPOSITORY" --title "CodexMulti $version" --notes-file "$notes" --verify-tag --draft
+            gh release upload "$GITHUB_REF_NAME" "$feed" --repo "$RELEASE_REPOSITORY"
+            gh release edit "$GITHUB_REF_NAME" --draft=false --repo "$RELEASE_REPOSITORY"
           fi
+      - name: Remove update signing key
+        if: always()
+        shell: bash
+        run: rm -f "$RUNNER_TEMP/codexmulti-sparkle.key"
