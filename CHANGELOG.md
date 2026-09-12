@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.2.6]
+
+### Fixed
+
+- Remove the independent two-second Failover status refresh. Automatic refresh now follows the configured interval and stays off when disabled; manual refresh still checks usage and Failover status together.
+
 ## [0.2.5]
 
 ### Fixed

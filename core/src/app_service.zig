@@ -217,7 +217,6 @@ pub const Service = struct {
     workers: [max_workers]Worker = @splat(.{}),
     proxy: app_proxy_service.Controller = .{},
     proxy_service: proxy_service_manager.Controller = .{},
-    last_proxy_poll_at: ?i64 = null,
     last_proxy_sync_at: ?i64 = null,
     last_proxy_sync_failure_at: ?i64 = null,
     pending_logins: [max_workers]PendingLogin = @splat(.{}),
@@ -1237,12 +1236,6 @@ pub const Service = struct {
                 return;
             };
         }
-        if (self.last_proxy_poll_at) |at| {
-            if (now_unix_s >= at and now_unix_s - at < 2) return;
-        }
-        if (!self.proxy_service.wantsEnabled() and self.proxy_service.discovery.new_presence == .not_loaded) return;
-        self.last_proxy_poll_at = now_unix_s;
-        if (self.startProxy(.refresh_status, null) == .accepted_pending) self.proxy.background_refresh = true;
     }
 
     fn maybeStartAutoRefresh(self: *Service, now_unix_s: i64) void {
