@@ -1,0 +1,118 @@
+name: Updater candidate
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - codex/safe-updater
+
+permissions:
+  contents: read
+
+jobs:
+  candidate:
+    name: Notarized updater candidate
+    timeout-minutes: 25
+    runs-on: macos-26
+    env:
+      RELEASE_SIGNING_IDENTITY_SECRET: ${{ secrets.SIGNING_IDENTITY }}
+      MACOS_CERTIFICATE_SECRET: ${{ secrets.MACOS_CERTIFICATE }}
+      MACOS_CERTIFICATE_PASSWORD_SECRET: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
+      KEYCHAIN_PASSWORD_SECRET: ${{ secrets.KEYCHAIN_PASSWORD }}
+      APPLE_NOTARY_KEY_ID_SECRET: ${{ secrets.APPLE_NOTARY_KEY_ID }}
+      APPLE_NOTARY_ISSUER_SECRET: ${{ secrets.APPLE_NOTARY_ISSUER }}
+      APPLE_NOTARY_KEY_SECRET: ${{ secrets.APPLE_NOTARY_KEY }}
+      SPARKLE_PUBLIC_KEY: ${{ vars.SPARKLE_PUBLIC_KEY }}
+      SPARKLE_FEED_URL: ${{ vars.SPARKLE_FEED_URL }}
+      SPARKLE_PRIVATE_KEY_SECRET: ${{ secrets.SPARKLE_PRIVATE_KEY }}
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Require distribution credentials
+        shell: bash
+        run: |
+          set -euo pipefail
+          for name in RELEASE_SIGNING_IDENTITY_SECRET MACOS_CERTIFICATE_SECRET MACOS_CERTIFICATE_PASSWORD_SECRET KEYCHAIN_PASSWORD_SECRET APPLE_NOTARY_KEY_ID_SECRET APPLE_NOTARY_ISSUER_SECRET APPLE_NOTARY_KEY_SECRET SPARKLE_PUBLIC_KEY SPARKLE_PRIVATE_KEY_SECRET; do
+            test -n "${!name}" || { printf 'Missing required release credential: %s\n' "$name" >&2; exit 1; }
+          done
+      - name: Install Zig 0.16.0
+        shell: bash
+        run: |
+          set -euo pipefail
+          zig_version="0.16.0"
+          case "$(uname -m)" in
+            arm64) zig_platform="aarch64-macos" ;;
+            x86_64) zig_platform="x86_64-macos" ;;
+            *) exit 1 ;;
+          esac
+          zig_index="$RUNNER_TEMP/zig-index.json"
+          zig_archive="$RUNNER_TEMP/zig.tar.xz"
+          zig_root="$RUNNER_TEMP/zig-$zig_version"
+          curl --fail --location --silent --show-error --proto '=https' --tlsv1.2 --output "$zig_index" "https://ziglang.org/download/index.json"
+          zig_url="$(ruby -rjson -e 'data = JSON.parse(File.read(ARGV[0])); puts data.fetch(ARGV[1]).fetch(ARGV[2]).fetch("tarball")' "$zig_index" "$zig_version" "$zig_platform")"
+          zig_sha256="$(ruby -rjson -e 'data = JSON.parse(File.read(ARGV[0])); puts data.fetch(ARGV[1]).fetch(ARGV[2]).fetch("shasum")' "$zig_index" "$zig_version" "$zig_platform")"
+          case "$zig_url" in
+            https://ziglang.org/download/*) ;;
+            *) exit 1 ;;
+          esac
+          printf '%s\n' "$zig_sha256" | grep -Eq '^[0-9a-f]{64}$'
+          curl --fail --location --silent --show-error --proto '=https' --tlsv1.2 --output "$zig_archive" "$zig_url"
+          actual_sha256="$(shasum -a 256 "$zig_archive" | awk '{print $1}')"
+          test "$actual_sha256" = "$zig_sha256"
+          mkdir -p "$zig_root"
+          tar -xJf "$zig_archive" -C "$zig_root" --strip-components=1
+          test "$("$zig_root/zig" version)" = "$zig_version"
+          printf '%s\n' "$zig_root" >> "$GITHUB_PATH"
+      - name: Fetch pinned Node runtime
+        run: ./app/scripts/fetch-node.sh
+      - name: Import Developer ID certificate
+        if: ${{ env.RELEASE_SIGNING_IDENTITY_SECRET != '' && env.MACOS_CERTIFICATE_SECRET != '' && env.MACOS_CERTIFICATE_PASSWORD_SECRET != '' && env.KEYCHAIN_PASSWORD_SECRET != '' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          certificate="$RUNNER_TEMP/codexmulti-release.p12"
+          keychain="$RUNNER_TEMP/codexmulti-release.keychain-db"
+          printf '%s' "$MACOS_CERTIFICATE_SECRET" | /usr/bin/base64 -D > "$certificate"
+          security create-keychain -p "$KEYCHAIN_PASSWORD_SECRET" "$keychain"
+          security set-keychain-settings -lut 21600 "$keychain"
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD_SECRET" "$keychain"
+          security import "$certificate" -k "$keychain" -P "$MACOS_CERTIFICATE_PASSWORD_SECRET" -T /usr/bin/codesign
+          security set-key-partition-list -S apple-tool:,apple: -s -k "$KEYCHAIN_PASSWORD_SECRET" "$keychain"
+          login_keychain="$(security login-keychain | sed -nE 's/^[[:space:]]*"(.*)"[[:space:]]*$/\1/p')"
+          test -n "$login_keychain"
+          security list-keychains -d user -s "$keychain" "$login_keychain"
+          printf 'SIGNING_IDENTITY=%s\n' "$RELEASE_SIGNING_IDENTITY_SECRET" >> "$GITHUB_ENV"
+      - name: Prepare App Store Connect API key
+        if: ${{ env.RELEASE_SIGNING_IDENTITY_SECRET != '' && env.MACOS_CERTIFICATE_SECRET != '' && env.MACOS_CERTIFICATE_PASSWORD_SECRET != '' && env.KEYCHAIN_PASSWORD_SECRET != '' && env.APPLE_NOTARY_KEY_ID_SECRET != '' && env.APPLE_NOTARY_ISSUER_SECRET != '' && env.APPLE_NOTARY_KEY_SECRET != '' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          key_path="$RUNNER_TEMP/AuthKey_${APPLE_NOTARY_KEY_ID_SECRET}.p8"
+          printf '%s' "$APPLE_NOTARY_KEY_SECRET" > "$key_path"
+          chmod 600 "$key_path"
+          printf 'APPLE_NOTARY_KEY_ID=%s\n' "$APPLE_NOTARY_KEY_ID_SECRET" >> "$GITHUB_ENV"
+          printf 'APPLE_NOTARY_ISSUER=%s\n' "$APPLE_NOTARY_ISSUER_SECRET" >> "$GITHUB_ENV"
+          printf 'APPLE_NOTARY_KEY_PATH=%s\n' "$key_path" >> "$GITHUB_ENV"
+      - name: Prepare update signing key
+        shell: bash
+        run: |
+          set -euo pipefail
+          key_path="$RUNNER_TEMP/codexmulti-sparkle.key"
+          (umask 077; printf '%s' "$SPARKLE_PRIVATE_KEY_SECRET" > "$key_path")
+          printf 'SPARKLE_PRIVATE_KEY_FILE=%s\n' "$key_path" >> "$GITHUB_ENV"
+      - name: Build and notarize candidate
+        run: bash app/scripts/build-updater-candidate.sh
+      - name: Upload verified candidate
+        uses: actions/upload-artifact@v4
+        with:
+          name: codexmulti-updater-candidate
+          path: dist/updater-candidate/
+          retention-days: 7
+          if-no-files-found: error
+      - name: Remove temporary private keys
+        if: always()
+        shell: bash
+        run: |
+          rm -f "$RUNNER_TEMP/codexmulti-sparkle.key" "$RUNNER_TEMP/AuthKey_${APPLE_NOTARY_KEY_ID_SECRET}.p8" "$RUNNER_TEMP/codexmulti-release.p12"
