@@ -294,7 +294,7 @@ test "the Keychain policy module keeps its app-owned constants and no Claude Cod
     try testing.expectEqualStrings("dev.codexmulti.app.v2", macos.v2_service);
     try testing.expectEqualStrings(
         "identifier \"dev.codexmulti.app\" and certificate root = H\"348b6cf6eed9f518a04c89f02cca7cd91674c55d\"",
-        macos.stable_designated_requirement,
+        macos.local_designated_requirement,
     );
 
     const foreign: ItemQuery = .{ .service = "Claude Code-credentials-0123abcd", .account = "demo-user" };

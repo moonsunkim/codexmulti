@@ -14,6 +14,7 @@ BUILD_BIN="${BUILD_BIN:-$REPO_ROOT/app/scripts/build-app.sh}"
 PACKAGE_BIN="${PACKAGE_BIN:-$REPO_ROOT/app/scripts/package-signed-macos.sh}"
 PROVENANCE_BIN="${PROVENANCE_BIN:-$REPO_ROOT/app/scripts/verify-provenance.sh}"
 PROXY_VERIFY_BIN="${PROXY_VERIFY_BIN:-$REPO_ROOT/app/scripts/verify-bundled-proxy.sh}"
+STARTUP_VERIFY_BIN="${STARTUP_VERIFY_BIN:-$REPO_ROOT/app/scripts/verify-signed-startup.sh}"
 GIT_BIN="${GIT_BIN:-git}"
 GH_BIN="${GH_BIN:-gh}"
 DITTO_BIN="${DITTO_BIN:-/usr/bin/ditto}"
@@ -154,6 +155,9 @@ stage_app() {
 verify_app() {
     "$PROVENANCE_BIN" "$STAGED_APP"
     "$PROXY_VERIFY_BIN" "$STAGED_APP"
+    if test "$SIGNING_STATUS" = "DEVELOPER ID"; then
+        "$STARTUP_VERIFY_BIN" "$STAGED_APP"
+    fi
 }
 
 notary_credential_count() {
@@ -289,6 +293,7 @@ main() {
     require_tool "$BUILD_BIN"
     require_tool "$PROVENANCE_BIN"
     require_tool "$PROXY_VERIFY_BIN"
+    require_tool "$STARTUP_VERIFY_BIN"
     require_tool "$PACKAGE_BIN"
     require_tool "$GH_BIN"
 

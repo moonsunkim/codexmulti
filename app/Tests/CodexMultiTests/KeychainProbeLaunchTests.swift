@@ -51,7 +51,7 @@ final class KeychainProbeLaunchTests: XCTestCase {
     }
 
     func testRuntimeAndProbeErrorsMapToExitOneAndStillDestroy() {
-        for result: Int32 in [-1, -2] {
+        for result: Int32 in [-1, -2, -3] {
             let fake = FakeABI(bytes: Data())
             fake.probeResult = result
             var stdout = Data()

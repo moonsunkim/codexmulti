@@ -2228,6 +2228,52 @@ test "F15 startup resynchronizes an existing Codex auth file to Keychain" {
     try testing.expect(synchronized.eqlPlaintext(rotated_codex_auth_backup_bytes));
 }
 
+test "denied background backup reads never overwrite an existing credential" {
+    const io = testing.io;
+    var cwd = std.Io.Dir.cwd();
+    const parent = ".zig-cache/test-auth-backup-read-failure";
+    const relative_root = parent ++ "/CodexMulti";
+    const auth_path = "accounts/" ++ codex_storage_key ++ "/codex/" ++ runtime_paths.codex_auth_file_name;
+    cwd.deleteTree(io, parent) catch {};
+    defer cwd.deleteTree(io, parent) catch {};
+    try cwd.createDirPath(io, relative_root ++ "/accounts/" ++ codex_storage_key ++ "/codex");
+    const root = try cwd.realPathFileAlloc(io, relative_root, testing.allocator);
+    defer testing.allocator.free(root);
+    const layout = try runtime_paths.Layout.fromAppDataDir(root);
+    var app_dir = try cwd.openDir(io, relative_root, .{});
+    defer app_dir.close(io);
+    var auth_file = try app_dir.createFile(io, auth_path, .{ .permissions = .fromMode(0o600) });
+    try auth_file.writeStreamingAll(io, rotated_codex_auth_backup_bytes);
+    auth_file.close(io);
+    const harness = try Harness.createWithLayout(layout);
+    defer harness.destroy();
+    try harness.addCodex();
+    harness.attach();
+    const account_key = try keychain.AccountKey.init(codex_storage_key);
+    var old_backup = try keychain.Credential.init(codex_auth_backup_bytes);
+    defer old_backup.wipe();
+    try harness.credentials.store().save(&account_key, .codex_auth_backup, &old_backup);
+    for ([_]keychain.LoadError{ error.AccessDenied, error.RepairRequired, error.Unavailable, error.Io, error.Corrupt }) |failure| {
+        harness.credentials.resetOperations();
+        harness.credentials.fail_loads_for = .codex_auth_backup;
+        harness.credentials.fail_next_load = failure;
+        harness.service.synchronizeCodexAuthBackups();
+        harness.service.synchronizeCodexAuthBackups();
+        for (harness.credentials.recordedOperations()) |operation| {
+            try testing.expectEqual(keychain.MemoryStore.Action.load, operation.action);
+        }
+        harness.credentials.fail_loads_for = null;
+        harness.credentials.fail_next_load = null;
+        var retained: keychain.Credential = .empty;
+        defer retained.wipe();
+        try harness.credentials.store().load(&account_key, .codex_auth_backup, &retained);
+        try testing.expect(retained.eql(&old_backup));
+    }
+    const bytes = try app_dir.readFileAlloc(io, auth_path, testing.allocator, .limited(keychain.max_credential_bytes));
+    defer testing.allocator.free(bytes);
+    try testing.expectEqualStrings(rotated_codex_auth_backup_bytes, bytes);
+}
+
 test "F9 removing a Codex account removes its auth backup" {
     const harness = try Harness.create();
     defer harness.destroy();

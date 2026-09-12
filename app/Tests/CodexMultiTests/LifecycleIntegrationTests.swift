@@ -136,27 +136,22 @@ final class LifecycleIntegrationTests: XCTestCase {
 
 
 
-    func testLiveCoreLinksAndDrainsUnderATemporaryHome() throws {
+    func testUnsignedLiveCoreFailsWithoutShowingAnEmptyAccountList() throws {
         let home = FileManager.default.temporaryDirectory
             .appending(path: "CodexMulti-home-\(UUID().uuidString)", directoryHint: .isDirectory)
         try FileManager.default.createDirectory(at: home, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: home) }
-        let process = try launch(fixture: nil, environment: ["HOME": home.path])
-        XCTAssertTrue(process.isRunning, "the live core must be running 2 s after launch")
+        let process = try launch(fixture: nil, settle: false, environment: ["HOME": home.path])
+        waitForExit(process, timeout: .seconds(12))
+        XCTAssertFalse(process.isRunning, "an untrusted build must report failed startup")
         let windows = (CGWindowListCopyWindowInfo([.optionAll], kCGNullWindowID) as? [[String: Any]]) ?? []
         let owned = windows.filter { ($0[kCGWindowOwnerPID as String] as? Int) == Int(process.processIdentifier) }
         XCTAssertEqual(owned.count, 0, "the live core launch owns windows: \(owned)")
 
-        let started = ContinuousClock.now
-        kill(process.processIdentifier, SIGTERM)
-        waitForExit(process, timeout: .seconds(12))
-        let elapsed = ContinuousClock.now - started
-        XCTAssertFalse(process.isRunning, "SIGTERM must end the live-core process")
         if !process.isRunning {
             XCTAssertEqual(process.terminationReason, .exit)
-            XCTAssertEqual(process.terminationStatus, 0, "0 = started and drained; \(AppDelegate.headlessStartupFailureStatus) = the core refused to start")
+            XCTAssertEqual(process.terminationStatus, AppDelegate.headlessStartupFailureStatus)
         }
-        XCTAssertLessThan(elapsed, .seconds(8), "the drained reply, not the 10 s watchdog, must end the process")
     }
 
 

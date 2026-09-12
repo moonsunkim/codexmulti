@@ -8,6 +8,8 @@ enum CoreBridgeError: Error, Equatable {
 
     case createFailed
     case alreadyStarted
+    case invalidInitialProjection
+    case runtimeUnavailable(RuntimeStartError?)
 }
 
 
@@ -58,8 +60,20 @@ actor CoreBridge: CoreProtocol {
 
         log.notice("core provenance \(self.abi.provenance(), privacy: .public) \(BridgeProvenance.bridgeSchemaMarker.description, privacy: .public)")
         guard let created = abi.create() else { throw CoreBridgeError.createFailed }
-        handle = created
-        projectAndPublish()
+        do {
+            guard let bytes = abi.project(created),
+                  let initial = try? JSONDecoder().decode(Projection.self, from: bytes) else {
+                throw CoreBridgeError.invalidInitialProjection
+            }
+            guard initial.runtime.started else {
+                throw CoreBridgeError.runtimeUnavailable(initial.runtime.error)
+            }
+            handle = created
+            projectAndPublish(bytes)
+        } catch {
+            abi.destroy(created)
+            throw error
+        }
         startPump()
     }
 
@@ -124,8 +138,8 @@ actor CoreBridge: CoreProtocol {
 
 
 
-    private func projectAndPublish() {
-        guard let handle, let bytes = abi.project(handle) else { return }
+    private func projectAndPublish(_ initialBytes: Data? = nil) {
+        guard let handle, let bytes = initialBytes ?? abi.project(handle) else { return }
         switch pipeline.ingest(bytes) {
         case .unchanged:
             return

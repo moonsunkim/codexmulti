@@ -449,8 +449,16 @@ pub export fn cm_service_provenance() callconv(.c) [*:0]const u8 {
 }
 
 pub export fn cm_service_keychain_probe(service: ?*cm_service, out: ?[*]u8, cap: usize) callconv(.c) i32 {
-    _ = service orelse return -1;
-    const bytes = "{\"schema\":1,\"signer_valid\":true,\"accounts\":[]}";
+    const self = service orelse return -1;
+    const runtime = self.runtime orelse return -3;
+    // Runtime creation has actually passed signer validation. Do not inspect
+    // credential values, and never report success for the detached shell.
+    var buffer: [192]u8 = undefined;
+    const bytes = std.fmt.bufPrint(
+        &buffer,
+        "{{\"schema\":1,\"signer_valid\":true,\"runtime_started\":true,\"account_count\":{d},\"accounts\":[]}}\n",
+        .{runtime.load_report.accounts_loaded},
+    ) catch return -2;
     if (bytes.len > cap or (bytes.len != 0 and out == null)) return -2;
     if (bytes.len != 0) @memcpy(out.?[0..bytes.len], bytes);
     return @intCast(bytes.len);

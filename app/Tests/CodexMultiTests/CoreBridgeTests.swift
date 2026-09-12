@@ -5,6 +5,45 @@ import XCTest
 final class CoreBridgeTests: XCTestCase {
 
     @MainActor
+    func testFailedRuntimeDoesNotPublishAnEmptyAccountList() async throws {
+        var document = try XCTUnwrap(JSONSerialization.jsonObject(with: Fixtures.emptyAttachedData()) as? [String: Any])
+        document["runtime"] = ["started": false, "error": "keychain_unavailable",
+                               "codex_cli_version_exact": false, "claude_cli_version_exact": false]
+        let fake = FakeABI(bytes: try JSONSerialization.data(withJSONObject: document))
+        let store = CoreStore()
+        let bridge = CoreBridge(store: store, effects: RecordingEffects().runner, abi: fake.abi)
+        do {
+            try await bridge.start()
+            XCTFail("failed runtime must not start the shell")
+        } catch let error as CoreBridgeError {
+            XCTAssertEqual(error, .runtimeUnavailable(.keychain_unavailable))
+        }
+        XCTAssertEqual(fake.creates, 1)
+        XCTAssertEqual(fake.destroys, 1)
+        XCTAssertEqual(fake.pumps, [])
+        XCTAssertNil(store.projection)
+        let running = await bridge.isRunning
+        XCTAssertFalse(running)
+        await bridge.shutdown()
+        XCTAssertEqual(fake.destroys, 1)
+    }
+
+    @MainActor
+    func testMalformedInitialProjectionCleansUpAndFailsStartup() async throws {
+        let fake = FakeABI(bytes: Data("{}".utf8))
+        let store = CoreStore()
+        let bridge = CoreBridge(store: store, effects: RecordingEffects().runner, abi: fake.abi)
+        do {
+            try await bridge.start()
+            XCTFail("unreadable startup status must fail")
+        } catch let error as CoreBridgeError {
+            XCTAssertEqual(error, .invalidInitialProjection)
+        }
+        XCTAssertEqual(fake.destroys, 1)
+        XCTAssertNil(store.projection)
+    }
+
+    @MainActor
     func testRefusesAVersionMismatchBeforeCreate() async throws {
         let fake = FakeABI(bytes: try Fixtures.emptyAttachedData())
         fake.version = 2

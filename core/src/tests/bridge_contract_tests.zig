@@ -54,7 +54,7 @@ fn projectedGeneration(bytes: []const u8) !u64 {
     return @intCast(parsed.value.object.get("generation").?.integer);
 }
 
-test "C4 keychain probe ABI is retained as an empty non-reading document" {
+test "keychain probe reports actual startup and never reads credentials" {
     const source = try std.Io.Dir.cwd().readFileAlloc(
         testing.io,
         "src/cmcore.zig",
@@ -65,17 +65,23 @@ test "C4 keychain probe ABI is retained as an empty non-reading document" {
     const marker = "pub export fn cm_service_keychain_probe";
     const start = std.mem.indexOf(u8, source, marker) orelse return error.TestUnexpectedResult;
     const body = source[start..];
-    try testing.expect(std.mem.indexOf(u8, body, "runtime") == null);
     try testing.expect(std.mem.indexOf(u8, body, ".load(") == null);
     try testing.expect(std.mem.indexOf(u8, body, "probeOne") == null);
+    try testing.expect(std.mem.indexOf(u8, body, ".credentials") == null);
 
     const inert_handle = try testing.allocator.create(cmcore.cm_service);
     defer testing.allocator.destroy(inert_handle);
+    inert_handle.runtime = null;
     var output: [128]u8 = undefined;
+    try testing.expectEqual(@as(i32, -3), cmcore.cm_service_keychain_probe(inert_handle, &output, output.len));
+    const runtime = try testing.allocator.create(cmcore.Runtime);
+    defer testing.allocator.destroy(runtime);
+    runtime.load_report = .{ .accounts_loaded = 2 };
+    inert_handle.runtime = runtime;
     const count = cmcore.cm_service_keychain_probe(inert_handle, &output, output.len);
     try testing.expect(count > 0);
     try testing.expectEqualStrings(
-        "{\"schema\":1,\"signer_valid\":true,\"accounts\":[]}",
+        "{\"schema\":1,\"signer_valid\":true,\"runtime_started\":true,\"account_count\":2,\"accounts\":[]}\n",
         output[0..@intCast(count)],
     );
     try testing.expectEqual(@as(i32, -2), cmcore.cm_service_keychain_probe(inert_handle, null, output.len));

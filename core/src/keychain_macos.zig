@@ -53,8 +53,15 @@ pub fn Module(
             pub const legacy_service = app_service_prefix;
             pub const v2_service = app_service_prefix ++ ".v2";
             pub const default_service = v2_service;
-            pub const stable_designated_requirement =
+            pub const local_designated_requirement =
                 "identifier \"dev.codexmulti.app\" and certificate root = H\"348b6cf6eed9f518a04c89f02cca7cd91674c55d\"";
+            pub const developer_id_requirement =
+                "identifier \"dev.codexmulti.app\" and anchor apple generic and " ++
+                "certificate 1[field.1.2.840.113635.100.6.2.6] exists and " ++
+                "certificate leaf[field.1.2.840.113635.100.6.1.13] exists and " ++
+                "certificate leaf[subject.OU] = \"W9AVC25Z2L\"";
+            pub const stable_designated_requirement =
+                "(" ++ local_designated_requirement ++ ") or (" ++ developer_id_requirement ++ ")";
 
             pub const SecItemBackend = struct {
                 context: *anyopaque,
@@ -405,6 +412,7 @@ pub fn Module(
                 extern fn SecItemUpdate(query: CFDictionaryRef, attributes_to_update: CFDictionaryRef) OSStatus;
                 extern fn SecItemDelete(query: CFDictionaryRef) OSStatus;
                 extern fn SecAccessCreate(descriptor: CFStringRef, trusted_list: CFTypeRef, access: *CFTypeRef) OSStatus;
+                extern fn SecKeychainSetUserInteractionAllowed(state: Boolean) OSStatus;
                 extern fn SecCodeCopySelf(flags: u32, code: *CFTypeRef) OSStatus;
                 extern fn SecRequirementCreateWithString(text: CFStringRef, flags: u32, requirement: *CFTypeRef) OSStatus;
                 extern fn SecCodeCheckValidity(code: CFTypeRef, flags: u32, requirement: CFTypeRef) OSStatus;
@@ -658,10 +666,15 @@ pub fn Module(
                 sign_in_adapter: KeychainStore,
                 versioned: VersionedKeychainStore = undefined,
 
-                pub fn init(service: []const u8) error{ ForeignKeychainService, UntrustedBuild }!SystemKeychain {
+                pub fn init(service: []const u8) error{ ForeignKeychainService, UntrustedBuild, InteractionPolicyUnavailable }!SystemKeychain {
                     if (!std.mem.eql(u8, service, v2_service)) return error.ForeignKeychainService;
 
                     if (!sec.stableSignerValid()) return error.UntrustedBuild;
+                    // These are background backups in the legacy login keychain. The
+                    // per-query authentication flag alone does not suppress its ACL UI.
+                    // This setting affects only this process; Codex login runs in a child.
+                    if (sec.SecKeychainSetUserInteractionAllowed(0) != status_success)
+                        return error.InteractionPolicyUnavailable;
                     return .{
                         .backend = .init(systemSecItemApi()),
                         .primary_adapter = try KeychainStore.init(v2_service),

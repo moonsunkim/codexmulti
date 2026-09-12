@@ -199,6 +199,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             alert.informativeText = "Core bridge version \(found); this build requires \(expected)."
         case .createFailed:
             alert.informativeText = "The core could not be created."
+        case .runtimeUnavailable(let reason):
+            alert.informativeText = "CodexMulti could not load your saved accounts (\(reason?.rawValue ?? "unknown startup error")). Your account data has not been deleted."
+        case .invalidInitialProjection:
+            alert.informativeText = "CodexMulti could not read its startup status. Your account data has not been deleted."
         case .alreadyStarted, nil:
             alert.informativeText = String(describing: error)
         }

@@ -1506,7 +1506,15 @@ pub const Service = struct {
         defer saved.wipe();
         const matches = if (live.credentials.load(&account_key, .codex_auth_backup, &saved)) |_| blk: {
             break :blk saved.eql(&credential);
-        } else |_| false;
+        } else |err| switch (err) {
+            error.NotFound => false,
+            else => {
+                // Denied or unavailable is not an absent backup. Do not turn a
+                // failed read into an overwrite or another authorization request.
+                logAuthFailure("backup load", account.storage_key, err);
+                return;
+            },
+        };
         if (!matches) live.credentials.save(&account_key, .codex_auth_backup, &credential) catch |err| {
             logAuthFailure("backup save", account.storage_key, err);
             return;

@@ -60,6 +60,7 @@ BUILD_BIN="$temp_root/bin/build" \
 PACKAGE_BIN="$temp_root/bin/package" \
 PROVENANCE_BIN="$temp_root/bin/verify" \
 PROXY_VERIFY_BIN="$temp_root/bin/verify" \
+STARTUP_VERIFY_BIN="$temp_root/bin/verify" \
 GIT_BIN="$temp_root/bin/git" \
 GH_BIN="$temp_root/bin/gh" \
 DITTO_BIN="/usr/bin/ditto" \
@@ -110,3 +111,9 @@ if (RELEASE_MODE=ci; SIGNING_IDENTITY=fixture; APPLE_NOTARY_KEY_ID=fixture; unse
     exit 1
 fi
 printf 'PASS public release and CI fail closed without signing and notarization\n'
+
+if (SIGNING_STATUS="DEVELOPER ID"; STAGED_APP="$temp_root/repo/app/dist/staging/CodexMulti.app"; PROVENANCE_BIN="$temp_root/bin/verify"; PROXY_VERIFY_BIN="$temp_root/bin/verify"; STARTUP_VERIFY_BIN=/usr/bin/false; verify_app) >"$temp_root/startup-check.log" 2>&1; then
+    printf 'FAIL public verification accepted a failed signed-app startup\n' >&2
+    exit 1
+fi
+printf 'PASS public verification requires real signed-app startup\n'

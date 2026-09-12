@@ -6,6 +6,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.2.3]
+
+### Fixed
+- Load saved accounts in Developer ID releases by recognizing the distribution signing identity as well as the existing local signing identity.
+- Show a startup error when the account service cannot start, instead of displaying an empty account list.
+- Suppress background login-keychain authorization dialogs and preserve existing backups when access is denied.
+- Verify real signed-app startup and saved-account loading before packaging a public release; the diagnostic probe no longer reports success for a failed runtime.
+
 ## [0.2.2]
 
 ### Fixed
