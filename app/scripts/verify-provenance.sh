@@ -303,3 +303,8 @@ printf '  proxy tree digest: recomputed and matched\n'
 printf '  proxy tree: package.json, bin/, and src/ match %s\n' "$PROXY_SRC"
 printf '  bundled Node: %s\n' "$bundled_node_identity"
 printf '  bundled Node license: non-empty and matches %s\n' "$node_license_src"
+
+maintenance="$app/Contents/Helpers/codexmulti-maintenance"
+test -f "$maintenance" && test -x "$maintenance" && test ! -L "$maintenance" || die "maintenance helper is missing or unsafe"
+"$STRINGS_BIN" -a "$maintenance" | grep -F -x -- "$core_marker" >/dev/null || die "maintenance source provenance mismatch"
+printf '  maintenance helper: executable with matching core source provenance\n'

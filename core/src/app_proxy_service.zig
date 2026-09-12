@@ -180,13 +180,13 @@ pub const Controller = struct {
         var resolved: runtime_paths.Path = .{};
         const node_found = self.resolveNode(drivers, &resolved);
         self.state.resolved_node = if (node_found) resolved else null;
+        const home = parentEnvValue(drivers.parent_env, "HOME") orelse "";
+        self.worker.config_path = proxy_import.expandConfigPath(self.state.settings.config_path.slice(), home) catch return .rejected_not_allowed;
         if (kind == .sync_config) {
             self.worker.cli_path = if (self.state.settings.cli_path) |path|
                 path
             else
                 (runtime_paths.Path.init(drivers.bundle_cli_path) catch return .rejected_not_allowed);
-            const home = parentEnvValue(drivers.parent_env, "HOME") orelse return .rejected_not_allowed;
-            self.worker.config_path = proxy_import.expandConfigPath(self.state.settings.config_path.slice(), home) catch return .rejected_not_allowed;
             if (!node_found) {
                 self.state.sync_state = .failed;
                 self.recordFailure(.import_node_missing, now_unix_s, drivers);
@@ -195,7 +195,6 @@ pub const Controller = struct {
             self.worker.node_path = resolved;
             self.sync_fingerprint = computeFingerprint(core);
         } else {
-            self.worker.config_path = .{};
             self.worker.node_path = .{};
             self.sync_fingerprint = null;
         }

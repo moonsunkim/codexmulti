@@ -76,6 +76,7 @@ pub const ProxyWorker = struct {
             .allocator = self.allocator,
             .exchange = self.exchange,
             .base_url = self.base_url,
+            .config_path = self.config_path.slice(),
             .timeout_ms = self.timeout_ms,
         };
         self.result = switch (self.kind) {

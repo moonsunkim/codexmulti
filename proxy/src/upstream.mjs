@@ -108,71 +108,77 @@ export function createUpstreamAgents() {
   };
 }
 
-export async function openUpstream({ method, target, headers, body, agents, connectTimeoutMs = 10_000 }) {
+function upstreamTimeouts(request, url, connectTimeoutMs, headersTimeoutMs) {
+  let connectTimer = null;
+  const headersTimer = setTimeout(() => request.destroy(new Error('upstream_headers_timeout')), headersTimeoutMs);
+  const clearConnect = () => {
+    if (connectTimer) clearTimeout(connectTimer);
+    connectTimer = null;
+  };
+  request.once('socket', (socket) => {
+    if (!socket.connecting) return;
+    connectTimer = setTimeout(() => request.destroy(new Error('upstream_connect_timeout')), connectTimeoutMs);
+    socket.once(url.protocol === 'https:' ? 'secureConnect' : 'connect', clearConnect);
+  });
+  return () => {
+    clearConnect();
+    clearTimeout(headersTimer);
+  };
+}
+
+export async function openUpstream({ method, target, headers, body, agents, signal,
+  connectTimeoutMs = 10_000, headersTimeoutMs = 60_000 }) {
   const url = target instanceof URL ? target : new URL(target);
   const transport = url.protocol === 'https:' ? https : url.protocol === 'http:' ? http : null;
   if (!transport) throw new Error('unsupported_upstream_protocol');
   return await new Promise((resolve, reject) => {
     let settled = false;
-    let timer = null;
+    let clearTimeouts = () => {};
     const request = transport.request(url, {
       method,
       headers,
+      signal,
       agent: url.protocol === 'https:' ? agents.https : agents.http,
     }, (response) => {
       settled = true;
-      if (timer) clearTimeout(timer);
+      clearTimeouts();
       resolve({ request, response });
     });
-    request.once('socket', (socket) => {
-      if (!socket.connecting) return;
-      timer = setTimeout(() => request.destroy(new Error('upstream_connect_timeout')), connectTimeoutMs);
-      const event = url.protocol === 'https:' ? 'secureConnect' : 'connect';
-      socket.once(event, () => {
-        if (timer) clearTimeout(timer);
-        timer = null;
-      });
-    });
+    clearTimeouts = upstreamTimeouts(request, url, connectTimeoutMs, headersTimeoutMs);
     request.once('error', (error) => {
-      if (timer) clearTimeout(timer);
+      clearTimeouts();
       if (!settled) reject(error);
     });
     request.end(body);
   });
 }
 
-export async function openUpstreamUpgrade({ method, target, headers, agents, connectTimeoutMs = 10_000 }) {
+export async function openUpstreamUpgrade({ method, target, headers, agents, signal,
+  connectTimeoutMs = 10_000, headersTimeoutMs = 60_000 }) {
   const url = target instanceof URL ? target : new URL(target);
   const transport = url.protocol === 'https:' ? https : url.protocol === 'http:' ? http : null;
   if (!transport) throw new Error('unsupported_upstream_protocol');
   return await new Promise((resolve, reject) => {
     let settled = false;
-    let timer = null;
+    let clearTimeouts = () => {};
     const finish = (value) => {
       if (settled) return;
       settled = true;
-      if (timer) clearTimeout(timer);
+      clearTimeouts();
       resolve(value);
     };
     const request = transport.request(url, {
       method,
       headers,
+      signal,
       agent: url.protocol === 'https:' ? agents.https : agents.http,
     }, (response) => finish({ kind: 'response', request, response }));
     request.once('upgrade', (response, socket, head) => {
       finish({ kind: 'upgrade', request, response, socket, head });
     });
-    request.once('socket', (socket) => {
-      if (!socket.connecting) return;
-      timer = setTimeout(() => request.destroy(new Error('upstream_connect_timeout')), connectTimeoutMs);
-      const event = url.protocol === 'https:' ? 'secureConnect' : 'connect';
-      socket.once(event, () => {
-        if (timer) clearTimeout(timer);
-        timer = null;
-      });
-    });
+    clearTimeouts = upstreamTimeouts(request, url, connectTimeoutMs, headersTimeoutMs);
     request.once('error', (error) => {
-      if (timer) clearTimeout(timer);
+      clearTimeouts();
       if (!settled) reject(error);
     });
     request.end();

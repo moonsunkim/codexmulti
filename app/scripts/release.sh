@@ -102,8 +102,8 @@ check_clean_checkout() {
 check_ci_success() {
     local head result run_head run_status run_conclusion tab
     head="$("$GIT_BIN" -C "$REPO_ROOT" rev-parse HEAD)"
-    result="$("$GH_BIN" run list --repo "$RELEASE_REPOSITORY" --workflow ci.yml --commit "$head" --limit 1 \
-        --json headSha,status,conclusion --jq '.[0] | [.headSha, .status, .conclusion] | @tsv')"
+    result="$("$GH_BIN" run list --repo "$RELEASE_REPOSITORY" --workflow ci.yml --commit "$head" --limit 20 \
+        --json headSha,status,conclusion,event --jq '[.[] | select(.event == "push" and .status == "completed" and .conclusion == "success")][0] | [.headSha, .status, .conclusion] | @tsv')"
     tab="$(printf '\t')"
     IFS="$tab" read -r run_head run_status run_conclusion <<EOF
 $result
@@ -142,19 +142,13 @@ build_app() {
 stage_app() {
     STAGE_ROOT="$(mktemp -d "$STAGE_PARENT/codexmulti-release.XXXXXX")"
     STAGED_APP="$STAGE_ROOT/CodexMulti.app"
-    if test "$RELEASE_MODE" = ci && test -z "${SIGNING_IDENTITY:-}"; then
-        "$DITTO_BIN" "$UNSIGNED_APP" "$STAGED_APP"
-        SIGNING_STATUS="UNSIGNED"
-        printf 'Signing: UNSIGNED because CI signing secrets are unavailable\n'
+    CODEXMULTI_USE_EXISTING_BUILD=yes "$PACKAGE_BIN" --stage "$STAGED_APP"
+    if test -n "${SIGNING_IDENTITY:-}"; then
+        SIGNING_STATUS="DEVELOPER ID"
     else
-        CODEXMULTI_USE_EXISTING_BUILD=yes "$PACKAGE_BIN" --stage "$STAGED_APP"
-        if test -n "${SIGNING_IDENTITY:-}"; then
-            SIGNING_STATUS="DEVELOPER ID"
-        else
-            SIGNING_STATUS="LOCAL SELF-SIGNED"
-        fi
-        printf 'Signing: %s\n' "$SIGNING_STATUS"
+        SIGNING_STATUS="LOCAL SELF-SIGNED"
     fi
+    printf 'Signing: %s\n' "$SIGNING_STATUS"
 }
 
 verify_app() {
@@ -171,10 +165,17 @@ notary_credential_count() {
     printf '%s\n' "$count"
 }
 
+check_distribution_credentials() {
+    test "$RELEASE_MODE" = dry-run && return 0
+    test -n "${SIGNING_IDENTITY:-}" || die "public releases require a Developer ID signing identity"
+    test "$(notary_credential_count)" = 3 || die "public releases require all three Apple notarization credentials"
+    test -f "$APPLE_NOTARY_KEY_PATH" || die "notary key file is missing"
+}
+
 notarize_app() {
     local credential_count submission_zip
     credential_count="$(notary_credential_count)"
-    if test "$credential_count" = 0; then
+    if test "$credential_count" = 0 && test "$RELEASE_MODE" = dry-run; then
         NOTARIZATION_STATUS="NOT NOTARIZED"
         printf 'Notarization: NOT NOTARIZED because credentials are unavailable\n'
         return
@@ -250,6 +251,7 @@ write_release_notes() {
 }
 
 publish_release() {
+    test "$SIGNING_STATUS" = "DEVELOPER ID" && test "$NOTARIZATION_STATUS" = "NOTARIZED" || die "refusing to publish an unverified distribution"
     "$GIT_BIN" -C "$REPO_ROOT" tag -a "$TAG" -m "CodexMulti $VERSION"
     "$GIT_BIN" -C "$REPO_ROOT" push origin "refs/tags/$TAG"
     "$GH_BIN" release create "$TAG" "$ZIP_PATH" "$SHA_PATH" --repo "$RELEASE_REPOSITORY" \
@@ -287,12 +289,8 @@ main() {
     require_tool "$BUILD_BIN"
     require_tool "$PROVENANCE_BIN"
     require_tool "$PROXY_VERIFY_BIN"
-    if test "$RELEASE_MODE" != ci || test -n "${SIGNING_IDENTITY:-}"; then
-        require_tool "$PACKAGE_BIN"
-    fi
-    if test "$RELEASE_MODE" != ci; then
-        require_tool "$GH_BIN"
-    fi
+    require_tool "$PACKAGE_BIN"
+    require_tool "$GH_BIN"
 
     begin_stage version
     VERSION="$(read_release_version)"
@@ -300,8 +298,10 @@ main() {
     printf 'Version: %s\nTag: %s\n' "$VERSION" "$TAG"
 
     begin_stage preflight
+    check_distribution_credentials
     if test "$RELEASE_MODE" = ci; then
         check_ci_tag
+        check_ci_success
     else
         check_clean_checkout
         check_ci_success

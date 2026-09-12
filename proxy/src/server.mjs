@@ -13,9 +13,11 @@ import {
   DEFAULT_REFRESH_SKEW_SECONDS,
   Mutex,
   assertSafeAuthPath,
+  canUseAccessTokenAfterRefreshFailure,
   expandHome,
   refreshErrorKind,
 } from './accounts.mjs';
+import { authorizedControlRequest, controlTokenPath, loadOrCreateControlToken, localRequestError } from './control-auth.mjs';
 import { AccountState, FailoverManager } from './failover.mjs';
 import {
   bufferForClassification,
@@ -38,6 +40,7 @@ export const CONFIG_DEFAULTS = Object.freeze({
   upstream_chatgpt_base_url: 'https://chatgpt.com/backend-api/',
   upstream_openai_base_url: 'https://chatgpt.com/backend-api/codex',
   request_body_limit_bytes: 64 * 1024 * 1024,
+  upstream_headers_timeout_ms: 60_000,
   token_refresh_skew_seconds: DEFAULT_REFRESH_SKEW_SECONDS,
   default_cooldown_seconds: 1800,
   cooldown_safety_margin_seconds: 60,
@@ -147,6 +150,7 @@ export function validateConfig(input, options = {}) {
     names.add(account.name);
   }
   positiveInteger(config.request_body_limit_bytes, 'request_body_limit_bytes');
+  positiveInteger(config.upstream_headers_timeout_ms, 'upstream_headers_timeout_ms');
   positiveInteger(config.token_refresh_skew_seconds, 'token_refresh_skew_seconds', { allowZero: true });
   positiveInteger(config.default_cooldown_seconds, 'default_cooldown_seconds', { allowZero: true });
   positiveInteger(config.cooldown_safety_margin_seconds, 'cooldown_safety_margin_seconds', { allowZero: true });
@@ -195,7 +199,7 @@ export async function loadConfig(configPath, options = {}) {
   } catch {
     throw new Error('invalid_config_file');
   }
-  return validateConfig(parsed, options);
+  return { ...validateConfig(parsed, options), control_token_file: controlTokenPath(configPath) };
 }
 
 function routeFor(rawUrl, config) {
@@ -413,6 +417,8 @@ export async function createProxy(configInput, options = {}) {
   const initialConfig = options.validated
     ? configInput : validateConfig(configInput, { allowPortZero: true, home: options.home });
   const configPath = options.configPath ? path.resolve(options.configPath) : null;
+  initialConfig.control_token_file = configPath ? controlTokenPath(configPath) : null;
+  const controlToken = options.controlToken ?? await loadOrCreateControlToken(initialConfig.control_token_file);
   if (initialConfig.log_file) {
     await mkdir(path.dirname(initialConfig.log_file), { recursive: true, mode: 0o700 });
     await chmod(path.dirname(initialConfig.log_file), 0o700);
@@ -484,7 +490,9 @@ export async function createProxy(configInput, options = {}) {
     state.consecutiveFailures += 1;
     state.lastError = refreshErrorKind(error);
     state.nextAttemptAt = at + renewalBackoffMs(state.consecutiveFailures);
-    await current.failover.markInvalid(name);
+    if (!canUseAccessTokenAfterRefreshFailure(expiresAt, error, at)) {
+      await current.failover.markInvalid(name);
+    }
     emit({
       timestamp: new Date(at).toISOString(),
       level: 'error',
@@ -493,6 +501,32 @@ export async function createProxy(configInput, options = {}) {
       token_expires_at: tokenExpiryIso(expiresAt),
       error_kind: state.lastError,
     });
+    if (renewalTimer !== null) {
+      (options.clearTimeout ?? clearTimeout)(renewalTimer);
+      renewalTimer = null;
+      scheduleTokenRenewal();
+    }
+  }
+
+  async function requestCredentials(current, name) {
+    const state = current.tokenRefresh.get(name);
+    if (state.lastError !== null && state.nextAttemptAt > clock()) {
+      await current.registry.reload(name);
+      const credentials = current.registry.credentials(name);
+      if (canUseAccessTokenAfterRefreshFailure(credentials.expiresAt, state.lastError, clock())) return credentials;
+    }
+    try {
+      const credentials = await current.registry.ensureFresh(name);
+      state.lastError = null;
+      state.nextAttemptAt = null;
+      state.consecutiveFailures = 0;
+      return credentials;
+    } catch (error) {
+      const credentials = current.registry.credentials(name);
+      await recordRenewalFailure(current, name, credentials.expiresAt, error);
+      if (canUseAccessTokenAfterRefreshFailure(credentials.expiresAt, error, clock())) return credentials;
+      throw error;
+    }
   }
 
   async function runTokenRenewalCycle() {
@@ -729,6 +763,7 @@ export async function createProxy(configInput, options = {}) {
 
   async function control(request, response, route) {
     if (!isLoopbackRemote(request.socket.remoteAddress)) return json(response, 403, { error: 'loopback_only' });
+    if (!authorizedControlRequest(request, controlToken)) return json(response, 401, { error: 'control_auth_required' });
     const current = generation;
     if (request.method === 'GET' && route === '/_proxy/status') {
       return json(response, 200, await statusPayload(current));
@@ -789,14 +824,19 @@ export async function createProxy(configInput, options = {}) {
         try {
           const credentials = await registry.forceRefresh(name);
           await failover.reloadReady(name);
+          const refreshState = current.tokenRefresh.get(name);
+          refreshState.lastOkAt = clock();
+          refreshState.lastError = null;
+          refreshState.nextAttemptAt = null;
+          refreshState.consecutiveFailures = 0;
           return json(response, 200, {
             name,
             result: 'ok',
             access_expires_at: credentials.expiresAt === null
               ? null : new Date(credentials.expiresAt * 1000).toISOString(),
           });
-        } catch {
-          await failover.markInvalid(name);
+        } catch (error) {
+          await recordRenewalFailure(current, name, registry.tokenExpiresAt(name), error);
           return json(response, 409, {
             name,
             result: 'failed',
@@ -817,7 +857,8 @@ export async function createProxy(configInput, options = {}) {
     });
     if (!admitted) throw new Error('proxy_reconfiguring');
     try {
-      const credentials = await current.registry.ensureFresh(name);
+      const credentials = await requestCredentials(current, name);
+      request.proxySignal?.throwIfAborted();
       const headers = buildUpstreamHeaders(request.headers, credentials, new URL(target), body.length);
       const opened = await openUpstream({
         method: request.method,
@@ -825,6 +866,8 @@ export async function createProxy(configInput, options = {}) {
         headers,
         body,
         agents,
+        signal: request.proxySignal,
+        headersTimeoutMs: current.config.upstream_headers_timeout_ms,
       });
       return { ...opened, credentials };
     } catch (error) {
@@ -841,7 +884,8 @@ export async function createProxy(configInput, options = {}) {
     });
     if (!admitted) throw new Error('proxy_reconfiguring');
     try {
-      const credentials = await current.registry.ensureFresh(name);
+      const credentials = await requestCredentials(current, name);
+      request.proxySignal?.throwIfAborted();
       const headers = buildUpstreamUpgradeHeaders(
         request.headers,
         credentials,
@@ -852,6 +896,8 @@ export async function createProxy(configInput, options = {}) {
         target,
         headers,
         agents,
+        signal: request.proxySignal,
+        headersTimeoutMs: current.config.upstream_headers_timeout_ms,
       });
     } catch (error) {
       changeInFlight(current, name, -1);
@@ -969,6 +1015,7 @@ export async function createProxy(configInput, options = {}) {
         try {
           ({ request: upstreamRequest, response: upstreamResponse } = await openUpstream({
             method: request.method, target: route.target, headers: retryHeaders, body, agents,
+            signal: request.proxySignal, headersTimeoutMs: config.upstream_headers_timeout_ms,
           }));
           status = upstreamResponse.statusCode ?? 502;
           request.proxyUpstreamStatus = status;
@@ -1036,7 +1083,7 @@ export async function createProxy(configInput, options = {}) {
       return;
     }
     let attemptNumber = 0;
-    while (accountName && attemptNumber < 2) {
+    while (accountName) {
       attemptNumber += 1;
       attempted.add(accountName);
       const started = Date.now();
@@ -1077,6 +1124,11 @@ export async function createProxy(configInput, options = {}) {
       };
       try {
         if (opened.kind === 'upgrade') {
+          if (request.proxySignal.aborted || socket.destroyed) {
+            opened.socket.destroy();
+            releaseAttempt();
+            return;
+          }
           const connectedAt = Date.now();
           logger({
             timestamp: new Date().toISOString(),
@@ -1140,8 +1192,7 @@ export async function createProxy(configInput, options = {}) {
               attempt: attemptNumber,
               cooldown_until: new Date(classification.cooldownUntil).toISOString(),
             });
-            const nextAccount = attemptNumber === 1
-              ? await failover.selectReady(attempted) : null;
+            const nextAccount = await failover.selectReady(attempted);
             if (nextAccount) {
               releaseAttempt();
               accountName = nextAccount;
@@ -1163,6 +1214,13 @@ export async function createProxy(configInput, options = {}) {
   }
 
   async function proxyUpgrade(request, socket, head) {
+    const localError = localRequestError(request);
+    if (localError) return endUpgradeError(socket, 403, localError);
+    const cancellation = new AbortController();
+    request.proxySignal = cancellation.signal;
+    const cancel = () => cancellation.abort();
+    socket.once('close', cancel);
+    socket.once('end', cancel);
     request.proxyRequestId = randomUUID();
     request.proxyStarted = Date.now();
     const current = generation;
@@ -1197,10 +1255,19 @@ export async function createProxy(configInput, options = {}) {
       });
     } finally {
       current.activeRequests -= 1;
+      socket.off('close', cancel);
+      socket.off('end', cancel);
     }
   }
 
   const server = http.createServer(async (request, response) => {
+    const localError = localRequestError(request);
+    if (localError) return json(response, 403, { error: localError });
+    const cancellation = new AbortController();
+    request.proxySignal = cancellation.signal;
+    const cancel = () => cancellation.abort();
+    request.once('aborted', cancel);
+    response.once('close', cancel);
     request.proxyRequestId = randomUUID();
     request.proxyStarted = Date.now();
     const current = generation;
@@ -1241,6 +1308,9 @@ export async function createProxy(configInput, options = {}) {
         error_code: error?.code ?? null,
         error_message: redactSecret(String(error?.message ?? error)).slice(0, 200),
         upstream_status: request.proxyUpstreamStatus ?? null, duration_ms: Date.now() - (request.proxyStarted ?? Date.now()) });
+    } finally {
+      request.off('aborted', cancel);
+      response.off('close', cancel);
     }
   });
   server.on('upgrade', (request, socket, head) => {

@@ -382,13 +382,30 @@ pub const FileEditor = struct {
     }
 
     fn mutate(self: *FileEditor, path: []const u8, kind: Kind, replace: bool, expected: ?Fingerprint) Mutation {
-        const loaded = self.readSafe(path) catch |err| return .{
-            .status = switch (err) {
-                error.FileTooBig => .too_large,
-                error.Unsafe, error.SymLinkLoop => .unsafe_file,
-                else => .io,
-            },
-            .state = .conflicting,
+        const loaded = self.readSafe(path) catch |err| {
+            if (err == error.FileNotFound) {
+                if (kind == .disable) return .{ .status = .no_change, .state = .off, .fingerprint = fingerprint("") };
+                if (expected) |confirmed| {
+                    if (!std.mem.eql(u8, &confirmed, &fingerprint(""))) return .{ .status = .raced, .state = .off };
+                }
+                self.createMissing(path) catch |create_error| return .{
+                    .status = switch (create_error) {
+                        error.PathAlreadyExists => .raced,
+                        error.Unsafe, error.SymLinkLoop, error.NotDir => .unsafe_file,
+                        else => .io,
+                    },
+                    .state = .off,
+                };
+                return .{ .status = .success, .state = .on, .fingerprint = fingerprint(canonical_pair) };
+            }
+            return .{
+                .status = switch (err) {
+                    error.FileTooBig => .too_large,
+                    error.Unsafe, error.SymLinkLoop => .unsafe_file,
+                    else => .io,
+                },
+                .state = .conflicting,
+            };
         };
         defer self.allocator.free(loaded.bytes);
         const parsed = classifyBytes(loaded.bytes);
@@ -418,6 +435,29 @@ pub const FileEditor = struct {
         return .{ .status = .success, .state = classifyBytes(next).state, .fingerprint = fingerprint(next) };
     }
 
+    fn createMissing(self: *FileEditor, path: []const u8) !void {
+        const parent_path = std.fs.path.dirname(path) orelse return error.Unsafe;
+        const cwd = std.Io.Dir.cwd();
+        cwd.createDir(self.io, parent_path, .fromMode(0o700)) catch |err| {
+            if (err != error.PathAlreadyExists) return err;
+        };
+        var parent = try cwd.openDir(self.io, parent_path, .{ .follow_symlinks = false });
+        defer parent.close(self.io);
+        if (!handleOwnedByCurrentUser(parent.handle)) return error.Unsafe;
+        const name = std.fs.path.basename(path);
+        var temp_buffer: [2048]u8 = undefined;
+        const stamp = self.fixed_timestamp_ns orelse std.Io.Clock.real.now(self.io).nanoseconds;
+        const temp = try std.fmt.bufPrint(&temp_buffer, ".{s}.tmp.{d}", .{ name, stamp });
+        var file = try parent.createFile(self.io, temp, .{ .exclusive = true, .permissions = .fromMode(0o600) });
+        defer file.close(self.io);
+        defer parent.deleteFile(self.io, temp) catch {};
+        try file.writeStreamingAll(self.io, canonical_pair);
+        try @import("durable_file.zig").syncFile(self.io, file);
+        if (self.before_rename) |hook| hook(path);
+        try parent.renamePreserve(temp, parent, name, self.io);
+        try @import("durable_file.zig").syncDirectory(self.io, parent);
+    }
+
     fn writeBackupAndTemp(
         self: *FileEditor,
         path: []const u8,
@@ -434,20 +474,20 @@ pub const FileEditor = struct {
         const cwd = std.Io.Dir.cwd();
 
         var backup_file = try cwd.createFile(self.io, backup, .{ .exclusive = true, .permissions = permissions });
+        defer backup_file.close(self.io);
         errdefer cwd.deleteFile(self.io, backup) catch {};
         try backup_file.setPermissions(self.io, permissions);
         try backup_file.writeStreamingAll(self.io, original);
         try backup_file.sync(self.io);
-        backup_file.close(self.io);
 
         var temp_file = try cwd.createFile(self.io, temp, .{
             .exclusive = true,
             .permissions = std.Io.File.Permissions.fromMode(0o600),
         });
+        defer temp_file.close(self.io);
         errdefer cwd.deleteFile(self.io, temp) catch {};
         try temp_file.writeStreamingAll(self.io, next);
         try temp_file.sync(self.io);
-        temp_file.close(self.io);
 
         if (self.before_rename) |hook| hook(path);
         const reread = try self.readSafe(path);
@@ -455,6 +495,8 @@ pub const FileEditor = struct {
         if (!std.mem.eql(u8, &expected, &fingerprint(reread.bytes))) return error.Raced;
         try cwd.rename(temp, cwd, path, self.io);
         try cwd.setFilePermissions(self.io, path, permissions, .{ .follow_symlinks = false });
+        try @import("durable_file.zig").syncFile(self.io, temp_file);
+        try @import("durable_file.zig").syncParent(self.io, cwd, path);
     }
 };
 

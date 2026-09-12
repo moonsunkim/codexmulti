@@ -163,9 +163,11 @@ const FixtureService = struct {
             .can_repair = self.proxy_service_state == .installed_stale or self.proxy_service_state == .@"unreachable",
             .can_stop = self.proxy_service_state == .running and self.codex_routing_state != .conflicting,
             .routing_state = self.codex_routing_state,
-            .enabled = self.proxy_service_state == .running and self.codex_routing_state == .on,
+            .enabled = self.codex_routing_state == .on,
             .enabled_detail_text = self.proxy_enabled_detail_text orelse if (self.proxy_service_state == .running and self.codex_routing_state == .on)
                 "Codex routes through the running failover proxy."
+            else if (self.codex_routing_state == .on)
+                "Codex still routes to an unavailable proxy. Turn this off to restore direct routing."
             else
                 "Codex routes directly; the failover proxy is off.",
             .cli_default_path = "/Applications/CodexMulti.app/Contents/Resources/proxy/bin/codexmulti-proxy",
@@ -315,6 +317,10 @@ fn addMapped(service: *FixtureService) void {
 }
 
 fn makeProjection(allocator: std.mem.Allocator, name: []const u8) ![]u8 {
+    return makeProjectionLanguage(allocator, name, .en);
+}
+
+fn makeProjectionLanguage(allocator: std.mem.Allocator, name: []const u8, language: ui_model.Language) ![]u8 {
     var service: FixtureService = .{};
     var model = shell.initialModel(.utc);
     var effects: shell.Effects = .{};
@@ -629,6 +635,7 @@ fn makeProjection(allocator: std.mem.Allocator, name: []const u8) ![]u8 {
         attach(&model, &service);
     } else return error.UnknownFixture;
 
+    if (language == .ko) shell.update(&model, .{ .set_language = .{ .value = language, .system = .en } }, &effects);
     return bridge.serialize(allocator, 1, runtime, &model, &effects);
 }
 
@@ -804,6 +811,13 @@ fn exportAll(allocator: std.mem.Allocator, io: std.Io) !void {
 }
 
 pub fn main(init: std.process.Init) !void {
+    const args = try init.minimal.args.toSlice(init.arena.allocator());
+    if (args.len == 4 and std.mem.eql(u8, args[1], "--korean")) {
+        const bytes = try makeProjectionLanguage(init.gpa, args[2], .ko);
+        defer init.gpa.free(bytes);
+        try std.Io.Dir.cwd().writeFile(init.io, .{ .sub_path = args[3], .data = bytes });
+        return;
+    }
     try exportAll(init.gpa, init.io);
 }
 
@@ -865,6 +879,9 @@ test "F18 selecting Korean immediately reprojects the visible catalog copy" {
     try testing.expectEqual(ui_model.Language.ko, model.view.settings.language);
     try testing.expectEqualStrings("등록된 계정 없음", model.view.summary_text);
     try testing.expectEqualStrings("언어", model.view.settings.language_label);
+    try testing.expectEqualStrings("시스템", model.view.settings.appearance_label_system);
+    try testing.expectEqualStrings("표시할 사용량", model.view.settings.codex_usage_window_label);
+    try testing.expectEqualStrings("모델별 한도", model.view.settings.codex_show_model_limits_label);
 }
 
 test "Codex settings projection owns labels supported values and typed intents" {

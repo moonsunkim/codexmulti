@@ -75,6 +75,7 @@ require_unsigned_nested_layout() {
     test -d "$app" || die "unsigned candidate app does not exist: $app"
     test -x "$app/$NESTED_NODE_RELATIVE" || die "unsigned candidate is missing bundled Node: $app/$NESTED_NODE_RELATIVE"
     test ! -L "$app/$NESTED_NODE_RELATIVE" || die "bundled Node must not be a symlink"
+    test -x "$app/Contents/Helpers/codexmulti-maintenance" && test ! -L "$app/Contents/Helpers/codexmulti-maintenance" || die "maintenance helper is missing or unsafe"
     test -f "$app/Contents/Resources/proxy/package.json" || die "unsigned candidate is missing proxy package.json"
     test -x "$app/Contents/Resources/proxy/bin/codexmulti-proxy" || die "unsigned candidate is missing the proxy entrypoint"
     test -f "$app/Contents/Resources/proxy/src/server.mjs" || die "unsigned candidate is missing proxy src/server.mjs"
@@ -309,6 +310,7 @@ verify_signed_app() {
     fi
     require_hardened_runtime "$app" "$BUNDLE_ID"
     verify_signed_node "$app"
+    require_hardened_runtime "$app/Contents/Helpers/codexmulti-maintenance" "codexmulti-maintenance"
     if test "$require_clean" = yes; then
         if ! "$PROVENANCE_AUDIT_BIN" --require-clean "$app"; then
             die "clean-checkout provenance verification failed: $app"
@@ -376,6 +378,8 @@ build_and_sign() {
     fi
     "$CODESIGN_BIN" --force --sign "$identity_hash" --options runtime "$timestamp_option" \
         --entitlements "$NODE_ENTITLEMENTS" "$output/$NESTED_NODE_RELATIVE"
+    "$CODESIGN_BIN" --force --sign "$identity_hash" --options runtime "$timestamp_option" \
+        "$output/Contents/Helpers/codexmulti-maintenance"
     record_signed_node_sha256 "$output"
     "$CODESIGN_BIN" --force --sign "$identity_hash" --options runtime "$timestamp_option" \
         --identifier "$BUNDLE_ID" "$output"

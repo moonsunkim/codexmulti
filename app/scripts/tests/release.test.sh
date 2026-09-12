@@ -97,3 +97,16 @@ test ! -s "$temp_root/release.log" || {
 }
 
 printf 'PASS release version extraction, notes extraction, and dry-run artifact path\n'
+
+# Credential omission must fail before any public build or upload, including CI.
+for mode in release ci; do
+    if (RELEASE_MODE="$mode"; unset SIGNING_IDENTITY APPLE_NOTARY_KEY_ID APPLE_NOTARY_ISSUER APPLE_NOTARY_KEY_PATH; check_distribution_credentials) >"$temp_root/credential-check.log" 2>&1; then
+        printf 'FAIL public release accepted missing credentials in %s mode\n' "$mode" >&2
+        exit 1
+    fi
+done
+if (RELEASE_MODE=ci; SIGNING_IDENTITY=fixture; APPLE_NOTARY_KEY_ID=fixture; unset APPLE_NOTARY_ISSUER APPLE_NOTARY_KEY_PATH; check_distribution_credentials) >"$temp_root/credential-check.log" 2>&1; then
+    printf 'FAIL public release accepted partial notarization credentials\n' >&2
+    exit 1
+fi
+printf 'PASS public release and CI fail closed without signing and notarization\n'

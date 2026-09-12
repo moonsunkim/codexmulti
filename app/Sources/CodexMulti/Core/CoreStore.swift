@@ -31,6 +31,7 @@ final class CoreStore {
         receivedCount += 1
         let previous = projection
         if let previous, previous.rendersSame(as: next) { return }
+        Copy.setLanguage(next.view.settings.language)
         projection = next
         publishCount += 1
         tray.receive(next)

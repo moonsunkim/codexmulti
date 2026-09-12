@@ -6,6 +6,26 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.2.2]
+
+### Fixed
+
+- Keep still-valid accounts usable during temporary token-refresh outages; show a retry warning and clear it after recovery.
+- Cancel upstream work and release account slots when a client disconnects before response headers, with bounded HTTP and WebSocket handshake waits.
+- Create a private Codex config on first enable; accurately show unavailable proxy routing and restore direct connections from the main switch.
+- Offer Repair during onboarding for an installed but unavailable service.
+- Reject foreign Host and browser-origin traffic and protect the control API with a private per-user capability.
+- Try the full eligible account pool after definitive pre-handshake WebSocket usage limits.
+- Translate shell settings, menus, dialogs and accessibility labels through the core Korean catalog.
+- Flush reset records and their parent directory before allowing a reset to be sent.
+
+### Added
+
+- A signed uninstall helper that restores managed Codex routing, drains requests and removes the verified LaunchAgent while retaining account data; Homebrew runs it before removal.
+- Swift app builds, shell tests and distribution-script checks in CI. Public release now requires successful CI, Developer ID signing and Apple notarization.
+
+## [0.2.1]
+
 ### Added
 
 - Releases are now signed with a Developer ID certificate and notarized by Apple, so the first launch opens directly on macOS.

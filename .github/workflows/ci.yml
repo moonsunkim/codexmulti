@@ -63,3 +63,53 @@ jobs:
       - name: Run proxy tests
         working-directory: proxy
         run: npm test
+  shell:
+    name: Swift shell and distribution
+    runs-on: macos-26
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+      - name: Install Zig 0.16.0
+        shell: bash
+        run: |
+          set -euo pipefail
+          zig_version="0.16.0"
+          case "$(uname -m)" in
+            arm64) zig_platform="aarch64-macos" ;;
+            x86_64) zig_platform="x86_64-macos" ;;
+            *) exit 1 ;;
+          esac
+          zig_index="$RUNNER_TEMP/zig-index.json"
+          zig_archive="$RUNNER_TEMP/zig.tar.xz"
+          zig_root="$RUNNER_TEMP/zig-$zig_version"
+          curl --fail --location --silent --show-error --proto '=https' --tlsv1.2 --output "$zig_index" "https://ziglang.org/download/index.json"
+          zig_url="$(ruby -rjson -e 'data = JSON.parse(File.read(ARGV[0])); puts data.fetch(ARGV[1]).fetch(ARGV[2]).fetch("tarball")' "$zig_index" "$zig_version" "$zig_platform")"
+          zig_sha256="$(ruby -rjson -e 'data = JSON.parse(File.read(ARGV[0])); puts data.fetch(ARGV[1]).fetch(ARGV[2]).fetch("shasum")' "$zig_index" "$zig_version" "$zig_platform")"
+          case "$zig_url" in
+            https://ziglang.org/download/*) ;;
+            *) exit 1 ;;
+          esac
+          printf '%s\n' "$zig_sha256" | grep -Eq '^[0-9a-f]{64}$'
+          curl --fail --location --silent --show-error --proto '=https' --tlsv1.2 --output "$zig_archive" "$zig_url"
+          actual_sha256="$(shasum -a 256 "$zig_archive" | awk '{print $1}')"
+          test "$actual_sha256" = "$zig_sha256"
+          mkdir -p "$zig_root"
+          tar -xJf "$zig_archive" -C "$zig_root" --strip-components=1
+          test "$("$zig_root/zig" version)" = "$zig_version"
+          printf '%s\n' "$zig_root" >> "$GITHUB_PATH"
+      - name: Fetch pinned Node runtime
+        run: ./app/scripts/fetch-node.sh
+      - name: Build complete macOS app
+        run: ./app/scripts/build-app.sh
+      - name: Test Swift shell
+        working-directory: app
+        run: swift test
+      - name: Verify distribution scripts and bundle
+        run: |
+          ./app/scripts/tests/build-version.test.sh
+          ./app/scripts/tests/release.test.sh
+          ./app/scripts/tests/signing-identity.test.sh
+          ./app/scripts/verify-provenance.sh app/dist/staging/CodexMulti.app
+          ./app/scripts/verify-bundled-proxy.sh app/dist/staging/CodexMulti.app
+          app/dist/staging/CodexMulti.app/Contents/Helpers/codexmulti-maintenance --help
+          ./core/scripts/e2e-proxy-control.sh

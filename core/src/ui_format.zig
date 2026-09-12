@@ -275,6 +275,7 @@ fn humanizeWindowLabelWith(localized: strings.Catalog, buffer: []u8, label: []co
     for (known) |candidate| {
         if (std.mem.eql(u8, label, candidate.source)) return localized.text(candidate.key);
         if (!std.ascii.eqlIgnoreCase(label, candidate.source)) continue;
+        if (localized.language == .ko) return localized.text(candidate.key);
         const take = @min(label.len, buffer.len);
         if (take == 0) return label;
         @memcpy(buffer[0..take], label[0..take]);

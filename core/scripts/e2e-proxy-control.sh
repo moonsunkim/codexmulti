@@ -20,6 +20,7 @@ EXPECTED_PROXY_COMMIT=${CODEXMULTI_EXPECTED_PROXY_COMMIT:-$(git -C "$REPO_ROOT" 
 test "$(git -C "$REPO_ROOT" log -1 --format=%H -- "$PROXY_RELATIVE")" = "$EXPECTED_PROXY_COMMIT"
 mkdir -p "$SCRATCH_ROOT"
 chmod 700 "$SCRATCH_ROOT"
+SCRATCH_ROOT=$(CDPATH= cd -- "$SCRATCH_ROOT" && pwd -P)
 RUN_DIR=$(mktemp -d "$SCRATCH_ROOT/proxy-e2e.XXXXXX")
 SERVER_PID=
 
@@ -103,7 +104,10 @@ SERVER_PID=$!
 READY=false
 attempt=0
 while test "$attempt" -lt 100; do
-  if curl --noproxy '*' --silent --fail "$BASE_URL/_proxy/status" >/dev/null 2>&1; then
+  if test -f "$CONFIG_PATH.control-token"; then
+    (umask 077; { printf 'Authorization: Bearer '; cat "$CONFIG_PATH.control-token"; printf '\n'; } > "$CONFIG_PATH.control-header")
+  fi
+  if curl --header "@$CONFIG_PATH.control-header" --noproxy '*' --silent --fail "$BASE_URL/_proxy/status" >/dev/null 2>&1; then
     READY=true
     break
   fi

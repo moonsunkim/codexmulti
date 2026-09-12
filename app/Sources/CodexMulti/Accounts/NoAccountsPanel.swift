@@ -52,11 +52,12 @@ struct EmptyAccountsPage: View {
 
 
 enum OnboardingChecklistModel {
-    static func intent(_ action: OnboardingNextAction?) -> Intent? {
+    static func intent(_ action: OnboardingNextAction?, serviceState: ProxyServiceState = .not_installed) -> Intent? {
         guard let action else { return nil }
         switch action.kind {
         case .add_account: return .begin_add_account
-        case .install_proxy_service: return .install_proxy_service
+        case .install_proxy_service:
+            return serviceState == .installed_stale || serviceState == .unreachable ? .repair_proxy_service : .install_proxy_service
         case .enable_codex_routing: return .enable_codex_routing(replace_conflicting: action.replace_conflicting)
         }
     }
@@ -68,12 +69,19 @@ struct OnboardingChecklist: View {
     let compact: Bool
     @Environment(\.tone) private var tone
     @Environment(\.submit) private var submit
+    @State private var confirmingRepair = false
 
     var body: some View {
         Group {
             if compact { compactBody } else { cardBody }
         }
         .accessibilityElement(children: .contain)
+        .confirmationDialog(Copy.clientQuiescenceTitle, isPresented: $confirmingRepair, titleVisibility: .visible) {
+            Button(Copy.repairProxyService) { submit(.repair_proxy_service) }
+            Button(Copy.cancel, role: .cancel) {}
+        } message: {
+            Text(verbatim: Copy.clientQuiescenceMessage)
+        }
     }
 
     private var compactBody: some View {
@@ -127,8 +135,11 @@ struct OnboardingChecklist: View {
 
     @ViewBuilder private var actionButton: some View {
         if let action = projection.view.onboarding_next_action,
-           let intent = OnboardingChecklistModel.intent(action) {
-            PrimaryButton(title: action.label, enabled: action.enabled) { submit(intent) }
+           let intent = OnboardingChecklistModel.intent(action, serviceState: projection.view.settings.proxy_service_state) {
+            PrimaryButton(title: action.label, enabled: action.enabled) {
+                if intent == .repair_proxy_service { confirmingRepair = true }
+                else { submit(intent) }
+            }
         }
     }
 }

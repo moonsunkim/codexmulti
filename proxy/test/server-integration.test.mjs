@@ -357,7 +357,7 @@ test('forced refresh control reports only result and new access expiry', async (
   assert.doesNotMatch(response.body.toString(), /synthetic-refresh|account_id|access_token|id_token|eyJ/);
 });
 
-test('failed forced refresh marks the account INVALID and returns a safe result', async (t) => {
+test('temporarily failed forced refresh preserves a valid account and returns a safe result', async (t) => {
   const upstream = await startHttpServer(t, (_req, res) => res.writeHead(204).end());
   const started = await startTestProxy(t, {
     upstreamOrigin: upstream.origin,
@@ -374,7 +374,8 @@ test('failed forced refresh marks the account INVALID and returns a safe result'
     name: 'a', result: 'failed', access_expires_at: null,
   });
   const status = JSON.parse((await request(started.origin, '/_proxy/status')).body);
-  assert.equal(status.accounts[0].state, 'INVALID');
+  assert.equal(status.accounts[0].state, 'READY');
+  assert.equal(status.accounts[0].token_refresh.last_error, 'network');
 });
 
 test('startup warns on duplicate account identity without rejecting either file', async (t) => {
@@ -717,7 +718,7 @@ test('Control API Upgrade requests receive exact 426 without reaching upstream',
   const { port } = proxy.server.address();
   const raw = await new Promise((resolve, reject) => {
     const socket = net.connect(port, '127.0.0.1', () => {
-      socket.write('GET /_proxy/status HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: Upgrade\r\nUpgrade: websocket\r\n\r\n');
+      socket.write(`GET /_proxy/status HTTP/1.1\r\nHost: 127.0.0.1:${port}\r\nConnection: Upgrade\r\nUpgrade: websocket\r\n\r\n`);
     });
     const chunks = [];
     socket.on('data', (chunk) => chunks.push(chunk));

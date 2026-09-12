@@ -161,6 +161,9 @@ build_core() {
         printf 'core object source: fresh Zig ReleaseSafe aarch64-macos build\n'
     fi
 
+    (cd "$CORE_DIR" && "$ZIG" build maintenance -Doptimize=ReleaseSafe -Dtarget=aarch64-macos -Dcore-provenance="$expected_marker")
+    test -x "$CORE_DIR/zig-out/bin/codexmulti-maintenance" || die "maintenance helper was not built"
+
     mkdir -p "$(dirname "$LOCAL_CORE_OBJECT")"
     /bin/cp -f "$CORE_OBJECT" "$LOCAL_CORE_OBJECT"
     /bin/cp -f "$CORE_DIR/include/cmcore.h" "$PROJECT_DIR/Sources/CMCore/cmcore.h"
@@ -213,6 +216,7 @@ assemble_bundle() {
         "$temp_bundle/Contents/Resources/Licenses" "$proxy_output"
     /bin/cp -f "$executable" "$temp_bundle/Contents/MacOS/CodexMulti"
 
+    /bin/cp -f "$CORE_DIR/zig-out/bin/codexmulti-maintenance" "$temp_bundle/Contents/Helpers/codexmulti-maintenance"
     /bin/cp -fL "$NODE_SRC" "$temp_bundle/Contents/Helpers/node"
     /bin/cp -f "$NODE_LICENSE_SRC" "$temp_bundle/Contents/Resources/Licenses/Node.LICENSE"
     chmod 0755 "$temp_bundle/Contents/Helpers/node"

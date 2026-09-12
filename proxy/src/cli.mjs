@@ -4,6 +4,7 @@ import os from 'node:os';
 import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { loadConfig, redactSecret, serveFromConfig } from './server.mjs';
+import { readControlToken } from './control-auth.mjs';
 import { DEFAULT_CODEXMULTI_STORE, formatImportTable, importCodexMulti } from './codexmulti.mjs';
 
 function usage() {
@@ -81,16 +82,25 @@ function parseArgs(argv) {
 
 async function controlRequest(config, method, requestPath, body = null) {
   const payload = body === null ? null : Buffer.from(JSON.stringify(body));
+  let token = null;
+  if (config.control_token_file) {
+    try {
+      token = await readControlToken(config.control_token_file);
+    } catch (error) {
+      // Old daemons and an offline first login have no token file yet.
+      if (error.code !== 'ENOENT') throw error;
+    }
+  }
   return await new Promise((resolve, reject) => {
     const request = http.request({
       hostname: config.listen_host,
       port: config.port,
       path: requestPath,
       method,
-      headers: payload ? {
-        'content-type': 'application/json',
-        'content-length': String(payload.length),
-      } : {},
+      headers: {
+        ...(token ? { authorization: `Bearer ${token}` } : {}),
+        ...(payload ? { 'content-type': 'application/json', 'content-length': String(payload.length) } : {}),
+      },
     }, async (response) => {
       const chunks = [];
       let length = 0;

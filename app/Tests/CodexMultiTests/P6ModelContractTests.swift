@@ -106,7 +106,7 @@ final class P6ModelContractTests: XCTestCase {
             XCTAssertEqual(settings.proxy_service_can_repair, projection.view.proxy_service_can_repair)
             XCTAssertEqual(settings.proxy_service_can_stop, projection.view.proxy_service_can_stop)
             XCTAssertEqual(settings.codex_routing_state, projection.view.codex_routing_state)
-            XCTAssertEqual(settings.proxy_enabled, settings.proxy_service_state == .running && settings.codex_routing_state == .on)
+            XCTAssertEqual(settings.proxy_enabled, settings.codex_routing_state == .on)
             XCTAssertFalse(settings.proxy_enabled_detail_text.isEmpty)
             XCTAssertEqual(settings.proxy_cli_default_path, projection.view.proxy_cli_default_path)
             XCTAssertEqual(settings.proxy_node_default_path, projection.view.proxy_node_default_path)

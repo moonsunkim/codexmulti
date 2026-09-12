@@ -12,6 +12,15 @@ cask "codexmulti" do
 
   app "CodexMulti.app"
 
+  uninstall quit: "dev.codexmulti.app",
+            on_upgrade: :quit,
+            script: {
+              executable: "#{appdir}/CodexMulti.app/Contents/Helpers/codexmulti-maintenance",
+              args: ["prepare-uninstall"],
+              sudo: false,
+              must_succeed: true,
+            }
+
   zap trash: [
     "~/.config/codexmulti",
     "~/Library/Application Support/CodexMulti",

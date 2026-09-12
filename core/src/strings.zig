@@ -12,6 +12,148 @@ pub const supported_languages = blk: {
 pub const month_count = English.month_names.len;
 
 pub const StaticKey = enum {
+    appearance_system,
+    appearance_light,
+    appearance_dark,
+    codex_usage_window_label,
+    codex_usage_window_detail,
+    codex_model_limits_label,
+    codex_model_limits_detail,
+
+    shell_settings,
+    shell_system,
+    shell_proxy,
+    shell_appearance,
+    shell_theme,
+    shell_launch_at_login,
+    shell_launch_at_login_registration_failed,
+    shell_auto_refresh,
+    shell_about,
+    shell_version,
+    shell_failover_state,
+    shell_failover_detail,
+    shell_in_flight,
+    shell_tab_accounts,
+    shell_tab_settings,
+    shell_tab_failover,
+    shell_update_proxy_accounts,
+    shell_add_codex_menu,
+    shell_refresh_all_help,
+    shell_status_accessibility,
+    shell_segment_accessibility,
+    shell_dismiss_notice,
+    shell_retry,
+    shell_starting,
+    shell_row_menu_accessibility,
+    shell_row_hint,
+    shell_reorder_hint,
+    shell_usage_bar_accessibility,
+    shell_refresh,
+    shell_sign_in,
+    shell_sign_in_again,
+    shell_pause_in_failover,
+    shell_clear_cooldown,
+    shell_move_to_top,
+    shell_rename,
+    shell_remove,
+    shell_fact_resets,
+    shell_fact_status,
+    shell_fact_failover,
+    shell_fact_o_auth_token,
+    shell_fact_last_refresh,
+    shell_fact_reset_credits,
+    shell_fact_updated,
+    shell_not_applicable,
+    shell_failover_row_menu_accessibility,
+    shell_use_in_failover,
+    shell_pause,
+    shell_resume,
+    shell_resume_in_failover,
+    shell_in_flight_suffix,
+    shell_status_separator,
+    shell_use_failover_proxy,
+    shell_advanced_proxy_controls,
+    shell_codex_routing,
+    shell_install_and_start,
+    shell_repair_proxy_service,
+    shell_stop_proxy_service,
+    shell_enable_for_codex,
+    shell_disable_for_codex,
+    shell_replace_codex_routing,
+    shell_routing_off,
+    shell_routing_on,
+    shell_routing_conflicting,
+    shell_client_quiescence_title,
+    shell_client_quiescence_message,
+    shell_replace_routing_title,
+    shell_replace_routing_message,
+    shell_connection_settings,
+    shell_field_control_u_r_l,
+    shell_field_proxy_c_l_i,
+    shell_field_config,
+    shell_field_node_path,
+    shell_bundled_proxy_c_l_i_default,
+    shell_bundled_node_default,
+    shell_advanced_overrides,
+    shell_field_proxy_c_l_i_override,
+    shell_field_node_override,
+    shell_empty_override_help,
+    shell_save,
+    shell_quit,
+    shell_failover_switch_title_prefix,
+    shell_failover_switch_title_suffix,
+    shell_failover_switch_body_prefix,
+    shell_failover_switch_body_suffix,
+    shell_failover_switch_muted,
+    shell_use_account,
+    shell_clear_cooldown_title_prefix,
+    shell_clear_cooldown_title_suffix,
+    shell_clear_cooldown_body,
+    shell_clear_cooldown_muted,
+    shell_clear_cooldown_confirm,
+    shell_rename_title,
+    shell_rename_muted,
+    shell_account_label,
+    shell_remove_title,
+    shell_remove_body_suffix,
+    shell_remove_mapped_muted,
+    shell_remove_plain_muted,
+    shell_refresh_drain_status,
+    shell_finish_removal,
+    shell_remove_and_sync,
+    shell_remove_confirm,
+    shell_reset_title,
+    shell_reset_retry_muted,
+    shell_close,
+    shell_retry_same_request,
+    shell_reset_body_prefix,
+    shell_reset_body_suffix,
+    shell_reset_available_suffix,
+    shell_reset_next_reset_infix,
+    shell_reset_acknowledge,
+    shell_use_one_reset,
+    shell_cancel,
+    shell_auto_refresh_off,
+    shell_fifteen_minutes,
+    shell_thirty_minutes,
+    shell_one_hour,
+    shell_usage_auto,
+    shell_usage_weekly,
+    shell_usage_session,
+    shell_expanded,
+    shell_collapsed,
+    proxy_running_routing,
+    proxy_unavailable_routing,
+    proxy_conflicting_routing,
+    proxy_applying_switch,
+    proxy_settings_changed,
+    proxy_service_starting,
+    proxy_waiting_requests,
+    proxy_service_stale,
+    proxy_service_running,
+    proxy_service_unreachable,
+    proxy_loaded_unreachable,
+
     plan_pro_20x,
     plan_pro_5x,
     reset_time_not_reported,
@@ -138,6 +280,7 @@ pub const StaticKey = enum {
     onboarding_enable_routing,
     add_codex,
     install_and_start,
+    repair_proxy_service,
     turn_on_routing,
     proxy_ready,
     proxy_cooldown,
@@ -153,6 +296,7 @@ pub const StaticKey = enum {
     credential_needs_attention,
     refreshing_token,
     token_refresh_failed,
+    token_refresh_retrying,
     proxy_status_unknown,
     failover_proxy_reachable,
     proxy_config_mismatch,
@@ -417,6 +561,21 @@ pub fn FormatArgs(comptime key: FormatKey) type {
 pub const Catalog = struct {
     language: Language,
 
+    pub fn lookup(self: Catalog, name: []const u8) ?[]const u8 {
+        for (static_key_names, 0..) |candidate, index| {
+            if (std.mem.eql(u8, candidate, name)) return self.text(@enumFromInt(index));
+        }
+        return null;
+    }
+
+    pub fn translateEnglish(self: Catalog, value: []const u8) []const u8 {
+        if (self.language != .ko) return value;
+        for (english_static, 0..) |english_value, index| {
+            if (std.mem.eql(u8, english_value, value)) return korean_static[index];
+        }
+        return value;
+    }
+
     pub fn text(self: Catalog, key: StaticKey) []const u8 {
         return switch (self.language) {
             .system, .en => english_static[@intFromEnum(key)],
@@ -439,6 +598,13 @@ pub const Catalog = struct {
     }
 };
 
+const static_key_names = blk: {
+    const fields = @typeInfo(StaticKey).@"enum".fields;
+    var names: [fields.len][]const u8 = undefined;
+    for (fields, 0..) |field, index| names[index] = field.name;
+    break :blk names;
+};
+
 pub fn catalog(language: Language) Catalog {
     return .{ .language = language };
 }
@@ -448,6 +614,148 @@ pub const english = catalog(.en);
 pub const korean = catalog(.ko);
 
 const English = struct {
+    const appearance_system = "System";
+    const appearance_light = "Light";
+    const appearance_dark = "Dark";
+    const codex_usage_window_label = "Usage shown";
+    const codex_usage_window_detail = "Prefer a usage window when the provider reports it.";
+    const codex_model_limits_label = "Per-model limits";
+    const codex_model_limits_detail = "Show reported model limits in account details and headlines.";
+
+    const shell_settings = "Settings…";
+    const shell_system = "System";
+    const shell_proxy = "Proxy";
+    const shell_appearance = "Appearance";
+    const shell_theme = "Theme";
+    const shell_launch_at_login = "Launch at login";
+    const shell_launch_at_login_registration_failed = "Registration failed";
+    const shell_auto_refresh = "Auto refresh";
+    const shell_about = "About";
+    const shell_version = "Version";
+    const shell_failover_state = "Failover state";
+    const shell_failover_detail = "Failover detail";
+    const shell_in_flight = "In flight";
+    const shell_tab_accounts = "Accounts";
+    const shell_tab_settings = "Settings";
+    const shell_tab_failover = "Failover";
+    const shell_update_proxy_accounts = "Update proxy accounts";
+    const shell_add_codex_menu = "Add Codex…";
+    const shell_refresh_all_help = "Refresh all accounts";
+    const shell_status_accessibility = "Failover status";
+    const shell_segment_accessibility = "Settings sections";
+    const shell_dismiss_notice = "Dismiss message";
+    const shell_retry = "Retry";
+    const shell_starting = "Starting…";
+    const shell_row_menu_accessibility = "More actions";
+    const shell_row_hint = "Expands the account";
+    const shell_reorder_hint = "Drag to change its failover order";
+    const shell_usage_bar_accessibility = "Reported usage";
+    const shell_refresh = "Refresh";
+    const shell_sign_in = "Sign in…";
+    const shell_sign_in_again = "Sign in again…";
+    const shell_pause_in_failover = "Pause in failover";
+    const shell_clear_cooldown = "Clear cooldown…";
+    const shell_move_to_top = "Move to top";
+    const shell_rename = "Rename…";
+    const shell_remove = "Remove…";
+    const shell_fact_resets = "Resets";
+    const shell_fact_status = "Status";
+    const shell_fact_failover = "Failover";
+    const shell_fact_o_auth_token = "OAuth token";
+    const shell_fact_last_refresh = "Last refresh";
+    const shell_fact_reset_credits = "Reset credits";
+    const shell_fact_updated = "Updated";
+    const shell_not_applicable = "—";
+    const shell_failover_row_menu_accessibility = "Failover actions";
+    const shell_use_in_failover = "Use in failover…";
+    const shell_pause = "Pause";
+    const shell_resume = "Resume";
+    const shell_resume_in_failover = "Resume in failover";
+    const shell_in_flight_suffix = " in flight";
+    const shell_status_separator = " · ";
+    const shell_use_failover_proxy = "Use the failover proxy";
+    const shell_advanced_proxy_controls = "Advanced proxy controls";
+    const shell_codex_routing = "Codex routing";
+    const shell_install_and_start = "Install & Start";
+    const shell_repair_proxy_service = "Repair";
+    const shell_stop_proxy_service = "Stop Proxy Service";
+    const shell_enable_for_codex = "Enable for Codex";
+    const shell_disable_for_codex = "Disable for Codex";
+    const shell_replace_codex_routing = "Replace Codex routing";
+    const shell_routing_off = "Off";
+    const shell_routing_on = "On";
+    const shell_routing_conflicting = "Conflicting";
+    const shell_client_quiescence_title = "Close or idle Codex clients";
+    const shell_client_quiescence_message = "Close or idle all Codex clients and start no new work until the operation settles.";
+    const shell_replace_routing_title = "Replace conflicting Codex routing?";
+    const shell_replace_routing_message = "Codex has routing values that do not match this proxy. Replace them with the bundled proxy routing values?";
+    const shell_connection_settings = "Connection settings";
+    const shell_field_control_u_r_l = "Control URL";
+    const shell_field_proxy_c_l_i = "CLI path";
+    const shell_field_config = "Config path";
+    const shell_field_node_path = "Node path";
+    const shell_bundled_proxy_c_l_i_default = "Bundled Proxy CLI default";
+    const shell_bundled_node_default = "Bundled Node default";
+    const shell_advanced_overrides = "Advanced overrides";
+    const shell_field_proxy_c_l_i_override = "Proxy CLI override (blank = default)";
+    const shell_field_node_override = "Node override (blank = default)";
+    const shell_empty_override_help = "Leave empty to use the bundled default.";
+    const shell_save = "Save";
+    const shell_quit = "Quit";
+    const shell_failover_switch_title_prefix = "Route new requests to “";
+    const shell_failover_switch_title_suffix = "”?";
+    const shell_failover_switch_body_prefix = "This changes the proxy cursor to ";
+    const shell_failover_switch_body_suffix = " for new routed requests.";
+    const shell_failover_switch_muted = "This does not copy or install an auth file. Requests already in flight continue on their current account.";
+    const shell_use_account = "Use Account";
+    const shell_clear_cooldown_title_prefix = "Clear the cooldown for “";
+    const shell_clear_cooldown_title_suffix = "”?";
+    const shell_clear_cooldown_body = "The proxy will use this account again immediately. Do this only if you reset its limit elsewhere.";
+    const shell_clear_cooldown_muted = "If the limit is not actually reset, the next request may still be refused and the account is cooled down again from the provider's own answer. No request is sent to the provider now.";
+    const shell_clear_cooldown_confirm = "Clear cooldown";
+    const shell_rename_title = "Rename account";
+    const shell_rename_muted = "This changes only the label shown in CodexMulti.";
+    const shell_account_label = "Account label";
+    const shell_remove_title = "Remove account?";
+    const shell_remove_body_suffix = " will be removed from CodexMulti.";
+    const shell_remove_mapped_muted = "Remove and sync first pauses new proxy traffic. Use Refresh to observe Paused with no requests in flight; only then can CodexMulti remove the saved account and synchronize the proxy configuration.";
+    const shell_remove_plain_muted = "Its saved usage snapshot is also removed. This does not delete the account at OpenAI.";
+    const shell_refresh_drain_status = "Refresh drain status";
+    const shell_finish_removal = "Finish removal";
+    const shell_remove_and_sync = "Remove and sync";
+    const shell_remove_confirm = "Remove";
+    const shell_reset_title = "Use one Codex reset?";
+    const shell_reset_retry_muted = "Retrying checks the same request. It does not spend another reset.";
+    const shell_close = "Close";
+    const shell_retry_same_request = "Retry same request";
+    const shell_reset_body_prefix = "Spends one reset credit on ";
+    const shell_reset_body_suffix = ". If the account is cooling in the failover proxy, its cooldown is cleared once the reset settles.";
+    const shell_reset_available_suffix = " available · ";
+    const shell_reset_next_reset_infix = " · next reset ";
+    const shell_reset_acknowledge = "I understand this cannot be undone";
+    const shell_use_one_reset = "Use one reset";
+    const shell_cancel = "Cancel";
+    const shell_auto_refresh_off = "Off";
+    const shell_fifteen_minutes = "15 min";
+    const shell_thirty_minutes = "30 min";
+    const shell_one_hour = "1 hour";
+    const shell_usage_auto = "auto";
+    const shell_usage_weekly = "weekly";
+    const shell_usage_session = "session";
+    const shell_expanded = "Expanded";
+    const shell_collapsed = "Collapsed";
+    const proxy_running_routing = "Codex routes through the running failover proxy.";
+    const proxy_unavailable_routing = "Codex still routes to an unavailable proxy. Turn this off to restore direct routing.";
+    const proxy_conflicting_routing = "Codex routing has conflicting settings. Review advanced controls.";
+    const proxy_applying_switch = "Applying the failover proxy switch…";
+    const proxy_settings_changed = "Proxy settings changed; repair is required.";
+    const proxy_service_starting = "Proxy service change is starting";
+    const proxy_waiting_requests = "Waiting for proxy requests to finish";
+    const proxy_service_stale = "Bundled proxy files or receipt changed; repair is required.";
+    const proxy_service_running = "Bundled proxy service is running.";
+    const proxy_service_unreachable = "Proxy service is installed but unreachable.";
+    const proxy_loaded_unreachable = "The proxy is not responding. Repair it or turn off routing to connect directly.";
+
     const plan_pro_20x = "Pro 20x";
     const plan_pro_5x = "Pro 5x";
     const reset_time_not_reported = "reset time not reported";
@@ -574,6 +882,7 @@ const English = struct {
     const onboarding_enable_routing = "Turn on Codex routing";
     const add_codex = "Add Codex";
     const install_and_start = "Install & Start";
+    const repair_proxy_service = "Repair";
     const turn_on_routing = "Turn on routing";
     const proxy_ready = "Ready";
     const proxy_cooldown = "Cooldown";
@@ -589,6 +898,7 @@ const English = struct {
     const credential_needs_attention = "credential needs attention";
     const refreshing_token = "refreshing token…";
     const token_refresh_failed = "Refresh failed · sign in again";
+    const token_refresh_retrying = "Token renewal delayed · retrying automatically";
     const proxy_status_unknown = "Proxy status unknown";
     const failover_proxy_reachable = "Failover proxy reachable";
     const proxy_config_mismatch = "Proxy config does not match this app";
@@ -761,6 +1071,148 @@ const EnglishFormat = struct {
 };
 
 const Korean = struct {
+    const appearance_system = "시스템";
+    const appearance_light = "라이트";
+    const appearance_dark = "다크";
+    const codex_usage_window_label = "표시할 사용량";
+    const codex_usage_window_detail = "제공자가 알려 준 사용량 중 표시할 기간을 선택합니다.";
+    const codex_model_limits_label = "모델별 한도";
+    const codex_model_limits_detail = "계정 상세와 요약에 모델별 사용 한도를 표시합니다.";
+
+    const shell_settings = "설정…";
+    const shell_system = "시스템";
+    const shell_proxy = "프록시";
+    const shell_appearance = "화면 모드";
+    const shell_theme = "테마";
+    const shell_launch_at_login = "로그인 시 실행";
+    const shell_launch_at_login_registration_failed = "등록 실패";
+    const shell_auto_refresh = "자동 새로 고침";
+    const shell_about = "앱 정보";
+    const shell_version = "버전";
+    const shell_failover_state = "계정 전환 상태";
+    const shell_failover_detail = "계정 전환 상세";
+    const shell_in_flight = "진행 중";
+    const shell_tab_accounts = "계정";
+    const shell_tab_settings = "설정";
+    const shell_tab_failover = "계정 전환";
+    const shell_update_proxy_accounts = "프록시 계정 업데이트";
+    const shell_add_codex_menu = "Codex 계정 추가…";
+    const shell_refresh_all_help = "모든 계정 새로 고침";
+    const shell_status_accessibility = "계정 전환 상태";
+    const shell_segment_accessibility = "설정 영역";
+    const shell_dismiss_notice = "알림 닫기";
+    const shell_retry = "다시 시도";
+    const shell_starting = "시작 중…";
+    const shell_row_menu_accessibility = "더 많은 작업";
+    const shell_row_hint = "계정 상세 보기";
+    const shell_reorder_hint = "드래그하여 계정 전환 순서 변경";
+    const shell_usage_bar_accessibility = "보고된 사용량";
+    const shell_refresh = "새로 고침";
+    const shell_sign_in = "로그인…";
+    const shell_sign_in_again = "다시 로그인…";
+    const shell_pause_in_failover = "계정 전환에서 일시 중지";
+    const shell_clear_cooldown = "대기 해제…";
+    const shell_move_to_top = "맨 위로 이동";
+    const shell_rename = "이름 변경…";
+    const shell_remove = "제거…";
+    const shell_fact_resets = "초기화 시점";
+    const shell_fact_status = "상태";
+    const shell_fact_failover = "계정 전환";
+    const shell_fact_o_auth_token = "OAuth 토큰";
+    const shell_fact_last_refresh = "마지막 새로 고침";
+    const shell_fact_reset_credits = "리셋 크레딧";
+    const shell_fact_updated = "업데이트 시점";
+    const shell_not_applicable = "—";
+    const shell_failover_row_menu_accessibility = "계정 전환 작업";
+    const shell_use_in_failover = "계정 전환에 사용…";
+    const shell_pause = "일시 중지";
+    const shell_resume = "재개";
+    const shell_resume_in_failover = "계정 전환에서 재개";
+    const shell_in_flight_suffix = "개 진행 중";
+    const shell_status_separator = " · ";
+    const shell_use_failover_proxy = "계정 전환 프록시 사용";
+    const shell_advanced_proxy_controls = "프록시 고급 설정";
+    const shell_codex_routing = "Codex 연결 경로";
+    const shell_install_and_start = "설치 및 시작";
+    const shell_repair_proxy_service = "복구";
+    const shell_stop_proxy_service = "프록시 서비스 중지";
+    const shell_enable_for_codex = "Codex에 적용";
+    const shell_disable_for_codex = "직접 연결로 복구";
+    const shell_replace_codex_routing = "Codex 연결 설정 교체";
+    const shell_routing_off = "꺼짐";
+    const shell_routing_on = "켜짐";
+    const shell_routing_conflicting = "설정 충돌";
+    const shell_client_quiescence_title = "Codex 작업을 먼저 마쳐 주세요";
+    const shell_client_quiescence_message = "모든 Codex 작업을 마치거나 앱을 닫아 주세요. 복구나 중지가 끝날 때까지 새 작업을 시작하지 마세요.";
+    const shell_replace_routing_title = "충돌하는 Codex 연결 설정을 교체할까요?";
+    const shell_replace_routing_message = "Codex의 연결 설정이 이 프록시와 다릅니다. 앱에 포함된 프록시를 사용하도록 교체할까요?";
+    const shell_connection_settings = "연결 설정";
+    const shell_field_control_u_r_l = "제어 URL";
+    const shell_field_proxy_c_l_i = "CLI 경로";
+    const shell_field_config = "설정 파일 경로";
+    const shell_field_node_path = "Node 경로";
+    const shell_bundled_proxy_c_l_i_default = "내장 프록시 CLI 기본값";
+    const shell_bundled_node_default = "내장 Node 기본값";
+    const shell_advanced_overrides = "고급 경로 지정";
+    const shell_field_proxy_c_l_i_override = "프록시 CLI 경로 (비워 두면 기본값)";
+    const shell_field_node_override = "Node 경로 (비워 두면 기본값)";
+    const shell_empty_override_help = "내장 기본값을 사용하려면 비워 두세요.";
+    const shell_save = "저장";
+    const shell_quit = "종료";
+    const shell_failover_switch_title_prefix = "“";
+    const shell_failover_switch_title_suffix = "” 계정으로 새 요청을 보낼까요?";
+    const shell_failover_switch_body_prefix = "새 요청에 사용할 계정을 ";
+    const shell_failover_switch_body_suffix = " 계정으로 바꿉니다.";
+    const shell_failover_switch_muted = "인증 파일을 복사하거나 설치하지 않습니다. 이미 진행 중인 요청은 현재 계정에서 계속 처리됩니다.";
+    const shell_use_account = "이 계정 사용";
+    const shell_clear_cooldown_title_prefix = "“";
+    const shell_clear_cooldown_title_suffix = "” 계정의 대기를 해제할까요?";
+    const shell_clear_cooldown_body = "프록시에서 이 계정을 바로 다시 사용합니다. 다른 곳에서 한도를 초기화한 경우에만 실행하세요.";
+    const shell_clear_cooldown_muted = "실제로 한도가 초기화되지 않았다면 다음 요청이 거절되고 제공자의 응답에 따라 다시 대기 상태가 됩니다. 지금 제공자에게 요청을 보내지는 않습니다.";
+    const shell_clear_cooldown_confirm = "대기 해제";
+    const shell_rename_title = "계정 이름 변경";
+    const shell_rename_muted = "CodexMulti에 표시되는 이름만 바뀝니다.";
+    const shell_account_label = "계정 이름";
+    const shell_remove_title = "계정을 제거할까요?";
+    const shell_remove_body_suffix = " 계정을 CodexMulti에서 제거합니다.";
+    const shell_remove_mapped_muted = "제거 및 동기화를 시작하면 새 프록시 요청을 일시 중지합니다. 새로 고침으로 진행 중인 요청이 없는지 확인한 뒤 계정을 제거하고 프록시 설정을 동기화할 수 있습니다.";
+    const shell_remove_plain_muted = "저장된 사용량 정보도 제거합니다. OpenAI 계정 자체는 삭제하지 않습니다.";
+    const shell_refresh_drain_status = "진행 상태 새로 고침";
+    const shell_finish_removal = "제거 완료";
+    const shell_remove_and_sync = "제거 및 동기화";
+    const shell_remove_confirm = "제거";
+    const shell_reset_title = "Codex 리셋 1개를 사용할까요?";
+    const shell_reset_retry_muted = "같은 요청의 결과를 다시 확인합니다. 리셋을 추가로 사용하지 않습니다.";
+    const shell_close = "닫기";
+    const shell_retry_same_request = "같은 요청 다시 확인";
+    const shell_reset_body_prefix = "리셋 크레딧 1개를 사용할 계정: ";
+    const shell_reset_body_suffix = ". 프록시에서 대기 중이면 리셋 완료 후 대기 상태가 해제됩니다.";
+    const shell_reset_available_suffix = "개 사용 가능 · ";
+    const shell_reset_next_reset_infix = " · 다음 초기화 ";
+    const shell_reset_acknowledge = "되돌릴 수 없음을 이해했습니다";
+    const shell_use_one_reset = "리셋 1개 사용";
+    const shell_cancel = "취소";
+    const shell_auto_refresh_off = "꺼짐";
+    const shell_fifteen_minutes = "15분";
+    const shell_thirty_minutes = "30분";
+    const shell_one_hour = "1시간";
+    const shell_usage_auto = "자동";
+    const shell_usage_weekly = "주간";
+    const shell_usage_session = "세션";
+    const shell_expanded = "펼침";
+    const shell_collapsed = "접힘";
+    const proxy_running_routing = "Codex가 실행 중인 계정 전환 프록시를 통해 연결됩니다.";
+    const proxy_unavailable_routing = "연결할 수 없는 프록시를 사용 중입니다. 끄면 직접 연결로 복구됩니다.";
+    const proxy_conflicting_routing = "Codex 연결 설정이 충돌합니다. 고급 설정에서 확인해 주세요.";
+    const proxy_applying_switch = "프록시 사용 설정 적용 중…";
+    const proxy_settings_changed = "프록시 설정이 바뀌었습니다. 복구가 필요합니다.";
+    const proxy_service_starting = "프록시 서비스 변경 시작 중";
+    const proxy_waiting_requests = "프록시 요청이 끝나기를 기다리는 중";
+    const proxy_service_stale = "내장 프록시 파일이나 설치 기록이 바뀌었습니다. 복구가 필요합니다.";
+    const proxy_service_running = "내장 프록시 서비스가 실행 중입니다.";
+    const proxy_service_unreachable = "프록시 서비스가 설치되어 있지만 연결할 수 없습니다.";
+    const proxy_loaded_unreachable = "프록시가 응답하지 않습니다. 복구하거나 프록시 사용을 꺼서 직접 연결하세요.";
+
     const plan_pro_20x = "Pro 20x";
     const plan_pro_5x = "Pro 5x";
     const reset_time_not_reported = "재설정 시간 미보고";
@@ -768,7 +1220,7 @@ const Korean = struct {
     const countdown_passed_refresh = "재설정 시각 지남 — 새로 고쳐 확인";
     const provider_unsupported = "지원 안 함";
     const provider_codex = "Codex";
-    const window_weekly = "Weekly";
+    const window_weekly = "주간";
     const window_session = "세션";
     const window_daily = "일간";
     const window_monthly = "월간";
@@ -887,6 +1339,7 @@ const Korean = struct {
     const onboarding_enable_routing = "Codex 라우팅 켜기";
     const add_codex = "Codex 추가";
     const install_and_start = "설치 및 시작";
+    const repair_proxy_service = "복구";
     const turn_on_routing = "라우팅 켜기";
     const proxy_ready = "준비됨";
     const proxy_cooldown = "대기 중";
@@ -902,6 +1355,7 @@ const Korean = struct {
     const credential_needs_attention = "자격 증명 확인 필요";
     const refreshing_token = "토큰 새로 고치는 중…";
     const token_refresh_failed = "새로 고침 실패 · 다시 로그인";
+    const token_refresh_retrying = "토큰 갱신 지연 · 자동 재시도 예정";
     const proxy_status_unknown = "프록시 상태 알 수 없음";
     const failover_proxy_reachable = "장애 조치 프록시 연결 가능";
     const proxy_config_mismatch = "프록시 설정이 이 앱과 일치하지 않음";
@@ -980,7 +1434,7 @@ const Korean = struct {
     const connection_paused_suffix = " · 일시 정지됨";
     const middle_dot_separator = " · ";
     const language_label = "언어";
-    const language_system = "System";
+    const language_system = "시스템";
     const language_english = "English";
     const language_korean = "한국어";
 

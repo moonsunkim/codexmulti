@@ -199,6 +199,7 @@ pub const LoopbackHealth = struct {
             .allocator = self.allocator,
             .exchange = self.exchange,
             .base_url = parsed_base,
+            .config_path = expected_config_path,
             .timeout_ms = self.timeout_ms,
         };
         const status = client.status() catch |err| return .{ .state = switch (err) {
@@ -387,14 +388,15 @@ pub const ProxyServiceWorker = struct {
     fn repair(self: *ProxyServiceWorker, before: Discovery) bool {
         const loaded = before.new_presence == .loaded;
         if (loaded) {
-            if (before.health.state != .healthy) return false;
+            if (!before.new_arguments_match or !before.artifacts.bundle_matches) return false;
         } else if (before.new_presence != .not_loaded) return false;
         if (!self.live.artifacts.ensureParents(&self.live.paths)) return false;
         if (loaded) {
-            _ = self.waitForZero() orelse return false;
-
-            const fresh = self.live.health.read(self.live.paths.config_path.slice(), self.live.control_base_url);
-            if (fresh.state != .healthy or fresh.in_flight != 0) return false;
+            if (before.health.state == .healthy) {
+                _ = self.waitForZero() orelse return false;
+                const fresh = self.live.health.read(self.live.paths.config_path.slice(), self.live.control_base_url);
+                if (fresh.state != .healthy or fresh.in_flight != 0) return false;
+            }
             if (!runBootout(self.live, new_label)) return false;
         }
         if (!self.live.artifacts.writePlist(&self.live.paths, self.plistBytes())) return false;
@@ -432,7 +434,8 @@ pub const ProxyServiceWorker = struct {
 
     fn switchCanMutate(before: Discovery) bool {
         if (before.new_presence != .loaded) return before.new_presence == .not_loaded;
-        return before.health.state == .healthy and before.health.in_flight == 0;
+        return before.new_arguments_match and
+            (before.health.state != .healthy or before.health.in_flight == 0);
     }
 
     fn setEnabledOn(self: *ProxyServiceWorker, before: Discovery) bool {
@@ -450,8 +453,11 @@ pub const ProxyServiceWorker = struct {
     }
 
     fn setEnabledOff(self: *ProxyServiceWorker, before: Discovery) bool {
-        if (!switchCanMutate(before) or before.routing.state == .conflicting) return false;
-        if (before.new_presence != .loaded) return self.disableRouting();
+        if (before.routing.state == .conflicting) return false;
+        // Restoring the user's routing does not require control of a broken or unknown process.
+        if (before.new_presence != .loaded or before.health.state != .healthy or
+            !before.new_arguments_match) return self.disableRouting();
+        if (!switchCanMutate(before)) return false;
 
         const disabled = self.live.routing.disable(self.live.paths.routing_config_path.slice());
         if (disabled.status != .success and disabled.status != .no_change) return false;
@@ -497,6 +503,42 @@ pub const ProxyServiceWorker = struct {
         return self.live.artifacts.writeReceipt(&self.live.paths, rendered);
     }
 };
+
+/// Restore shared Codex routing before removing only this app's verified service.
+/// Callers must quiesce clients. Healthy requests drain; an unresponsive owned job
+/// may be stopped because uninstall was explicitly requested.
+pub fn prepareUninstall(live: Live) !void {
+    const restored = live.routing.disable(live.paths.routing_config_path.slice());
+    if (restored.state != .off or (restored.status != .success and restored.status != .no_change))
+        return error.RoutingNeedsManualReview;
+    var plist_buffer: [max_plist_bytes]u8 = undefined;
+    const plist = try renderPlist(&plist_buffer, &live.paths, &live.identity);
+    var digest: [64]u8 = undefined;
+    digestHex(plist, &digest);
+    const before = discoverNow(live, plist, &digest);
+    if (before.new_presence == .unknown) return error.ServiceOwnershipUnknown;
+    if (before.new_presence == .loaded) {
+        if (!before.new_arguments_match) return error.ServiceOwnershipUnknown;
+        var attempts: usize = 0;
+        while (true) : (attempts += 1) {
+            const health = live.health.read(live.paths.config_path.slice(), live.control_base_url);
+            if (health.state == .incompatible) return error.ServiceOwnershipUnknown;
+            if (health.state == .@"unreachable" or health.in_flight == 0) break;
+            if (attempts >= drain_poll_limit) return error.RequestsStillRunning;
+            try live.io.sleep(.fromMilliseconds(drain_poll_ms), .awake);
+        }
+        // Recheck launch ownership immediately before stopping the job.
+        var target_buffer: [192]u8 = undefined;
+        const target = domainTarget(&target_buffer, live.paths.uid, new_label) orelse return error.InvalidTarget;
+        const arguments = live.paths.programArguments();
+        if (live.launch.run(.{ .print = .{ .domain_target = target, .program_arguments = &arguments } }).status != .loaded)
+            return error.ServiceOwnershipUnknown;
+        if (!runBootout(live, new_label)) return error.StopFailed;
+    } else if (before.artifacts.plist_exists and !before.artifacts.plist_matches) {
+        return error.ServiceOwnershipUnknown;
+    }
+    if (!live.artifacts.removeOwned(&live.paths)) return error.RemoveFailed;
+}
 
 pub const Controller = struct {
     worker: ProxyServiceWorker = .{},
@@ -558,9 +600,7 @@ pub const Controller = struct {
                     .installed_stale, .@"unreachable" => projected.can_repair,
                     .starting => false,
                 },
-            .set_enabled_off => self.discovery.new_presence != .unknown and
-                self.discovery.routing.readable and self.discovery.routing.state != .conflicting and
-                (self.discovery.new_presence != .loaded or self.discovery.health.state == .healthy),
+            .set_enabled_off => self.discovery.routing.readable and self.discovery.routing.state != .conflicting,
         };
         if (!allowed) return .rejected_not_allowed;
         if (whole_switch) self.switch_refusal_detail = null;
@@ -616,7 +656,7 @@ pub const Controller = struct {
                 .state = .starting,
                 .detail_text = if (count == 0) "Proxy service change is starting" else "Waiting for proxy requests to finish",
                 .routing_state = self.discovery.routing.state,
-                .enabled = self.discovery.state == .running and self.discovery.routing.state == .on,
+                .enabled = self.discovery.routing.state == .on,
                 .enabled_detail_text = "Applying the failover proxy switch…",
                 .cli_default_path = paths.cli_path.slice(),
                 .node_default_path = paths.node_path.slice(),
@@ -624,9 +664,10 @@ pub const Controller = struct {
         }
         const state = self.discovery.state;
         const no_job = self.worker.state == .idle;
-        const repairable_loaded = self.discovery.new_presence == .loaded and self.discovery.health.state == .healthy;
+        const repairable_loaded = self.discovery.new_presence == .loaded and
+            self.discovery.new_arguments_match and self.discovery.artifacts.bundle_matches;
         const repairable_unloaded = self.discovery.new_presence == .not_loaded;
-        const enabled = state == .running and self.discovery.routing.state == .on;
+        const enabled = self.discovery.routing.state == .on;
         return .{
             .state = state,
             .detail_text = self.discovery.detail.slice(),
@@ -637,8 +678,12 @@ pub const Controller = struct {
             .enabled = enabled,
             .enabled_detail_text = if (self.switch_refusal_detail) |*detail|
                 detail.slice()
-            else if (enabled)
+            else if (enabled and state == .running)
                 "Codex routes through the running failover proxy."
+            else if (enabled)
+                "Codex still routes to an unavailable proxy. Turn this off to restore direct routing."
+            else if (self.discovery.routing.state == .conflicting)
+                "Codex routing has conflicting settings. Review advanced controls."
             else
                 "Codex routes directly; the failover proxy is off.",
             .cli_default_path = paths.cli_path.slice(),
@@ -687,7 +732,7 @@ fn discoverNow(live: Live, plist: []const u8, digest_hex: []const u8) Discovery 
         .installed_stale => "Bundled proxy files or receipt changed; repair is required.",
         .starting => "Proxy service change is starting",
         .running => "Bundled proxy service is running.",
-        .@"unreachable" => if (new_presence == .loaded) "Loaded proxy service is unreachable; no lifecycle mutation is allowed." else "Proxy service is installed but unreachable.",
+        .@"unreachable" => if (new_presence == .loaded) "The proxy is not responding. Repair it or turn off routing to connect directly." else "Proxy service is installed but unreachable.",
     };
     return .{
         .state = state,

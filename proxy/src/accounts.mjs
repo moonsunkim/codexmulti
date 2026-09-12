@@ -29,6 +29,7 @@ const REFRESH_ERROR_KINDS = new Set([
   'save_failed',
   'reload_failed',
   'network',
+  'unavailable',
 ]);
 
 export function refreshErrorKind(error) {
@@ -36,12 +37,19 @@ export function refreshErrorKind(error) {
   switch (error?.message) {
     case 'refresh_rejected': return 'rejected';
     case 'refresh_timeout': return 'timeout';
+    case 'refresh_unavailable': return 'unavailable';
     case 'invalid_refresh_response': return 'invalid_response';
     case 'refresh_response_too_large': return 'response_too_large';
     case 'credential_save_failed': return 'save_failed';
     case 'credential_reload_failed': return 'reload_failed';
     default: return error instanceof SyntaxError ? 'invalid_response' : 'network';
   }
+}
+
+export function canUseAccessTokenAfterRefreshFailure(expiresAt, error, now = Date.now()) {
+  const kind = typeof error === 'string' ? error : refreshErrorKind(error);
+  return expiresAt !== null && expiresAt > Math.floor(now / 1000)
+    && kind !== 'rejected' && kind !== 'reload_failed';
 }
 
 function credentialRefreshError(kind) {
@@ -219,8 +227,10 @@ export async function requestRefresh(refreshUrl, refreshToken, { timeoutMs = 10_
     }, async (response) => {
       try {
         const raw = await collectResponse(response);
-        if ((response.statusCode ?? 500) < 200 || (response.statusCode ?? 500) >= 300) {
-          throw new Error('refresh_rejected');
+        const status = response.statusCode ?? 500;
+        if (status < 200 || status >= 300) {
+          throw new Error(status >= 500 || status === 408 || status === 429
+            ? 'refresh_unavailable' : 'refresh_rejected');
         }
         const payload = JSON.parse(raw.toString('utf8'));
         if (!payload || typeof payload.access_token !== 'string' || !payload.access_token) {

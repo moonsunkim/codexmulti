@@ -162,3 +162,27 @@ with the selected account's identity.
 
 MIT — see [LICENSE](LICENSE). The bundled Node.js runtime is MIT as well; its notices travel with any
 redistributed binary. See [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+
+## Recovery and removal
+
+If the proxy is unavailable, its switch remains on while Codex still points to it. Turn it off to restore direct Codex routing, or use **Repair** to restart the app-owned service after closing active Codex clients.
+
+Before removing the app, quit Codex clients and run:
+
+```sh
+"/Applications/CodexMulti.app/Contents/Helpers/codexmulti-maintenance" prepare-uninstall
+brew uninstall --cask codexmulti
+```
+
+The bundled helper restores only CodexMulti's two managed routing entries, drains healthy requests, checks the LaunchAgent's exact program arguments, and removes its plist and service receipt. Account credentials, usage history and reset records remain available for reinstall. Homebrew runs this helper automatically on removal; if it reports a conflict or a busy service, resolve that condition and retry before deleting the app. Homebrew upgrades and reinstalls also run the cleanup: reopen CodexMulti and turn the proxy on again afterward. `--zap` additionally removes the app's saved account data.
+
+If the app or helper cannot run, open `~/.codex/config.toml` in a text editor. Remove only these exact root-level entries when present, preserving all other settings:
+
+```toml
+chatgpt_base_url = "http://127.0.0.1:8787/backend-api/"
+openai_base_url = "http://127.0.0.1:8787/backend-api/codex"
+```
+
+Then inspect `launchctl print "gui/$(id -u)/dev.codexmulti.app.proxy"`. Only if its program arguments point to your CodexMulti app's `Contents/Helpers/node`, `Contents/Resources/proxy/src/server.mjs`, `--config`, and your proxy config, stop it with `launchctl bootout "gui/$(id -u)/dev.codexmulti.app.proxy"` and remove `~/Library/LaunchAgents/dev.codexmulti.app.proxy.plist`. Restart Codex clients so they reread the direct-connection configuration. Do not replace the whole shared config with an old backup.
+
+Proxy control requires a private per-user capability. Ordinary Codex proxy traffic is trusted at the local-machine level, so use it only on a Mac with trusted local users and processes. See [proxy security](proxy/README.md#state-logs-and-security).

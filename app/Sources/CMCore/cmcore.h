@@ -11,6 +11,7 @@ extern "C" {
 typedef struct cm_service cm_service;
 
 uint32_t cm_service_version(void);
+size_t cm_copy_text(uint8_t language, const char *key, size_t key_len, char *out, size_t cap);
 cm_service *cm_service_create(void);
 void cm_service_destroy(cm_service *service);
 int32_t cm_service_submit(cm_service *service, const char *intent_json);

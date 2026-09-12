@@ -433,7 +433,11 @@ pub const ViewState = struct {
         self.onboarding_next_action = if (!account_completed)
             .{ .kind = .add_account, .label = copy.text(.add_codex), .enabled = self.capabilities.accounts }
         else if (!service_completed)
-            .{ .kind = .install_proxy_service, .label = copy.text(.install_and_start), .enabled = self.proxy_service_can_install }
+            .{
+                .kind = .install_proxy_service,
+                .label = copy.text(if (self.proxy_service_state == .not_installed) .install_and_start else .repair_proxy_service),
+                .enabled = if (self.proxy_service_state == .not_installed) self.proxy_service_can_install else self.proxy_service_can_repair,
+            }
         else if (!routing_completed)
             .{
                 .kind = .enable_codex_routing,
@@ -1024,6 +1028,13 @@ pub const ViewState = struct {
         };
         self.settings = .{
             .appearance = self.appearance,
+            .appearance_label_system = copy.text(.appearance_system),
+            .appearance_label_light = copy.text(.appearance_light),
+            .appearance_label_dark = copy.text(.appearance_dark),
+            .codex_usage_window_label = copy.text(.codex_usage_window_label),
+            .codex_usage_window_detail_text = copy.text(.codex_usage_window_detail),
+            .codex_show_model_limits_label = copy.text(.codex_model_limits_label),
+            .codex_show_model_limits_detail_text = copy.text(.codex_model_limits_detail),
             .language = self.language,
             .language_label = copy.text(.language_label),
             .language_label_system = copy.text(.language_system),
@@ -1037,13 +1048,13 @@ pub const ViewState = struct {
             .auto_refresh_minutes = self.auto_refresh_minutes,
             .auto_refresh_traffic_text = auto_refresh_traffic_text,
             .proxy_service_state = self.proxy_service_state,
-            .proxy_service_detail_text = self.proxy_service_detail_text,
+            .proxy_service_detail_text = copy.translateEnglish(self.proxy_service_detail_text),
             .proxy_service_can_install = self.proxy_service_can_install,
             .proxy_service_can_repair = self.proxy_service_can_repair,
             .proxy_service_can_stop = self.proxy_service_can_stop,
             .codex_routing_state = self.codex_routing_state,
             .proxy_enabled = self.proxy_enabled,
-            .proxy_enabled_detail_text = self.proxy_enabled_detail_text,
+            .proxy_enabled_detail_text = copy.translateEnglish(self.proxy_enabled_detail_text),
             .proxy_cli_default_path = self.proxy_cli_default_path,
             .proxy_node_default_path = self.proxy_node_default_path,
             .proxy_base_url = self.proxy_base_url,
@@ -1503,7 +1514,9 @@ pub const ViewState = struct {
         inspector.connection_line = blk: {
             if (proxy_account) |account| {
                 const index = self.proxyIndexOfAccount(row.account_id).?;
-                if (self.proxy_token_refresh_failed[index]) break :blk self.internText(copy.text(.token_refresh_failed));
+                if (self.proxy_token_refresh_failed[index]) break :blk self.internText(copy.text(
+                    if (account.state == .invalid) .token_refresh_failed else .token_refresh_retrying,
+                ));
                 if (account.token_expires_at_unix_s) |expires_at| {
                     break :blk self.fmtText(.token_valid_until, .{format.mediumLocal(&absolute, expires_at, self.time_zone)});
                 }

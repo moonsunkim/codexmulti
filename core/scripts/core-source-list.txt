@@ -9,9 +9,11 @@ src/bridge_json.zig
 src/cmcore.zig
 src/coordinator.zig
 src/domain.zig
+src/durable_file.zig
 src/keychain.zig
 src/keychain_macos.zig
 src/login_runtime.zig
+src/maintenance.zig
 src/oauth.zig
 src/oauth_protocol.zig
 src/oauth_rotation.zig

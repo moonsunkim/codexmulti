@@ -285,9 +285,18 @@ fn validateDisplayText(value: []const u8) !void {
 
 pub fn writeAtomically(io: std.Io, dir: std.Io.Dir, final_path: []const u8, temp_path: []const u8, bytes: []const u8) !void {
     if (std.mem.eql(u8, final_path, temp_path)) return error.TempPathMatchesFinalPath;
-    try dir.writeFile(io, .{ .sub_path = temp_path, .data = bytes });
-    errdefer dir.deleteFile(io, temp_path) catch {};
-    try dir.rename(temp_path, dir, final_path, io);
+    // A unique exclusive file preserves stale crash remnants and cannot follow a symlink.
+    var nonce: [16]u8 = undefined;
+    io.random(&nonce);
+    var path_buffer: [std.Io.Dir.max_path_bytes]u8 = undefined;
+    const unique_temp = try std.fmt.bufPrint(&path_buffer, "{s}.{x}", .{ temp_path, nonce });
+    var file = try dir.createFile(io, unique_temp, .{ .exclusive = true, .permissions = .fromMode(0o600) });
+    defer file.close(io);
+    errdefer dir.deleteFile(io, unique_temp) catch {};
+    try file.writeStreamingAll(io, bytes);
+    try @import("durable_file.zig").syncFile(io, file);
+    try dir.rename(unique_temp, dir, final_path, io);
+    try @import("durable_file.zig").syncParent(io, dir, final_path);
 }
 
 pub fn saveSnapshotsAtomic(

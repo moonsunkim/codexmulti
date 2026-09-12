@@ -71,6 +71,7 @@ pub const Request = struct {
     path: []const u8,
     body: []const u8 = "",
     content_type_json: bool = false,
+    config_path: []const u8 = "",
     timeout_ms: u32 = default_timeout_ms,
 };
 
@@ -545,6 +546,7 @@ pub const Client = struct {
     allocator: std.mem.Allocator,
     exchange: Exchange,
     base_url: BaseUrl,
+    config_path: []const u8 = "",
     timeout_ms: u32 = default_timeout_ms,
 
     pub fn init(allocator: std.mem.Allocator, exchange: Exchange, base_url: []const u8) error{InvalidBaseUrl}!Client {
@@ -620,6 +622,7 @@ pub const Client = struct {
             .base_url = self.base_url.slice(),
             .path = path,
             .body = body,
+            .config_path = self.config_path,
             .content_type_json = is_post,
             .timeout_ms = self.timeout_ms,
         }, response_buffer);
@@ -664,6 +667,7 @@ fn parseClearCooldownReceipt(allocator: std.mem.Allocator, bytes: []const u8) Pa
 pub const LoopbackExchange = struct {
     allocator: std.mem.Allocator,
     io: std.Io,
+    control_token_path: runtime_paths.Path = .{},
 
     const vtable: Exchange.VTable = .{ .perform = perform };
 
@@ -675,14 +679,27 @@ pub const LoopbackExchange = struct {
         return .{ .context = self, .vtable = &vtable };
     }
 
+    pub fn useConfigPath(self: *LoopbackExchange, config_path: []const u8) !void {
+        try runtime_paths.validateAbsoluteDir(config_path);
+        var buffer: [runtime_paths.max_path_bytes]u8 = undefined;
+        self.control_token_path = try runtime_paths.Path.init(try std.fmt.bufPrint(&buffer, "{s}.control-token", .{config_path}));
+    }
+
     fn perform(context: *anyopaque, request: Request, response_buffer: []u8) TransportError!ExchangeResult {
         const self: *LoopbackExchange = @ptrCast(@alignCast(context));
         _ = BaseUrl.init(request.base_url) catch return error.RequestRejected;
+        var token_path = self.control_token_path;
+        if (request.config_path.len != 0) {
+            runtime_paths.validateAbsoluteDir(request.config_path) catch return error.RequestRejected;
+            var path_buffer: [runtime_paths.max_path_bytes]u8 = undefined;
+            token_path = runtime_paths.Path.init(std.fmt.bufPrint(&path_buffer, "{s}.control-token", .{request.config_path}) catch return error.RequestRejected) catch return error.RequestRejected;
+        }
         return runBounded(self.io, request.timeout_ms, exchangeOnce, .{
             self.allocator,
             self.io,
             request,
             response_buffer,
+            token_path.slice(),
         });
     }
 };
@@ -732,6 +749,7 @@ fn exchangeOnce(
     io: std.Io,
     request: Request,
     response_buffer: []u8,
+    control_token_path: []const u8,
 ) TransportError!ExchangeResult {
     var url_buffer: [max_base_url_bytes + max_request_path_bytes]u8 = undefined;
     const url = std.fmt.bufPrint(&url_buffer, "{s}{s}", .{ request.base_url, request.path }) catch return error.RequestRejected;
@@ -742,6 +760,10 @@ fn exchangeOnce(
         .accept_encoding = .{ .override = "identity" },
     };
     if (request.content_type_json) headers.content_type = .{ .override = "application/json" };
+    var authorization: [71]u8 = undefined;
+    if (try readControlAuthorization(io, control_token_path, &authorization)) |value| {
+        headers.authorization = .{ .override = value };
+    }
     var client: std.http.Client = .{
         .allocator = allocator,
         .io = io,
@@ -804,4 +826,24 @@ fn exchangeOnce(
         error.ReadFailed => return error.Network,
     };
     return .{ .status = @intFromEnum(response.head.status), .body_len = body_len };
+}
+
+fn readControlAuthorization(io: std.Io, path: []const u8, buffer: *[71]u8) TransportError!?[]const u8 {
+    if (path.len == 0) return null;
+    const file = std.Io.Dir.cwd().openFile(io, path, .{ .allow_directory = false, .follow_symlinks = false }) catch |err| {
+        // A pre-0.2.2 daemon has no token file. New daemons reject unauthenticated requests.
+        if (err == error.FileNotFound) return null;
+        return error.RequestRejected;
+    };
+    defer file.close(io);
+    var stat: std.c.Stat = undefined;
+    if (std.c.fstat(file.handle, &stat) != 0 or stat.uid != std.c.getuid() or
+        (stat.mode & 0o077) != 0 or stat.size != 64) return error.RequestRejected;
+    const info = file.stat(io) catch return error.RequestRejected;
+    if (info.kind != .file) return error.RequestRejected;
+    @memcpy(buffer[0..7], "Bearer ");
+    var reader = file.reader(io, &.{});
+    reader.interface.readSliceAll(buffer[7..]) catch return error.RequestRejected;
+    for (buffer[7..]) |byte| if (!std.ascii.isHex(byte) or std.ascii.isUpper(byte)) return error.RequestRejected;
+    return buffer;
 }

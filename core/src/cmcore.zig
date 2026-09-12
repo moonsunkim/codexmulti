@@ -191,6 +191,7 @@ pub const Runtime = struct {
 
         self.load_report = self.service.load(io, self.data_dir);
         const expanded_config = proxy_import_runner.expandConfigPath(self.service.proxyState().settings.config_path.slice(), home) catch return error.InvalidRoot;
+        self.proxy_http.useConfigPath(expanded_config.slice()) catch return error.InvalidRoot;
         self.proxy_service_paths = proxy_service_manager.Paths.init(
             home,
             app_path,
@@ -308,6 +309,18 @@ fn libcEnvironmentBlock() std.process.Environ.Block {
 
 pub export fn cm_service_version() callconv(.c) u32 {
     return 1;
+}
+
+/// Pure catalog access for shell labels; no service, credentials, or I/O is involved.
+pub export fn cm_copy_text(language: u8, key: ?[*]const u8, key_len: usize, out: ?[*]u8, capacity: usize) callconv(.c) usize {
+    const input = key orelse return 0;
+    if (key_len > 128) return 0;
+    const copy = @import("strings.zig").catalog(if (language == 1) .ko else .en);
+    const value = copy.lookup(input[0..key_len]) orelse return 0;
+    if (out) |buffer| {
+        if (capacity >= value.len) @memcpy(buffer[0..value.len], value);
+    }
+    return value.len;
 }
 
 pub export fn cm_service_create() callconv(.c) ?*cm_service {

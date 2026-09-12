@@ -1,92 +1,65 @@
 import Foundation
 
-
-
-
-
-
-
-
-
-
 extension Copy {
 
+    static var failoverSwitchTitlePrefix: String { text("shell_failover_switch_title_prefix", fallback: "Route new requests to “") }
+    static var failoverSwitchTitleSuffix: String { text("shell_failover_switch_title_suffix", fallback: "”?") }
 
+    static var failoverSwitchBodyPrefix: String { text("shell_failover_switch_body_prefix", fallback: "This changes the proxy cursor to ") }
+    static var failoverSwitchBodySuffix: String { text("shell_failover_switch_body_suffix", fallback: " for new routed requests.") }
 
-    static let failoverSwitchTitlePrefix = "Route new requests to “"
-    static let failoverSwitchTitleSuffix = "”?"
+    static var failoverSwitchMuted: String { text("shell_failover_switch_muted", fallback: "This does not copy or install an auth file. Requests already in flight continue on their current account.") }
 
-    static let failoverSwitchBodyPrefix = "This changes the proxy cursor to "
-    static let failoverSwitchBodySuffix = " for new routed requests."
+    static var useAccount: String { text("shell_use_account", fallback: "Use Account") }
 
-    static let failoverSwitchMuted = "This does not copy or install an auth file. Requests already in flight continue on their current account."
+    static var clearCooldownTitlePrefix: String { text("shell_clear_cooldown_title_prefix", fallback: "Clear the cooldown for “") }
+    static var clearCooldownTitleSuffix: String { text("shell_clear_cooldown_title_suffix", fallback: "”?") }
 
-    static let useAccount = "Use Account"
+    static var clearCooldownBody: String { text("shell_clear_cooldown_body", fallback: "The proxy will use this account again immediately. Do this only if you reset its limit elsewhere.") }
 
+    static var clearCooldownMuted: String { text("shell_clear_cooldown_muted", fallback: "If the limit is not actually reset, the next request may still be refused and the account is cooled down again from the provider's own answer. No request is sent to the provider now.") }
 
+    static var clearCooldownConfirm: String { text("shell_clear_cooldown_confirm", fallback: "Clear cooldown") }
 
+    static var renameTitle: String { text("shell_rename_title", fallback: "Rename account") }
 
-    static let clearCooldownTitlePrefix = "Clear the cooldown for “"
-    static let clearCooldownTitleSuffix = "”?"
+    static var renameMuted: String { text("shell_rename_muted", fallback: "This changes only the label shown in CodexMulti.") }
 
-    static let clearCooldownBody = "The proxy will use this account again immediately. Do this only if you reset its limit elsewhere."
+    static var accountLabel: String { text("shell_account_label", fallback: "Account label") }
 
-    static let clearCooldownMuted = "If the limit is not actually reset, the next request may still be refused and the account is cooled down again from the provider's own answer. No request is sent to the provider now."
+    static var removeTitle: String { text("shell_remove_title", fallback: "Remove account?") }
 
-    static let clearCooldownConfirm = "Clear cooldown"
+    static var removeBodySuffix: String { text("shell_remove_body_suffix", fallback: " will be removed from CodexMulti.") }
 
+    static var removeMappedMuted: String { text("shell_remove_mapped_muted", fallback: "Remove and sync first pauses new proxy traffic. Use Refresh to observe Paused with no requests in flight; only then can CodexMulti remove the saved account and synchronize the proxy configuration.") }
 
+    static var removePlainMuted: String { text("shell_remove_plain_muted", fallback: "Its saved usage snapshot is also removed. This does not delete the account at OpenAI.") }
 
+    static var refreshDrainStatus: String { text("shell_refresh_drain_status", fallback: "Refresh drain status") }
 
-    static let renameTitle = "Rename account"
+    static var finishRemoval: String { text("shell_finish_removal", fallback: "Finish removal") }
 
-    static let renameMuted = "This changes only the label shown in CodexMulti."
+    static var removeAndSync: String { text("shell_remove_and_sync", fallback: "Remove and sync") }
 
-    static let accountLabel = "Account label"
+    static var removeConfirm: String { text("shell_remove_confirm", fallback: "Remove") }
 
+    static var resetTitle: String { text("shell_reset_title", fallback: "Use one Codex reset?") }
 
+    static var resetRetryMuted: String { text("shell_reset_retry_muted", fallback: "Retrying checks the same request. It does not spend another reset.") }
 
+    static var close: String { text("shell_close", fallback: "Close") }
 
+    static var retrySameRequest: String { text("shell_retry_same_request", fallback: "Retry same request") }
 
-    static let removeTitle = "Remove account?"
+    static var resetBodyPrefix: String { text("shell_reset_body_prefix", fallback: "Spends one reset credit on ") }
+    static var resetBodySuffix: String { text("shell_reset_body_suffix", fallback: ". If the account is cooling in the failover proxy, its cooldown is cleared once the reset settles.") }
 
-    static let removeBodySuffix = " will be removed from CodexMulti."
+    static var resetAvailableSuffix: String { text("shell_reset_available_suffix", fallback: " available · ") }
+    static var resetNextResetInfix: String { text("shell_reset_next_reset_infix", fallback: " · next reset ") }
 
-    static let removeMappedMuted = "Remove and sync first pauses new proxy traffic. Use Refresh to observe Paused with no requests in flight; only then can CodexMulti remove the saved account and synchronize the proxy configuration."
+    static var resetAcknowledge: String { text("shell_reset_acknowledge", fallback: "I understand this cannot be undone") }
 
+    static var useOneReset: String { text("shell_use_one_reset", fallback: "Use one reset") }
 
-    static let removePlainMuted = "Its saved usage snapshot is also removed. This does not delete the account at OpenAI."
-
-    static let refreshDrainStatus = "Refresh drain status"
-
-    static let finishRemoval = "Finish removal"
-
-    static let removeAndSync = "Remove and sync"
-
-    static let removeConfirm = "Remove"
-
-
-
-
-    static let resetTitle = "Use one Codex reset?"
-
-    static let resetRetryMuted = "Retrying checks the same request. It does not spend another reset."
-
-    static let close = "Close"
-
-    static let retrySameRequest = "Retry same request"
-
-    static let resetBodyPrefix = "Spends one reset credit on "
-    static let resetBodySuffix = ". If the account is cooling in the failover proxy, its cooldown is cleared once the reset settles."
-
-    static let resetAvailableSuffix = " available · "
-    static let resetNextResetInfix = " · next reset "
-
-    static let resetAcknowledge = "I understand this cannot be undone"
-
-    static let useOneReset = "Use one reset"
-
-
-
-    static let cancel = "Cancel"
+    static var cancel: String { text("shell_cancel", fallback: "Cancel") }
 }

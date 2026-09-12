@@ -51,3 +51,5 @@ a coordinated `cm.bridge/1` schema change is intended.
   durable-before-send state, same-key retry, and a verification read.
 - Storage, Keychain, proxy-service, and designated-requirement identifiers are
   compatibility data and must not be renamed as presentation cleanup.
+
+Reset ledger writes flush the temporary file before atomic replacement and flush the parent directory afterward. On macOS they also request `F_FULLFSYNC` to flush device caches. A reported persistence error stops the reset before send; restart recovery preserves the original idempotency key. This improves power-loss durability subject to the filesystem and storage device honoring flush requests; power-loss hardware testing is not part of the automated suite.

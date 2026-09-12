@@ -89,7 +89,10 @@ proxy_pid=$!
 
 http_code=""
 for _attempt in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26 27 28 29 30 31 32 33 34 35 36 37 38 39 40 41 42 43 44 45 46 47 48 49 50; do
-    http_code="$("$CURL_BIN" --silent --show-error --max-time 0.5 \
+    if test -f "$config_path.control-token"; then
+      (umask 077; { printf 'Authorization: Bearer '; cat "$config_path.control-token"; printf '\n'; } > "$config_path.control-header")
+    fi
+    http_code="$("$CURL_BIN" --header "@$config_path.control-header" --silent --show-error --max-time 0.5 \
         --output "$status_path" --write-out '%{http_code}' \
         "http://127.0.0.1:$port/_proxy/status" 2>/dev/null || true)"
     test "$http_code" = "200" && break

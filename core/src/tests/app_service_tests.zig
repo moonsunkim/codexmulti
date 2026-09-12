@@ -1689,6 +1689,7 @@ test "C4 direct Claude commands are inert and refresh all admits Codex only" {
     defer harness.destroy();
     try harness.addClaude();
     try harness.addCodex();
+    harness.parent_env = &proxy_env;
     harness.attach();
     harness.codex_launcher.stream = .{ .chunks = &.{.{ .bytes = script_read }} };
 

@@ -74,7 +74,8 @@ struct ProxyLifecyclePanel: View {
         }
         .buttonStyle(.plain)
         .accessibilityLabel(Copy.advancedProxyControls)
-        .accessibilityValue(advancedExpanded ? "Expanded" : "Collapsed")
+        .accessibilityValue(advancedExpanded
+            ? Copy.text("shell_expanded", fallback: "Expanded") : Copy.text("shell_collapsed", fallback: "Collapsed"))
     }
 
     private var serviceRow: some View {

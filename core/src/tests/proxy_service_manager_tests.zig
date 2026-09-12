@@ -299,7 +299,7 @@ test "state precedence covers not installed stale running and unreachable" {
     harness.refresh();
     try testing.expectEqual(ui_model.ProxyServiceState.@"unreachable", harness.controller.discovery.state);
     fact = harness.controller.fact(true, &harness.paths);
-    try testing.expect(!fact.can_install and !fact.can_repair and !fact.can_stop);
+    try testing.expect(!fact.can_install and fact.can_repair and !fact.can_stop);
 }
 
 test "install is importer first and no eligible account touches nothing" {
@@ -343,10 +343,11 @@ test "loaded repair admits positive count and never bootouts before a fresh zero
     try testing.expect(harness.trace.first(.write_plist).? < harness.trace.first(.bootstrap_new).?);
 }
 
-test "loaded unreachable fails closed while definitely unloaded repair skips health and bootout" {
+test "unrecognized loaded job fails closed while definitely unloaded repair skips health and bootout" {
     var harness = try Harness.init();
     harness.rebind();
     harness.launch.new_loaded = true;
+    harness.launch.new_arguments_match = false;
     harness.artifacts.value = .{ .plist_exists = true, .plist_matches = false, .bundle_matches = true };
     harness.health.set(&.{.{ .state = .@"unreachable" }});
     harness.refresh();
@@ -362,6 +363,41 @@ test "loaded unreachable fails closed while definitely unloaded repair skips hea
     try harness.drain();
     try testing.expectEqual(@as(usize, 0), harness.trace.count(.bootout_new));
     try testing.expect(harness.trace.first(.write_plist).? < harness.trace.first(.bootstrap_new).?);
+}
+
+test "unreachable routing stays visibly on and the primary off action restores direct routing" {
+    var harness = try Harness.init();
+    harness.rebind();
+    harness.launch.new_loaded = true;
+    harness.artifacts.value = .{ .plist_exists = true, .receipt_exists = true, .plist_matches = true, .receipt_matches = true, .bundle_matches = true };
+    harness.routing_editor.state = .on;
+    harness.health.set(&.{.{ .state = .@"unreachable" }});
+    harness.refresh();
+    const fact = harness.controller.fact(true, &harness.paths);
+    try testing.expect(fact.enabled);
+    try testing.expect(std.mem.indexOf(u8, fact.enabled_detail_text, "unavailable proxy") != null);
+    harness.trace.len = 0;
+    try testing.expectEqual(.accepted_pending, harness.controller.submit(.set_enabled_off, false, true, harness.live()));
+    try harness.drain();
+    try testing.expect(harness.controller.worker.result.ok);
+    try testing.expectEqual(.off, harness.controller.discovery.routing.state);
+    try testing.expectEqual(@as(usize, 1), harness.trace.count(.routing_disable));
+    try testing.expectEqual(@as(usize, 0), harness.trace.count(.bootout_new));
+}
+
+test "explicit repair can restart an unreachable job with verified owned arguments" {
+    var harness = try Harness.init();
+    harness.rebind();
+    harness.launch.new_loaded = true;
+    harness.artifacts.value = .{ .plist_exists = true, .bundle_matches = true };
+    harness.health.set(&.{ .{ .state = .@"unreachable" }, .{ .state = .@"unreachable" }, .{ .state = .healthy } });
+    harness.refresh();
+    try testing.expect(harness.controller.fact(true, &harness.paths).can_repair);
+    try testing.expectEqual(.accepted_pending, harness.controller.submit(.repair, false, true, harness.live()));
+    try harness.drain();
+    try testing.expect(harness.controller.worker.result.ok);
+    try testing.expectEqual(@as(usize, 1), harness.trace.count(.bootout_new));
+    try testing.expectEqual(@as(usize, 1), harness.trace.count(.bootstrap_new));
 }
 
 test "stop disables routing before positive drain and bootout" {
@@ -629,4 +665,42 @@ test "source contains no kickstart lifecycle path and public artifacts contain n
         try testing.expect(std.mem.indexOf(u8, plist, needle) == null);
         try testing.expect(std.mem.indexOf(u8, receipt, needle) == null);
     }
+}
+
+test "uninstall restores routing before removing a verified unresponsive service" {
+    var harness = try Harness.init();
+    harness.rebind();
+    harness.launch.new_loaded = true;
+    harness.routing_editor.state = .on;
+    harness.health.set(&.{.{ .state = .@"unreachable" }});
+    try manager.prepareUninstall(harness.live());
+    try testing.expectEqual(ui_model.CodexRoutingState.off, harness.routing_editor.state);
+    try testing.expect(!harness.launch.new_loaded);
+    try testing.expectEqual(@as(usize, 1), harness.trace.count(.remove_owned));
+    try testing.expect(harness.trace.first(.routing_disable).? < harness.trace.first(.bootout_new).?);
+    try testing.expect(harness.trace.first(.bootout_new).? < harness.trace.first(.remove_owned).?);
+    try testing.expectEqual(@as(usize, 0), harness.trace.count(.importer));
+}
+
+test "uninstall restores direct routing but preserves a mismatched service" {
+    var harness = try Harness.init();
+    harness.rebind();
+    harness.launch.new_loaded = true;
+    harness.launch.new_arguments_match = false;
+    harness.routing_editor.state = .on;
+    try testing.expectError(error.ServiceOwnershipUnknown, manager.prepareUninstall(harness.live()));
+    try testing.expectEqual(ui_model.CodexRoutingState.off, harness.routing_editor.state);
+    try testing.expect(harness.launch.new_loaded);
+    try testing.expectEqual(@as(usize, 0), harness.trace.count(.remove_owned));
+    try testing.expectEqual(@as(usize, 0), harness.trace.count(.bootout_new));
+}
+
+test "uninstall leaves a conflicting shared config and service untouched" {
+    var harness = try Harness.init();
+    harness.rebind();
+    harness.launch.new_loaded = true;
+    harness.routing_editor.state = .conflicting;
+    try testing.expectError(error.RoutingNeedsManualReview, manager.prepareUninstall(harness.live()));
+    try testing.expectEqual(@as(usize, 0), harness.trace.count(.bootout_new));
+    try testing.expectEqual(@as(usize, 0), harness.trace.count(.remove_owned));
 }

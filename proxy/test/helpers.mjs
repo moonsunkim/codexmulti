@@ -3,6 +3,9 @@ import path from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { chmod, mkdir, rm, writeFile } from 'node:fs/promises';
 import { createProxy } from '../src/server.mjs';
+import { readControlToken } from '../src/control-auth.mjs';
+
+const controlTokens = new Map();
 
 export const SCRATCH_ROOT = '/private/tmp/codexmulti-proxy-tests';
 
@@ -103,6 +106,8 @@ export async function request(origin, requestPath, options = {}) {
     const req = http.request(`${origin}${requestPath}`, {
       method: options.method ?? 'GET',
       headers: {
+        ...(requestPath.startsWith('/_proxy/') && options.controlAuth !== false && controlTokens.has(origin)
+          ? { authorization: `Bearer ${controlTokens.get(origin)}` } : {}),
         ...(body ? { 'content-length': String(body.length) } : {}),
         ...options.headers,
       },
@@ -165,11 +170,16 @@ export async function startTestProxy(testContext, {
   const proxy = await createProxy(proxyConfig, {
     now: () => now,
     configPath,
+    ...(options.configPath === null ? { controlToken: 'a'.repeat(64) } : {}),
     ...options,
   });
   const address = await proxy.listen();
+  const origin = `http://127.0.0.1:${address.port}`;
   testContext.after(async () => {
     if (proxy.server.listening) await proxy.close();
   });
-  return { proxy, origin: `http://127.0.0.1:${address.port}`, root, accounts, configPath };
+  controlTokens.set(origin, proxy.config.control_token_file
+    ? await readControlToken(proxy.config.control_token_file) : options.controlToken ?? 'a'.repeat(64));
+  testContext.after(() => controlTokens.delete(origin));
+  return { proxy, origin, root, accounts, configPath };
 }

@@ -114,3 +114,37 @@ test "file editor refuses symlink and oversized TOML" {
     huge.close(testing.io);
     try testing.expectEqual(editor_mod.MutationStatus.too_large, editor.enable(fixture.path, false, null).status);
 }
+
+test "first enable creates missing config and private parent then disables cleanly" {
+    const fixture = try setupRoot("routing-first-install");
+    defer testing.allocator.free(fixture.root);
+    defer testing.allocator.free(fixture.path);
+    defer std.Io.Dir.cwd().deleteTree(testing.io, fixture.root) catch {};
+    const path = try std.fmt.allocPrint(testing.allocator, "{s}/.codex/config.toml", .{fixture.root});
+    defer testing.allocator.free(path);
+    var backing = editor_mod.FileEditor.init(testing.io, testing.allocator);
+    const editor = backing.editor();
+    try testing.expect(!editor.inspect(path).exists);
+    try testing.expectEqual(.no_change, editor.disable(path).status);
+    try testing.expectEqual(.success, editor.enable(path, false, null).status);
+    try testing.expectEqual(.on, editor.inspect(path).state);
+    const mode = (try std.Io.Dir.cwd().statFile(testing.io, path, .{})).permissions.toMode() & 0o777;
+    try testing.expectEqual(@as(std.posix.mode_t, 0o600), mode);
+    try testing.expectEqual(.success, editor.disable(path).status);
+    const bytes = try std.Io.Dir.cwd().readFileAlloc(testing.io, path, testing.allocator, .limited(1024));
+    defer testing.allocator.free(bytes);
+    try testing.expectEqualStrings("", bytes);
+}
+
+test "first enable never overwrites a concurrently created config" {
+    const fixture = try setupRoot("routing-first-install-race");
+    defer testing.allocator.free(fixture.root);
+    defer testing.allocator.free(fixture.path);
+    defer std.Io.Dir.cwd().deleteTree(testing.io, fixture.root) catch {};
+    var backing = editor_mod.FileEditor.init(testing.io, testing.allocator);
+    backing.before_rename = raceHook;
+    try testing.expectEqual(.raced, backing.editor().enable(fixture.path, false, null).status);
+    const bytes = try std.Io.Dir.cwd().readFileAlloc(testing.io, fixture.path, testing.allocator, .limited(1024));
+    defer testing.allocator.free(bytes);
+    try testing.expectEqualStrings(race_replacement, bytes);
+}

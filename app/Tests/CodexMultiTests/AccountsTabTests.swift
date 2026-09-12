@@ -226,6 +226,25 @@ final class AccountsTabTests: XCTestCase {
 
 
 
+    func testOnboardingRepairsAnInstalledUnreachableProxy() throws {
+        let projection = try fixture("two-accounts-fresh")
+        let action = try XCTUnwrap(projection.view.onboarding_next_action)
+        XCTAssertEqual(action.kind, .install_proxy_service)
+        XCTAssertEqual(OnboardingChecklistModel.intent(action, serviceState: .unreachable), .repair_proxy_service)
+        XCTAssertEqual(OnboardingChecklistModel.intent(action, serviceState: .installed_stale), .repair_proxy_service)
+    }
+
+    func testShellCopyUsesCoreKoreanCatalogAndChangesImmediately() {
+        Copy.setLanguage(.ko)
+        defer { Copy.setLanguage(.en) }
+        XCTAssertEqual(Copy.tabSettings, "설정")
+        XCTAssertEqual(Copy.theme, "테마")
+        XCTAssertEqual(Copy.rowMenuAccessibility, "더 많은 작업")
+        XCTAssertEqual(Copy.repairProxyService, "복구")
+        Copy.setLanguage(.en)
+        XCTAssertEqual(Copy.tabSettings, "Settings")
+    }
+
     func testShellCopyNamesOnlyCodex() throws {
         XCTAssertEqual(Copy.removePlainMuted, "Its saved usage snapshot is also removed. This does not delete the account at OpenAI.")
         let sources = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()

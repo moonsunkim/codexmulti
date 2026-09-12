@@ -143,12 +143,16 @@ enum PreferencesModel {
         return short == build ? short : "\(short) (\(build))"
     }
 
-    static let autoRefreshOptions = [
-        AutoRefreshOption(minutes: 0, label: "Off"),
-        AutoRefreshOption(minutes: 15, label: "15 min"),
-        AutoRefreshOption(minutes: 30, label: "30 min"),
-        AutoRefreshOption(minutes: 60, label: "1 hour"),
-    ]
+    static var autoRefreshOptions: [AutoRefreshOption] { [
+        AutoRefreshOption(minutes: 0, label: Copy.text("shell_auto_refresh_off", fallback: "Off")),
+        AutoRefreshOption(minutes: 15, label: Copy.text("shell_fifteen_minutes", fallback: "15 min")),
+        AutoRefreshOption(minutes: 30, label: Copy.text("shell_thirty_minutes", fallback: "30 min")),
+        AutoRefreshOption(minutes: 60, label: Copy.text("shell_one_hour", fallback: "1 hour")),
+    ] }
+
+    static func usageWindowLabel(_ value: CodexUsageWindow) -> String {
+        Copy.text("shell_usage_\(value.rawValue)", fallback: value.rawValue)
+    }
 
     static func appearanceIntent(_ appearance: Appearance) -> Intent { .set_appearance(value: appearance) }
     static func languageIntent(_ language: Language, system: Language) -> Intent {
@@ -378,7 +382,7 @@ struct CodexUsageWindowSegments: View {
                         supported: settings.codex_usage_window_supported,
                         submit: submit)
                 } label: {
-                    Text(verbatim: candidate.rawValue)
+                    Text(verbatim: PreferencesModel.usageWindowLabel(candidate))
                         .font(candidate == settings.codex_usage_window ? Face.bandStrong : Face.band)
                         .foregroundStyle(candidate == settings.codex_usage_window ? tone.text : tone.text2)
                         .frame(width: Grid.appearanceSegmentWidth, height: Grid.settingsSegmentHeight)
@@ -394,7 +398,7 @@ struct CodexUsageWindowSegments: View {
         .background(Capsule().fill(tone.pill))
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(settings.codex_usage_window_label)
-        .accessibilityValue(settings.codex_usage_window.rawValue)
+        .accessibilityValue(PreferencesModel.usageWindowLabel(settings.codex_usage_window))
     }
 }
 

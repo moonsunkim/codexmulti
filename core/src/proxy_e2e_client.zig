@@ -17,6 +17,7 @@ pub fn main(init: std.process.Init) !void {
     if (args.len != 5) return E2eError.InvalidArguments;
 
     var exchange = proxy_control.LoopbackExchange.init(init.gpa, init.io);
+    try exchange.useConfigPath(args[3]);
     var client = try proxy_control.Client.init(init.gpa, exchange.exchange(), args[2]);
     const layout = try runtime_paths.Layout.fromApplicationSupportDir(args[4]);
 

@@ -29,6 +29,7 @@ pub fn build(b: *std.Build) void {
     core_mod.addImport("core_provenance", core_options.createModule());
     core_mod.export_symbol_names = &.{
         "cm_service_version",
+        "cm_copy_text",
         "cm_service_create",
         "cm_service_destroy",
         "cm_service_submit",
@@ -47,6 +48,20 @@ pub fn build(b: *std.Build) void {
     const install_core = b.addInstallLibFile(core_object.getEmittedBin(), "cmcore.o");
     const cmcore_step = b.step("cmcore", "Build the cm.bridge/1 relocatable object");
     cmcore_step.dependOn(&install_core.step);
+
+    const maintenance = b.addExecutable(.{
+        .name = "codexmulti-maintenance",
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("src/maintenance.zig"),
+            .target = core_target,
+            .optimize = core_optimize,
+            .link_libc = true,
+        }),
+        .use_llvm = true,
+    });
+    maintenance.root_module.addImport("core_provenance", core_options.createModule());
+    const maintenance_step = b.step("maintenance", "Build the safe uninstall helper");
+    maintenance_step.dependOn(&b.addInstallArtifact(maintenance, .{}).step);
 
     const aggregate_test_mod = b.createModule(.{
         .root_source_file = b.path("src/test_root.zig"),
@@ -160,5 +175,7 @@ pub fn build(b: *std.Build) void {
         .use_llvm = true,
     });
     const export_fixtures_step = b.step("export-fixtures", "Regenerate cm.bridge/1 JSON fixtures");
-    export_fixtures_step.dependOn(&b.addRunArtifact(fixture_exporter).step);
+    const fixture_run = b.addRunArtifact(fixture_exporter);
+    if (b.args) |args| fixture_run.addArgs(args);
+    export_fixtures_step.dependOn(&fixture_run.step);
 }
