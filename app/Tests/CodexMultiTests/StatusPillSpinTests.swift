@@ -97,64 +97,51 @@ final class StatusPillSpinTests: XCTestCase {
 
 
 
-    func testGlyphStopsWithinAFrameOfProxyWorkClearing() throws {
-        let control = try Hosted(self, try projection("proxy-checking", proxyWork: "idle"))
-        control.spin(0.2)
-        let rest = control.glyph()
-        control.spin(0.15)
-        XCTAssertEqual(Hosted.differing(control.glyph(), rest), 0, "the control never moves")
-        XCTAssertGreaterThan(rest.count, 0, "the glyph was found")
+    func testGlyphIsAtRestOnTheFirstFrameAfterProxyWorkClears() throws {
+        var spin = RefreshSpin()
+        let idle = try projection("proxy-checking", proxyWork: "idle")
+        let checking = try projection("proxy-checking")
+        let start = Date(timeIntervalSinceReferenceDate: 1000.125)
+        let rest = try glyph(turning: false, at: start)
+        XCTAssertTrue(rest.contains { $0 > 64 }, "the rendered glyph contains visible pixels")
+        XCTAssertEqual(pixelDifference(rest, try glyph(turning: false, at: start.addingTimeInterval(0.25))), 0)
 
-        let pill = try Hosted(self, try projection("proxy-checking"))
-        pill.spin(0.2)
-        let turning = pill.glyph()
-        pill.spin(0.15)
-        XCTAssertGreaterThan(Hosted.differing(pill.glyph(), turning), 0, "busy: the glyph turns")
-
-        pill.store.publish(try projection("proxy-checking", proxyWork: "idle"))
-        pill.spin(1.0 / 60.0)
-        XCTAssertEqual(Hosted.differing(pill.glyph(), rest), 0, "idle: the glyph is at rest within a frame (pixels differing from the control)")
-        for _ in 0..<3 {
-            pill.spin(0.15)
-            XCTAssertEqual(Hosted.differing(pill.glyph(), rest), 0, "idle: it stays at rest (pixels differing from the control)")
+        _ = spin.observe(.init(checking.view))
+        let turning = try glyph(turning: spin.spinning, at: start)
+        XCTAssertGreaterThan(pixelDifference(turning, try glyph(turning: spin.spinning, at: start.addingTimeInterval(0.25))), 20,
+                          "busy frames render different arrow rotations")
+        _ = spin.observe(.init(idle.view))
+        for offset in [1.0 / 60.0, 0.25, 0.5, 0.75] {
+            XCTAssertEqual(pixelDifference(rest, try glyph(turning: spin.spinning, at: start.addingTimeInterval(offset))), 0,
+                           "every idle frame renders the unrotated glyph")
         }
     }
 
-
-
     func testGlyphIsAtRestOnceTheReadReportsWhileProxyWorkStaysUp() throws {
-        let control = try Hosted(self, try projection("proxy-checking", proxyWork: "idle"))
-        control.spin(0.2)
-        let rest = control.glyph()
+        var spin = RefreshSpin()
+        let start = Date(timeIntervalSinceReferenceDate: 1000.125)
+        let rest = try glyph(turning: false, at: start)
+        _ = spin.observe(.init(try projection("proxy-checking").view))
+        let turning = try glyph(turning: spin.spinning, at: start)
+        XCTAssertGreaterThan(pixelDifference(turning, try glyph(turning: spin.spinning, at: start.addingTimeInterval(0.25))), 20)
 
-        let pill = try Hosted(self, try projection("proxy-checking"))
-        pill.spin(0.2)
-        let turning = pill.glyph()
-        pill.spin(0.15)
-        XCTAssertGreaterThan(Hosted.differing(pill.glyph(), turning), 0, "busy: the glyph turns")
-
-        pill.store.publish(try projection("proxy-checking") { root, view in
+        let reported = try projection("proxy-checking") { root, view in
             root["generation"] = 9
             view["proxy_last_attempt_at_unix_s"] = 1_784_948_399
             view["proxy_last_success_at_unix_s"] = 1_784_948_399
             view["proxy_success_revision"] = 1
             view["proxy_reachability"] = "reachable"
-        })
-        pill.spin(0.1)
-        XCTAssertEqual(Hosted.differing(pill.glyph(), rest), 0, "read reported: at rest (pixels differing from the control)")
-        pill.spin(0.15)
-        XCTAssertEqual(Hosted.differing(pill.glyph(), rest), 0, "and stays at rest (pixels differing from the control)")
+        }
+        XCTAssertEqual(spin.observe(.init(reported.view)), .stopped("read reported while proxy_work=checking"))
+        XCTAssertFalse(spin.spinning)
+        XCTAssertEqual(pixelDifference(rest, try glyph(turning: spin.spinning, at: start.addingTimeInterval(1.0 / 60.0))), 0)
+        XCTAssertEqual(pixelDifference(rest, try glyph(turning: spin.spinning, at: start.addingTimeInterval(0.25))), 0)
     }
 
-
-    func testHostingOpensNoVisibleWindow() throws {
-        let pill = try Hosted(self, try projection("proxy-checking"))
-        pill.spin(0.1)
-        XCTAssertFalse(pill.window.isVisible)
+    func testRenderingOpensNoVisibleWindow() throws {
+        _ = try glyph(turning: true, at: Date(timeIntervalSinceReferenceDate: 1000.125))
         XCTAssertTrue(NSApp.windows.allSatisfy { !$0.isVisible }, "\(NSApp.windows)")
     }
-
-
 
     private func projection(_ name: String, proxyWork: String? = nil, mutate: (inout [String: Any], inout [String: Any]) -> Void = { _, _ in }) throws -> Projection {
         var root = try XCTUnwrap(JSONSerialization.jsonObject(with: Data(contentsOf: Fixtures.exported(name))) as? [String: Any])
@@ -168,68 +155,33 @@ final class StatusPillSpinTests: XCTestCase {
         return try JSONDecoder().decode(Projection.self, from: Fixtures.data(from: root))
     }
 
-    private struct PillHost: View {
-        let store: CoreStore
-        var body: some View {
-            if let projection = store.projection {
-                RefreshButton(projection: projection)
-                    .environment(\.tone, .light)
-                    .environment(\.submit, { _ in })
-                    .padding(20)
-            }
-        }
+    // Render the same glyph as RefreshButton at explicit timeline dates. Hidden
+    // NSHostingView windows can yield no pixels and no display ticks on CI VMs.
+    // The tests cover state transitions and rendered frames, not wall-clock latency.
+    private func pixelDifference(_ a: [UInt8], _ b: [UInt8]) -> Int {
+        // Repeated SF Symbol rasterization can differ by one 8-bit alpha level.
+        a.count == b.count ? zip(a, b).filter { abs(Int($0) - Int($1)) > 1 }.count : max(a.count, b.count)
     }
 
-
-
-    @MainActor
-    private final class Hosted {
-        let store: CoreStore
-        let window: NSWindow
-        private let hosting: NSHostingView<PillHost>
-        private static let scale = 2
-
-        init(_ test: XCTestCase, _ projection: Projection) throws {
-            store = CoreStore()
-            store.publish(projection)
-            hosting = NSHostingView(rootView: PillHost(store: store))
-            hosting.frame = NSRect(x: 0, y: 0, width: 400, height: 80)
-            window = NSWindow(contentRect: NSRect(x: -20000, y: -20000, width: 400, height: 80), styleMask: .borderless, backing: .buffered, defer: true)
-            window.isReleasedWhenClosed = false
-            window.contentView = hosting
-            hosting.layoutSubtreeIfNeeded()
-            test.addTeardownBlock { @MainActor [window] in window.contentView = nil }
+    private func glyph(turning: Bool, at date: Date) throws -> [UInt8] {
+        let renderer = ImageRenderer(content:
+            RefreshGlyph(turning: turning, enabled: true, date: date)
+                .environment(\.tone, Tone.light)
+                .padding(8))
+        renderer.scale = 2
+        let image = try XCTUnwrap(renderer.cgImage)
+        let width = image.width
+        let height = image.height
+        var rgba = [UInt8](repeating: 0, count: width * height * 4)
+        let rendered = rgba.withUnsafeMutableBytes { bytes -> Bool in
+            guard let context = CGContext(data: bytes.baseAddress, width: width, height: height,
+                                          bitsPerComponent: 8, bytesPerRow: width * 4,
+                                          space: CGColorSpaceCreateDeviceRGB(),
+                                          bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue) else { return false }
+            context.draw(image, in: CGRect(x: 0, y: 0, width: width, height: height))
+            return true
         }
-
-        func spin(_ seconds: TimeInterval) {
-            RunLoop.main.run(until: Date(timeIntervalSinceNow: seconds))
-        }
-
-        func glyph() -> [UInt8] {
-            let width = Int(hosting.bounds.width) * Self.scale
-            let height = Int(hosting.bounds.height) * Self.scale
-            hosting.layoutSubtreeIfNeeded()
-            hosting.displayIfNeeded()
-            // Capture through AppKit, as the app's screenshot path does. A hidden
-            // hosting layer can render no pixels on a virtual macOS display.
-            guard let bitmap = NSBitmapImageRep(
-                bitmapDataPlanes: nil, pixelsWide: width, pixelsHigh: height,
-                bitsPerSample: 8, samplesPerPixel: 4, hasAlpha: true,
-                isPlanar: false, colorSpaceName: .deviceRGB,
-                bytesPerRow: width * 4, bitsPerPixel: 32) else { return [] }
-            bitmap.size = hosting.bounds.size
-            hosting.cacheDisplay(in: hosting.bounds, to: bitmap)
-            guard let data = bitmap.bitmapData else { return [] }
-            let bytes = Array(UnsafeBufferPointer(start: data, count: width * height * 4))
-            let alpha = (0..<height).map { y in (0..<width).map { x in bytes[(y * width + x) * 4 + 3] } }
-            let inked = (0..<width).map { x in alpha.contains { $0[x] > 64 } }
-            guard let last = inked.lastIndex(of: true) else { return [] }
-            let columns = max(0, last - 20 * Self.scale)..<(last + 1)
-            return alpha.flatMap { Array($0[columns]) }
-        }
-
-        static func differing(_ a: [UInt8], _ b: [UInt8]) -> Int {
-            a.count == b.count ? zip(a, b).filter { $0 != $1 }.count : max(a.count, b.count)
-        }
+        XCTAssertTrue(rendered)
+        return stride(from: 3, to: rgba.count, by: 4).map { rgba[$0] }
     }
 }

@@ -99,7 +99,6 @@ struct StatusPill: View {
 
 struct RefreshButton: View {
     let projection: Projection
-    @Environment(\.tone) private var tone
     @Environment(\.submit) private var submit
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var spin = RefreshSpin()
@@ -111,14 +110,7 @@ struct RefreshButton: View {
     var body: some View {
         Button { submit(.refresh_all) } label: {
             TimelineView(.animation(paused: !turning)) { context in
-                Image(systemName: "arrow.clockwise")
-                    .font(.system(size: 11, weight: .semibold))
-                    .foregroundStyle(tone.text2)
-                    .rotationEffect(turning ? RefreshSpin.angle(at: context.date) : .zero)
-                    .frame(width: BandControlLayout.buttonDiameter,
-                           height: BandControlLayout.buttonDiameter)
-                    .contentShape(Circle())
-                    .opacity(enabled ? 1 : Tone.disabledOpacity)
+                RefreshGlyph(turning: turning, enabled: enabled, date: context.date)
             }
         }
         .buttonStyle(.plain)
@@ -132,6 +124,24 @@ struct RefreshButton: View {
                 Self.log.debug("refresh glyph \(transition.description, privacy: .public) busy_count=\(projection.view.busy_count, privacy: .public) proxy_work=\(projection.view.proxy_work.rawValue, privacy: .public)")
             }
         }
+    }
+}
+
+struct RefreshGlyph: View {
+    let turning: Bool
+    let enabled: Bool
+    let date: Date
+    @Environment(\.tone) private var tone
+
+    var body: some View {
+        Image(systemName: "arrow.clockwise")
+            .font(.system(size: 11, weight: .semibold))
+            .foregroundStyle(tone.text2)
+            .rotationEffect(turning ? RefreshSpin.angle(at: date) : .zero)
+            .frame(width: BandControlLayout.buttonDiameter,
+                   height: BandControlLayout.buttonDiameter)
+            .contentShape(Circle())
+            .opacity(enabled ? 1 : Tone.disabledOpacity)
     }
 }
 
