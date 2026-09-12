@@ -1,7 +1,7 @@
 # CodexMulti
 
 <p align="center">
-  <img src="assets/hero.png" width="720" alt="CodexMulti — one Mac, many Codex accounts, with automatic failover">
+  <img src="assets/hero.png" width="100%" alt="CodexMulti — one Mac, many Codex accounts, with automatic failover">
 </p>
 
 **When one Codex account hits its limit, keep going with the next.**
