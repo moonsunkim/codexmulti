@@ -100,7 +100,8 @@ capture_one accounts-expanded-light.png light accounts "$EXPANDED_FIXTURE" 0,0,1
 capture_one accounts-expanded-dark.png dark accounts "$EXPANDED_FIXTURE" 0,0,1000,780
 capture_one accounts-light.png light accounts "$FIXTURE" 0,0,1000,700
 capture_one accounts-dark.png dark accounts "$FIXTURE" 0,0,1000,700
-capture_one settings-dark.png dark settings "$FIXTURE" 0,0,1000,700
+capture_one settings-light.png light settings "$FIXTURE" 0,0,1000,780
+capture_one settings-dark.png dark settings "$FIXTURE" 0,0,1000,780
 
 front_after="$($LSAPPINFO front)"
 printf 'Front application after:  %s\n' "$front_after"

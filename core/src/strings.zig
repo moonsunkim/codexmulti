@@ -1,8 +1,10 @@
 const std = @import("std");
 
-pub const Language = enum { system, en, ko };
+pub const Language = enum { system, en, ko, ja };
+const Japanese = @import("strings_ja.zig").Static;
+const JapaneseFormat = @import("strings_ja.zig").Format;
 
-const catalog_languages = [_]Language{ .en, .ko };
+const catalog_languages = [_]Language{ .en, .ko, .ja };
 pub const supported_languages = blk: {
     var values: [catalog_languages.len + 1]Language = undefined;
     values[0] = .system;
@@ -172,6 +174,12 @@ pub const StaticKey = enum {
     shell_usage_session,
     shell_expanded,
     shell_collapsed,
+    proxy_update_pending,
+    proxy_enabling_pending,
+    proxy_disabling_pending,
+    proxy_retrying,
+    proxy_sign_in_first,
+    proxy_accounts_syncing,
     proxy_running_routing,
     proxy_unavailable_routing,
     proxy_conflicting_routing,
@@ -280,6 +288,10 @@ pub const StaticKey = enum {
     service_all_attached,
     unrepresentable_local_time,
     just_now,
+    tray_refresh_usage,
+    tray_open_in_settings,
+    tray_help,
+    tray_accounts,
     tray_settings,
     tray_quit,
     tray_refresh_all_accounts,
@@ -408,6 +420,7 @@ pub const StaticKey = enum {
     language_system,
     language_english,
     language_korean,
+    language_japanese,
 };
 
 pub const FormatKey = enum {
@@ -599,9 +612,9 @@ pub const Catalog = struct {
     }
 
     pub fn translateEnglish(self: Catalog, value: []const u8) []const u8 {
-        if (self.language != .ko) return value;
+        if (self.language == .en or self.language == .system) return value;
         for (english_static, 0..) |english_value, index| {
-            if (std.mem.eql(u8, english_value, value)) return korean_static[index];
+            if (std.mem.eql(u8, english_value, value)) return self.text(@enumFromInt(index));
         }
         return value;
     }
@@ -610,6 +623,7 @@ pub const Catalog = struct {
         return switch (self.language) {
             .system, .en => english_static[@intFromEnum(key)],
             .ko => korean_static[@intFromEnum(key)],
+            .ja => japanese_static[@intFromEnum(key)],
         };
     }
 
@@ -617,6 +631,7 @@ pub const Catalog = struct {
         switch (self.language) {
             .system, .en => writer.print(@field(EnglishFormat, @tagName(key)), args) catch {},
             .ko => writer.print(@field(KoreanFormat, @tagName(key)), args) catch {},
+            .ja => writer.print(@field(JapaneseFormat, @tagName(key)), args) catch {},
         }
     }
 
@@ -624,6 +639,7 @@ pub const Catalog = struct {
         return switch (self.language) {
             .system, .en => English.month_names[index],
             .ko => Korean.month_names[index],
+            .ja => Japanese.month_names[index],
         };
     }
 };
@@ -642,6 +658,7 @@ pub fn catalog(language: Language) Catalog {
 pub const system = catalog(.system);
 pub const english = catalog(.en);
 pub const korean = catalog(.ko);
+pub const japanese = catalog(.ja);
 
 const English = struct {
     const add_account_dialog_title = "Add Codex account";
@@ -733,7 +750,7 @@ const English = struct {
     const shell_resume_in_failover = "Resume in failover";
     const shell_in_flight_suffix = " in flight";
     const shell_status_separator = " · ";
-    const shell_use_failover_proxy = "Use the failover proxy";
+    const shell_use_failover_proxy = "Use Failover";
     const shell_advanced_proxy_controls = "Advanced proxy controls";
     const shell_codex_routing = "Codex routing";
     const shell_install_and_start = "Install & Start";
@@ -778,7 +795,7 @@ const English = struct {
     const shell_account_label = "Account label";
     const shell_remove_title = "Remove account?";
     const shell_remove_body_suffix = " will be removed from CodexMulti.";
-    const shell_remove_mapped_muted = "Remove and sync first pauses new proxy traffic. Use Refresh to observe Paused with no requests in flight; only then can CodexMulti remove the saved account and synchronize the proxy configuration.";
+    const shell_remove_mapped_muted = "The account will be removed automatically after its current requests finish.";
     const shell_remove_plain_muted = "Its saved usage snapshot is also removed. This does not delete the account at OpenAI.";
     const shell_refresh_drain_status = "Refresh drain status";
     const shell_finish_removal = "Finish removal";
@@ -804,10 +821,16 @@ const English = struct {
     const shell_usage_session = "session";
     const shell_expanded = "Expanded";
     const shell_collapsed = "Collapsed";
-    const proxy_running_routing = "Codex routes through the running failover proxy.";
-    const proxy_unavailable_routing = "Codex still routes to an unavailable proxy. Turn this off to restore direct routing.";
-    const proxy_conflicting_routing = "Codex routing has conflicting settings. Review advanced controls.";
-    const proxy_applying_switch = "Applying the failover proxy switch…";
+    const proxy_update_pending = "Failover is on. Updating automatically after current requests finish.";
+    const proxy_enabling_pending = "Turning on Failover automatically after current requests finish.";
+    const proxy_disabling_pending = "Turning off Failover automatically after current requests finish.";
+    const proxy_retrying = "Failover could not connect. Retrying automatically.";
+    const proxy_sign_in_first = "Add a Codex account to use Failover.";
+    const proxy_accounts_syncing = "Applying account changes automatically after current requests finish.";
+    const proxy_running_routing = "Failover is on. New accounts are included automatically.";
+    const proxy_unavailable_routing = "Reconnecting Failover automatically. You can turn it off to connect directly.";
+    const proxy_conflicting_routing = "Codex has another connection setting. Turn on Failover to replace it.";
+    const proxy_applying_switch = "Applying your Failover setting…";
     const proxy_settings_changed = "Proxy settings changed; repair is required.";
     const proxy_service_starting = "Proxy service change is starting";
     const proxy_waiting_requests = "Waiting for proxy requests to finish";
@@ -912,34 +935,38 @@ const English = struct {
     const service_all_attached = "All application services attached.";
     const unrepresentable_local_time = "unrepresentable local time";
     const just_now = "just now";
+    const tray_refresh_usage = "Refresh Usage";
+    const tray_open_in_settings = "Show Account…";
+    const tray_help = "CodexMulti — saved usage and CLI accounts";
+    const tray_accounts = "Accounts…";
     const tray_settings = "Settings…";
     const tray_quit = "Quit";
     const tray_refresh_all_accounts = "Refresh All Accounts";
     const tray_no_saved_accounts = "No saved accounts";
-    const tray_more_accounts = "More accounts in Settings…";
-    const tray_one_more_account = "1 more account in Settings…";
-    const tray_two_more_accounts = "2 more accounts in Settings…";
-    const tray_three_more_accounts = "3 more accounts in Settings…";
-    const tray_four_more_accounts = "4 more accounts in Settings…";
-    const tray_five_more_accounts = "5 more accounts in Settings…";
-    const tray_six_more_accounts = "6 more accounts in Settings…";
-    const tray_seven_more_accounts = "7 more accounts in Settings…";
-    const tray_eight_more_accounts = "8 more accounts in Settings…";
-    const tray_nine_more_accounts = "9 more accounts in Settings…";
-    const tray_ten_more_accounts = "10 more accounts in Settings…";
-    const tray_eleven_more_accounts = "11 more accounts in Settings…";
-    const tray_twelve_more_accounts = "12 more accounts in Settings…";
-    const tray_thirteen_more_accounts = "13 more accounts in Settings…";
-    const tray_fourteen_more_accounts = "14 more accounts in Settings…";
-    const tray_fifteen_more_accounts = "15 more accounts in Settings…";
-    const tray_sixteen_more_accounts = "16 more accounts in Settings…";
+    const tray_more_accounts = "Show More Accounts…";
+    const tray_one_more_account = "Show 1 More Account…";
+    const tray_two_more_accounts = "Show 2 More Accounts…";
+    const tray_three_more_accounts = "Show 3 More Accounts…";
+    const tray_four_more_accounts = "Show 4 More Accounts…";
+    const tray_five_more_accounts = "Show 5 More Accounts…";
+    const tray_six_more_accounts = "Show 6 More Accounts…";
+    const tray_seven_more_accounts = "Show 7 More Accounts…";
+    const tray_eight_more_accounts = "Show 8 More Accounts…";
+    const tray_nine_more_accounts = "Show 9 More Accounts…";
+    const tray_ten_more_accounts = "Show 10 More Accounts…";
+    const tray_eleven_more_accounts = "Show 11 More Accounts…";
+    const tray_twelve_more_accounts = "Show 12 More Accounts…";
+    const tray_thirteen_more_accounts = "Show 13 More Accounts…";
+    const tray_fourteen_more_accounts = "Show 14 More Accounts…";
+    const tray_fifteen_more_accounts = "Show 15 More Accounts…";
+    const tray_sixteen_more_accounts = "Show 16 More Accounts…";
     const node_missing_reason = "node not found — set Node path in Connection settings";
     const app_version = "Version 0.1.0 (build 0.1.0)";
     const proxy_service_not_installed = "Proxy service is not installed";
-    const proxy_direct_routing = "Codex routes directly; the failover proxy is off.";
+    const proxy_direct_routing = "Failover is off. Codex connects directly.";
     const onboarding_add_account = "Add a Codex account";
     const onboarding_install_proxy = "Install the proxy service";
-    const onboarding_enable_routing = "Turn on Codex routing";
+    const onboarding_enable_routing = "Turn on Failover";
     const add_codex = "Add Codex";
     const install_and_start = "Install & Start";
     const repair_proxy_service = "Repair";
@@ -965,8 +992,8 @@ const English = struct {
     const proxy_unreachable = "Proxy unreachable";
     const proxy_incompatible = "Proxy incompatible for account control";
     const proxy_press_refresh = "Press Refresh to read status v2.";
-    const proxy_busy_retry = "The proxy was busy · account changes will be retried on the next refresh.";
-    const proxy_changes_next_refresh = "Account changes reach the proxy on the next refresh.";
+    const proxy_busy_retry = "Account changes will be applied automatically after current requests finish.";
+    const proxy_changes_next_refresh = "Account changes are being applied automatically.";
     const proxy_synchronized = "Saved accounts and proxy mappings are synchronized.";
     const proxy_sync_failed = "The last proxy synchronization failed.";
     const proxy_checking = "Checking proxy status…";
@@ -1040,6 +1067,7 @@ const English = struct {
     const language_system = "System";
     const language_english = "English";
     const language_korean = "한국어";
+    const language_japanese = "日本語";
 
     const month_names = [_][]const u8{
         "Jan", "Feb", "Mar", "Apr", "May", "Jun",
@@ -1220,7 +1248,7 @@ const Korean = struct {
     const shell_resume_in_failover = "계정 전환에서 재개";
     const shell_in_flight_suffix = "개 진행 중";
     const shell_status_separator = " · ";
-    const shell_use_failover_proxy = "계정 전환 프록시 사용";
+    const shell_use_failover_proxy = "Failover 사용";
     const shell_advanced_proxy_controls = "프록시 고급 설정";
     const shell_codex_routing = "Codex 연결 경로";
     const shell_install_and_start = "설치 및 시작";
@@ -1265,7 +1293,7 @@ const Korean = struct {
     const shell_account_label = "계정 이름";
     const shell_remove_title = "계정을 제거할까요?";
     const shell_remove_body_suffix = " 계정을 CodexMulti에서 제거합니다.";
-    const shell_remove_mapped_muted = "제거 및 동기화를 시작하면 새 프록시 요청을 일시 중지합니다. 새로 고침으로 진행 중인 요청이 없는지 확인한 뒤 계정을 제거하고 프록시 설정을 동기화할 수 있습니다.";
+    const shell_remove_mapped_muted = "이 계정의 현재 요청이 끝나면 자동으로 삭제합니다.";
     const shell_remove_plain_muted = "저장된 사용량 정보도 제거합니다. OpenAI 계정 자체는 삭제하지 않습니다.";
     const shell_refresh_drain_status = "진행 상태 새로 고침";
     const shell_finish_removal = "제거 완료";
@@ -1291,10 +1319,16 @@ const Korean = struct {
     const shell_usage_session = "세션";
     const shell_expanded = "펼침";
     const shell_collapsed = "접힘";
-    const proxy_running_routing = "Codex가 실행 중인 계정 전환 프록시를 통해 연결됩니다.";
-    const proxy_unavailable_routing = "연결할 수 없는 프록시를 사용 중입니다. 끄면 직접 연결로 복구됩니다.";
-    const proxy_conflicting_routing = "Codex 연결 설정이 충돌합니다. 고급 설정에서 확인해 주세요.";
-    const proxy_applying_switch = "프록시 사용 설정 적용 중…";
+    const proxy_update_pending = "Failover 사용 중 · 현재 요청이 끝나면 자동으로 업데이트합니다.";
+    const proxy_enabling_pending = "현재 요청이 끝나면 Failover를 자동으로 켭니다.";
+    const proxy_disabling_pending = "현재 요청이 끝나면 Failover를 자동으로 끕니다.";
+    const proxy_retrying = "Failover에 연결하지 못했습니다. 자동으로 다시 시도합니다.";
+    const proxy_sign_in_first = "Codex 계정을 추가하면 Failover를 사용할 수 있습니다.";
+    const proxy_accounts_syncing = "현재 요청이 끝나면 계정 변경을 자동으로 반영합니다.";
+    const proxy_running_routing = "Failover 사용 중 · 추가한 계정은 자동으로 반영됩니다.";
+    const proxy_unavailable_routing = "Failover에 자동으로 다시 연결하고 있습니다. 끄면 직접 연결합니다.";
+    const proxy_conflicting_routing = "Codex의 다른 연결 설정을 사용 중입니다. Failover를 켜면 변경할 수 있습니다.";
+    const proxy_applying_switch = "Failover 설정을 적용하고 있습니다…";
     const proxy_settings_changed = "프록시 설정이 바뀌었습니다. 복구가 필요합니다.";
     const proxy_service_starting = "프록시 서비스 변경 시작 중";
     const proxy_waiting_requests = "프록시 요청이 끝나기를 기다리는 중";
@@ -1399,34 +1433,38 @@ const Korean = struct {
     const service_all_attached = "모든 앱 서비스 연결됨.";
     const unrepresentable_local_time = "표시할 수 없는 현지 시각";
     const just_now = "방금";
+    const tray_refresh_usage = "사용량 새로 고침";
+    const tray_open_in_settings = "계정 상세 보기…";
+    const tray_help = "CodexMulti — 계정 및 사용량";
+    const tray_accounts = "계정…";
     const tray_settings = "설정…";
     const tray_quit = "종료";
     const tray_refresh_all_accounts = "모든 계정 새로 고침";
     const tray_no_saved_accounts = "저장된 계정 없음";
-    const tray_more_accounts = "설정에 계정 더 있음…";
-    const tray_one_more_account = "설정에 계정 1개 더 있음…";
-    const tray_two_more_accounts = "설정에 계정 2개 더 있음…";
-    const tray_three_more_accounts = "설정에 계정 3개 더 있음…";
-    const tray_four_more_accounts = "설정에 계정 4개 더 있음…";
-    const tray_five_more_accounts = "설정에 계정 5개 더 있음…";
-    const tray_six_more_accounts = "설정에 계정 6개 더 있음…";
-    const tray_seven_more_accounts = "설정에 계정 7개 더 있음…";
-    const tray_eight_more_accounts = "설정에 계정 8개 더 있음…";
-    const tray_nine_more_accounts = "설정에 계정 9개 더 있음…";
-    const tray_ten_more_accounts = "설정에 계정 10개 더 있음…";
-    const tray_eleven_more_accounts = "설정에 계정 11개 더 있음…";
-    const tray_twelve_more_accounts = "설정에 계정 12개 더 있음…";
-    const tray_thirteen_more_accounts = "설정에 계정 13개 더 있음…";
-    const tray_fourteen_more_accounts = "설정에 계정 14개 더 있음…";
-    const tray_fifteen_more_accounts = "설정에 계정 15개 더 있음…";
-    const tray_sixteen_more_accounts = "설정에 계정 16개 더 있음…";
+    const tray_more_accounts = "계정 더 보기…";
+    const tray_one_more_account = "계정 1개 더 보기…";
+    const tray_two_more_accounts = "계정 2개 더 보기…";
+    const tray_three_more_accounts = "계정 3개 더 보기…";
+    const tray_four_more_accounts = "계정 4개 더 보기…";
+    const tray_five_more_accounts = "계정 5개 더 보기…";
+    const tray_six_more_accounts = "계정 6개 더 보기…";
+    const tray_seven_more_accounts = "계정 7개 더 보기…";
+    const tray_eight_more_accounts = "계정 8개 더 보기…";
+    const tray_nine_more_accounts = "계정 9개 더 보기…";
+    const tray_ten_more_accounts = "계정 10개 더 보기…";
+    const tray_eleven_more_accounts = "계정 11개 더 보기…";
+    const tray_twelve_more_accounts = "계정 12개 더 보기…";
+    const tray_thirteen_more_accounts = "계정 13개 더 보기…";
+    const tray_fourteen_more_accounts = "계정 14개 더 보기…";
+    const tray_fifteen_more_accounts = "계정 15개 더 보기…";
+    const tray_sixteen_more_accounts = "계정 16개 더 보기…";
     const node_missing_reason = "node를 찾을 수 없음 — 연결 설정에서 Node 경로 지정";
     const app_version = "버전 0.1.0 (빌드 0.1.0)";
     const proxy_service_not_installed = "프록시 서비스 설치 안 됨";
-    const proxy_direct_routing = "Codex 직접 연결 · 장애 조치 프록시 꺼짐";
+    const proxy_direct_routing = "Failover 꺼짐 · Codex에 직접 연결합니다.";
     const onboarding_add_account = "Codex 계정 추가";
     const onboarding_install_proxy = "프록시 서비스 설치";
-    const onboarding_enable_routing = "Codex 라우팅 켜기";
+    const onboarding_enable_routing = "Failover 켜기";
     const add_codex = "Codex 추가";
     const install_and_start = "설치 및 시작";
     const repair_proxy_service = "복구";
@@ -1452,8 +1490,8 @@ const Korean = struct {
     const proxy_unreachable = "프록시 연결 불가";
     const proxy_incompatible = "계정 제어와 호환되지 않는 프록시";
     const proxy_press_refresh = "새로 고침을 눌러 상태 v2 확인.";
-    const proxy_busy_retry = "프록시 사용 중 · 다음 새로 고침에서 계정 변경 재시도.";
-    const proxy_changes_next_refresh = "다음 새로 고침에서 계정 변경을 프록시에 적용.";
+    const proxy_busy_retry = "현재 요청이 끝나면 계정 변경을 자동으로 반영합니다.";
+    const proxy_changes_next_refresh = "계정 변경을 자동으로 반영하고 있습니다.";
     const proxy_synchronized = "저장된 계정과 프록시 매핑 동기화됨.";
     const proxy_sync_failed = "마지막 프록시 동기화 실패.";
     const proxy_checking = "프록시 상태 확인 중…";
@@ -1527,6 +1565,7 @@ const Korean = struct {
     const language_system = "시스템";
     const language_english = "English";
     const language_korean = "한국어";
+    const language_japanese = "日本語";
 
     const month_names = [_][]const u8{
         "Jan", "Feb", "Mar", "Apr", "May", "Jun",
@@ -1635,19 +1674,30 @@ const korean_static = blk: {
     break :blk values;
 };
 
+const japanese_static = blk: {
+    const fields = std.meta.fields(StaticKey);
+    var values: [fields.len][]const u8 = undefined;
+    for (fields, 0..) |field, index| {
+        values[index] = @field(Japanese, field.name);
+    }
+    break :blk values;
+};
+
 comptime {
     for (std.meta.fields(StaticKey)) |field| {
         if (!@hasDecl(English, field.name)) @compileError("missing English static string: " ++ field.name);
         if (!@hasDecl(Korean, field.name)) @compileError("missing Korean static string: " ++ field.name);
+        if (!@hasDecl(Japanese, field.name)) @compileError("missing Japanese static string: " ++ field.name);
     }
     for (std.meta.fields(FormatKey)) |field| {
         if (!@hasDecl(EnglishFormat, field.name)) @compileError("missing English format string: " ++ field.name);
         if (!@hasDecl(KoreanFormat, field.name)) @compileError("missing Korean format string: " ++ field.name);
+        if (!@hasDecl(JapaneseFormat, field.name)) @compileError("missing Japanese format string: " ++ field.name);
     }
 }
 
 test "F18 Korean catalog covers every key and preserves date and time formats" {
-    try std.testing.expectEqual([3]Language{ .system, .en, .ko }, supported_languages);
+    try std.testing.expectEqual([4]Language{ .system, .en, .ko, .ja }, supported_languages);
     try std.testing.expectEqualStrings("Never refreshed", system.text(.freshness_never));
     try std.testing.expectEqualStrings("새로 고친 적 없음", catalog(.ko).text(.freshness_never));
     var buffer: [64]u8 = undefined;
@@ -1659,4 +1709,21 @@ test "F18 Korean catalog covers every key and preserves date and time formats" {
     var datetime_writer = std.Io.Writer.fixed(&datetime_buffer);
     catalog(.ko).write(&datetime_writer, .absolute_datetime, .{ 2026, "Jul", 25, 12, 0, "KST" });
     try std.testing.expectEqualStrings("2026-Jul-25 12:00 KST", datetime_writer.buffered());
+}
+
+test "Japanese catalog renders settings durations and dates without English fallbacks" {
+    for (japanese_static) |value| {
+        try std.testing.expect(value.len != 0);
+        try std.testing.expect(std.unicode.utf8ValidateSlice(value));
+    }
+    try std.testing.expectEqualStrings("言語", japanese.text(.language_label));
+    try std.testing.expectEqualStrings("日本語", japanese.text(.language_japanese));
+    try std.testing.expectEqualStrings("Failoverを使用", japanese.translateEnglish(english.text(.shell_use_failover_proxy)));
+    var buffer: [128]u8 = undefined;
+    var writer = std.Io.Writer.fixed(&buffer);
+    japanese.write(&writer, .countdown_hours, .{ @as(i64, 2), @as(i64, 15) });
+    try std.testing.expectEqualStrings("2時間15分後", writer.buffered());
+    writer = std.Io.Writer.fixed(&buffer);
+    japanese.write(&writer, .absolute_datetime, .{ 2026, japanese.monthName(8), 12, 15, 30, "JST" });
+    try std.testing.expectEqualStrings("2026年9月12日 15:30 JST", writer.buffered());
 }

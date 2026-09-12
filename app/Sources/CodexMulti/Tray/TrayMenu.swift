@@ -101,6 +101,8 @@ private struct TrayActionButton: View {
     var body: some View {
         if action.isQuit {
             button.keyboardShortcut("q")
+        } else if action.intent == .open_details {
+            button.keyboardShortcut(",", modifiers: .command)
         } else {
             button
         }

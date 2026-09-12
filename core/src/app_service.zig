@@ -217,6 +217,9 @@ pub const Service = struct {
     workers: [max_workers]Worker = @splat(.{}),
     proxy: app_proxy_service.Controller = .{},
     proxy_service: proxy_service_manager.Controller = .{},
+    last_proxy_poll_at: ?i64 = null,
+    last_proxy_sync_at: ?i64 = null,
+    last_proxy_sync_failure_at: ?i64 = null,
     pending_logins: [max_workers]PendingLogin = @splat(.{}),
     reset: ResetService = .{},
     reset_proxy_clear: ResetProxyClearRecord = .{},
@@ -675,12 +678,25 @@ pub const Service = struct {
         const live = self.live orelse return;
         const service_live = live.proxy_service orelse return;
         self.proxy_service.project(view, self.hasEligibleCodexAccount(), &service_live.paths);
+        if (view.proxy_enabled and self.proxy_service.discovery.state == .running and
+            (self.proxy.state.sync_state == .needed or self.proxy.state.work == .importing))
+        {
+            const copy: @import("strings.zig").Catalog = .{ .language = .en };
+            view.proxy_enabled_detail_text = copy.text(.proxy_accounts_syncing);
+        }
     }
 
     fn startProxyService(self: *Service, kind: proxy_service_manager.JobKind, replace_conflicting: bool) ui_model.CommandOutcome {
         const live = self.live orelse return .service_unavailable;
         const service_live = self.currentProxyServiceLive(live) orelse return .rejected_not_allowed;
-        return self.proxy_service.submit(kind, replace_conflicting, self.hasEligibleCodexAccount(), service_live);
+        const effective_kind = if (kind == .enable_routing and replace_conflicting) .set_enabled_on else kind;
+        const whole_switch = effective_kind == .set_enabled_on or effective_kind == .set_enabled_off;
+        const previous = self.proxy.state.settings.enabled;
+        if (whole_switch) self.proxy.setEnabled(effective_kind == .set_enabled_on, proxyDrivers(live)) catch return .failed;
+        const outcome = self.proxy_service.submit(effective_kind, replace_conflicting, self.hasEligibleCodexAccount(), service_live);
+        if (whole_switch and !outcome.accepted()) self.proxy.setEnabled(previous, proxyDrivers(live)) catch return .failed;
+        if (whole_switch and outcome.accepted()) self.proxy_service.last_reconcile_at = null;
+        return outcome;
     }
 
     fn currentProxyServiceLive(self: *const Service, live: Live) ?proxy_service_manager.Live {
@@ -704,6 +720,7 @@ pub const Service = struct {
 
     pub fn discoverProxyService(self: *Service, live: proxy_service_manager.Live) void {
         self.proxy_service.refresh(live);
+        self.proxy_service.target_enabled = self.proxy.state.settings.enabled;
     }
 
     pub fn proxyServiceWorkerBusy(self: *const Service) bool {
@@ -934,6 +951,10 @@ pub const Service = struct {
         }
         self.proxy.recordRemoval(account_id);
         self.clearAuthBackupStamp(account.storage_key);
+        self.proxy.recordRegistryChange();
+        if (!self.hasEligibleCodexAccount() and self.proxy_service.wantsEnabled()) {
+            _ = self.startProxyService(.set_enabled_off, false);
+        }
         return .accepted_pending;
     }
 
@@ -1182,6 +1203,38 @@ pub const Service = struct {
         self.submitOneCooldownReconciliation();
         if (!self.usage_refresh.active()) self.startQueued(now_unix_s);
         self.maybeStartAutoRefresh(now_unix_s);
+        self.maintainFailover(now_unix_s);
+    }
+
+    fn maintainFailover(self: *Service, now_unix_s: i64) void {
+        const live = self.live orelse return;
+        self.proxy.observeRegistry(self.core);
+        if (!self.proxy_service.initialized) return;
+        if (self.proxy.busy() or self.proxy_service.busy() or self.usage_refresh.active()) return;
+        if (self.currentProxyServiceLive(live)) |service_live| {
+            self.proxy_service.reconcile(now_unix_s, self.hasEligibleCodexAccount(), service_live);
+            if (self.proxy_service.busy()) return;
+        }
+        if (!self.proxy_service.wantsEnabled() and self.proxy_service.target_enabled == null and !self.proxy.removal_pause_set) return;
+        const state = self.proxy.state;
+        const fresh = if (state.last_success_at_unix_s) |at| now_unix_s >= at and now_unix_s - at < 2 else false;
+        const retry_due = if (self.last_proxy_sync_at) |at| now_unix_s < at or now_unix_s - at >= 2 else true;
+        const failure_retry_due = if (self.last_proxy_sync_failure_at) |at| now_unix_s < at or now_unix_s - at >= 30 else true;
+        if (self.proxy_service.wantsEnabled() and self.hasEligibleCodexAccount() and fresh and retry_due and failure_retry_due and
+            (state.sync_state == .needed or state.sync_state == .failed) and state.reachability == .reachable and state.config_path_matches)
+        {
+            if (state.last_success) |status| if (status.in_flight == 0) {
+                self.last_proxy_sync_at = now_unix_s;
+                _ = self.startProxy(.sync_config, null);
+                return;
+            };
+        }
+        if (self.last_proxy_poll_at) |at| {
+            if (now_unix_s >= at and now_unix_s - at < 2) return;
+        }
+        if (!self.proxy_service.wantsEnabled() and self.proxy_service.discovery.new_presence == .not_loaded) return;
+        self.last_proxy_poll_at = now_unix_s;
+        if (self.startProxy(.refresh_status, null) == .accepted_pending) self.proxy.background_refresh = true;
     }
 
     fn maybeStartAutoRefresh(self: *Service, now_unix_s: i64) void {
@@ -1213,8 +1266,13 @@ pub const Service = struct {
     fn drainProxy(self: *Service, now_unix_s: i64) void {
         const live = self.live orelse return;
         const success_revision = self.proxy.state.success_revision;
+        const completion_serial = self.proxy.last_completion.serial;
         self.proxy.drain(self.core, proxyDrivers(live), now_unix_s);
         if (self.proxy.state.success_revision != success_revision) self.synchronizeCodexAuthBackups();
+        if (self.proxy.last_completion.serial == completion_serial) return;
+        if (self.proxy.last_completion.kind == .sync_config) {
+            self.last_proxy_sync_failure_at = if (self.proxy.last_completion.ok) null else now_unix_s;
+        }
         switch (self.proxy.state.reachability) {
             .reachable => if (self.proxy.state.config_path_matches) {
                 const in_flight = if (self.proxy.state.last_success) |status| status.in_flight else 0;

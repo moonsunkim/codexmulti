@@ -213,21 +213,20 @@ final class DialogsTests: XCTestCase {
         XCTAssertEqual(DialogModel.removeMuted(plain.remove), Copy.removePlainMuted)
 
         let mapped = try exported("remove-mapped-open").shell
-        XCTAssertEqual(DialogModel.removeButtons(mapped.remove, proxyCanRefresh: true).map(\.label), ["Cancel", "Remove and sync"])
+        XCTAssertEqual(DialogModel.removeButtons(mapped.remove, proxyCanRefresh: true).map(\.label), ["Cancel", "Remove"])
         XCTAssertEqual(DialogModel.removeButtons(mapped.remove, proxyCanRefresh: true).last?.intent, .confirm_remove)
         XCTAssertEqual(DialogModel.removeMuted(mapped.remove), Copy.removeMappedMuted)
 
         let paused = try exported("remove-mapped-pause-requested").shell
         XCTAssertFalse(paused.remove.can_finish)
         let pausedButtons = DialogModel.removeButtons(paused.remove, proxyCanRefresh: paused.proxy_can_refresh)
-        XCTAssertEqual(pausedButtons.map(\.label), ["Cancel", "Refresh drain status", "Finish removal"])
-        XCTAssertEqual(pausedButtons.map(\.enabled), [true, true, false])
-        XCTAssertEqual(pausedButtons[1].intent, .refresh_proxy_status)
-        XCTAssertEqual(pausedButtons[2].intent, .finish_mapped_remove)
-        XCTAssertEqual(DialogModel.removeButtons(paused.remove, proxyCanRefresh: false).map(\.enabled), [true, false, false])
+        XCTAssertEqual(pausedButtons.map(\.label), ["Cancel"])
+        XCTAssertEqual(pausedButtons.map(\.enabled), [true])
+        XCTAssertEqual(DialogModel.removeButtons(paused.remove, proxyCanRefresh: false).map(\.enabled), [true])
 
         let finish = try exported("remove-mapped-can-finish").shell
-        XCTAssertEqual(DialogModel.removeButtons(finish.remove, proxyCanRefresh: true).map(\.enabled), [true, true, true])
+        XCTAssertEqual(DialogModel.removeButtons(finish.remove, proxyCanRefresh: true).map(\.label), ["Cancel"])
+
     }
 
 
@@ -235,9 +234,9 @@ final class DialogsTests: XCTestCase {
         for state in Self.states {
             let spec = DialogModel.spec(state.target.kind, shell: try shell(state))
             let red = spec.buttons.filter { $0.style == .destructive }.map(\.label)
-            if state.target.kind == .remove {
-                XCTAssertEqual(red.count, 1, state.fixture)
-                XCTAssertTrue(["Remove", "Remove and sync", "Finish removal"].contains(red[0]), state.fixture)
+            let removePending = try shell(state).remove.pause_requested
+            if state.target.kind == .remove && !removePending {
+                XCTAssertEqual(red, ["Remove"], state.fixture)
             } else {
                 XCTAssertEqual(red, [], state.fixture)
             }

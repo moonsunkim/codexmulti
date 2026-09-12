@@ -536,6 +536,7 @@ pub const SettingsView = struct {
     language_label_system: []const u8 = strings.system.text(.language_system),
     language_label_english: []const u8 = strings.system.text(.language_english),
     language_label_korean: []const u8 = strings.system.text(.language_korean),
+    language_label_japanese: []const u8 = strings.system.text(.language_japanese),
     codex_section_title: []const u8 = "Codex",
     codex_usage_window: CodexUsageWindow = .auto,
     codex_usage_window_supported: [3]CodexUsageWindow = .{ .auto, .weekly, .session },
@@ -582,6 +583,7 @@ pub const TrayItem = struct {
 };
 
 pub const tray_command_refresh_all = "tray.refresh_all";
+pub const tray_command_open_accounts = "tray.open_accounts";
 pub const tray_command_open_details = "tray.open_details";
 pub const tray_command_quit = "tray.quit";
 pub const tray_command_open_account_prefix = "tray.open_account:";

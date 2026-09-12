@@ -6,6 +6,27 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.2.4]
+
+### Added
+
+- Open Accounts directly from the top of the menu-bar menu.
+
+- Japanese throughout settings, account views, menus, dialogs, dates and accessibility text.
+
+### Changed
+
+- Use one Failover switch for setup, routing and recovery; automatically apply account additions, reconnections and order changes after active requests finish.
+- Remember pending enable/disable requests and retry after active work drains; automatically finish a confirmed account removal after its requests drain.
+- Replace language segments with a single-selection menu that accommodates more languages.
+- Remove the redundant proxy diagnostic line from the tray menu.
+- Distinguish a healthy service awaiting an update from an unavailable service, and bound background status writes.
+
+### Fixed
+
+- Keep headers, native controls, popovers and sheets in sync when switching between Light, Dark and System appearance.
+- Open the Accounts tab when choosing an account or the full account list from the menu bar, including when Settings was last shown.
+
 ## [0.2.3]
 
 ### Fixed

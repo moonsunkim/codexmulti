@@ -375,7 +375,7 @@ test "unreachable routing stays visibly on and the primary off action restores d
     harness.refresh();
     const fact = harness.controller.fact(true, &harness.paths);
     try testing.expect(fact.enabled);
-    try testing.expect(std.mem.indexOf(u8, fact.enabled_detail_text, "unavailable proxy") != null);
+    try testing.expect(std.mem.indexOf(u8, fact.enabled_detail_text, "Reconnecting Failover") != null);
     harness.trace.len = 0;
     try testing.expectEqual(.accepted_pending, harness.controller.submit(.set_enabled_off, false, true, harness.live()));
     try harness.drain();
@@ -422,7 +422,7 @@ test "stop disables routing before positive drain and bootout" {
     try testing.expectEqual(ui_model.ProxyServiceState.not_installed, harness.controller.discovery.state);
 }
 
-test "C9 whole-proxy switch refuses an in-flight request without any mutation" {
+test "whole-proxy switch queues off while busy and completes after draining" {
     var harness = try Harness.init();
     harness.rebind();
     harness.launch.new_loaded = true;
@@ -431,18 +431,17 @@ test "C9 whole-proxy switch refuses an in-flight request without any mutation" {
     harness.health.set(&.{.{ .state = .healthy, .in_flight = 4 }});
     harness.refresh();
     harness.trace.len = 0;
-
-    try testing.expectEqual(ui_model.CommandOutcome.rejected_busy, harness.controller.submit(.set_enabled_off, false, true, harness.live()));
+    try testing.expectEqual(ui_model.CommandOutcome.accepted_pending, harness.controller.submit(.set_enabled_off, false, true, harness.live()));
+    harness.controller.reconcile(100, true, harness.live());
     try testing.expectEqual(@as(usize, 0), harness.trace.count(.routing_disable));
     try testing.expectEqual(@as(usize, 0), harness.trace.count(.bootout_new));
-    const fact = harness.controller.fact(true, &harness.paths);
-    try testing.expect(fact.enabled);
-    try testing.expect(std.mem.indexOf(u8, fact.enabled_detail_text, "4") != null);
-    try testing.expect(std.mem.indexOf(u8, fact.enabled_detail_text, "will apply when they finish") != null);
-
+    try testing.expect(!harness.controller.fact(true, &harness.paths).enabled);
+    harness.health.set(&.{.{ .state = .healthy, .in_flight = 0 }});
     harness.controller.observeProxyHealth(.{ .state = .healthy, .in_flight = 0 });
-    const drained = harness.controller.fact(true, &harness.paths);
-    try testing.expectEqualStrings("Codex routes through the running failover proxy.", drained.enabled_detail_text);
+    harness.controller.reconcile(103, true, harness.live());
+    try harness.drain();
+    try testing.expectEqual(ui_model.CodexRoutingState.off, harness.routing_editor.state);
+    try testing.expectEqual(@as(usize, 1), harness.trace.count(.bootout_new));
 }
 
 test "C9 whole-proxy switch on installs starts and enables routing as one job" {
@@ -703,4 +702,86 @@ test "uninstall leaves a conflicting shared config and service untouched" {
     try testing.expectError(error.RoutingNeedsManualReview, manager.prepareUninstall(harness.live()));
     try testing.expectEqual(@as(usize, 0), harness.trace.count(.bootout_new));
     try testing.expectEqual(@as(usize, 0), harness.trace.count(.remove_owned));
+}
+
+test "healthy stale installation remains usable while awaiting automatic update" {
+    var harness = try Harness.init();
+    harness.rebind();
+    harness.launch.new_loaded = true;
+    harness.artifacts.value = .{ .plist_exists = true, .receipt_exists = true, .plist_matches = true, .receipt_matches = false, .bundle_matches = true };
+    harness.routing_editor.state = .on;
+    harness.health.set(&.{.{ .state = .healthy, .in_flight = 4 }});
+    harness.refresh();
+    const fact = harness.controller.fact(true, &harness.paths);
+    try testing.expect(fact.enabled);
+    try testing.expect(std.mem.indexOf(u8, fact.enabled_detail_text, "unavailable") == null);
+}
+
+test "busy failover off request is accepted for automatic completion" {
+    var harness = try Harness.init();
+    harness.rebind();
+    harness.launch.new_loaded = true;
+    harness.artifacts.value = .{ .plist_exists = true, .receipt_exists = true, .plist_matches = true, .receipt_matches = true, .bundle_matches = true };
+    harness.routing_editor.state = .on;
+    harness.health.set(&.{.{ .state = .healthy, .in_flight = 4 }});
+    harness.refresh();
+    try testing.expectEqual(ui_model.CommandOutcome.accepted_pending, harness.controller.submit(.set_enabled_off, false, true, harness.live()));
+    try testing.expectEqual(@as(usize, 0), harness.trace.count(.bootout_new));
+}
+
+test "stale running service updates itself only after active requests finish" {
+    var harness = try Harness.init();
+    harness.rebind();
+    harness.launch.new_loaded = true;
+    harness.artifacts.value = .{ .plist_exists = true, .receipt_exists = true, .plist_matches = true, .receipt_matches = false, .bundle_matches = true };
+    harness.routing_editor.state = .on;
+    harness.health.set(&.{.{ .state = .healthy, .in_flight = 2 }});
+    harness.refresh();
+    harness.controller.reconcile(100, true, harness.live());
+    try testing.expectEqual(@as(usize, 0), harness.trace.count(.bootout_new));
+    harness.health.set(&.{.{ .state = .healthy, .in_flight = 0 }});
+    harness.controller.observeProxyHealth(.{ .state = .healthy, .in_flight = 0 });
+    harness.controller.reconcile(103, true, harness.live());
+    try harness.drain();
+    try testing.expectEqual(ui_model.ProxyServiceState.running, harness.controller.discovery.state);
+    try testing.expectEqual(ui_model.CodexRoutingState.on, harness.routing_editor.state);
+    try testing.expectEqual(@as(usize, 1), harness.trace.count(.bootstrap_new));
+    try testing.expect(harness.artifacts.value.receipt_matches);
+}
+
+test "failed automatic repair backs off instead of restarting in a loop" {
+    var harness = try Harness.init();
+    harness.rebind();
+    harness.launch.new_loaded = true;
+    harness.artifacts.value = .{ .plist_exists = true, .receipt_exists = true, .plist_matches = true, .receipt_matches = false, .bundle_matches = true };
+    harness.artifacts.receipt_ok = false;
+    harness.routing_editor.state = .on;
+    harness.refresh();
+    harness.controller.reconcile(100, true, harness.live());
+    try harness.drain();
+    try testing.expect(harness.controller.last_job_failed);
+    harness.controller.reconcile(102, true, harness.live());
+    try testing.expectEqual(@as(usize, 1), harness.trace.count(.bootstrap_new));
+    harness.artifacts.receipt_ok = true;
+    harness.controller.reconcile(130, true, harness.live());
+    try harness.drain();
+    try testing.expectEqual(@as(usize, 2), harness.trace.count(.bootstrap_new));
+    try testing.expect(!harness.controller.last_job_failed);
+}
+
+test "turning back on cancels a queued off request before any service mutation" {
+    var harness = try Harness.init();
+    harness.rebind();
+    harness.launch.new_loaded = true;
+    harness.artifacts.value = .{ .plist_exists = true, .receipt_exists = true, .plist_matches = true, .receipt_matches = true, .bundle_matches = true };
+    harness.routing_editor.state = .on;
+    harness.health.set(&.{.{ .state = .healthy, .in_flight = 4 }});
+    harness.refresh();
+    _ = harness.controller.submit(.set_enabled_off, false, true, harness.live());
+    _ = harness.controller.submit(.set_enabled_on, false, true, harness.live());
+    harness.health.set(&.{.{ .state = .healthy, .in_flight = 0 }});
+    harness.controller.observeProxyHealth(.{ .state = .healthy, .in_flight = 0 });
+    harness.controller.reconcile(103, true, harness.live());
+    try testing.expect(harness.controller.fact(true, &harness.paths).enabled);
+    try testing.expectEqual(@as(usize, 0), harness.trace.count(.bootout_new));
 }

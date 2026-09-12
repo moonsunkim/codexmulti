@@ -16,7 +16,7 @@ struct SettingsWindowScene: Scene {
 
     var body: some Scene {
         Window(Self.title, id: Self.id) {
-            SettingsShell(store: store, options: options, submit: submit)
+            SettingsPresentation(store: store, options: options, submit: submit)
         }
         .defaultLaunchBehavior(options.showWindow ? .presented : .suppressed)
         .restorationBehavior(.disabled)
@@ -31,5 +31,18 @@ struct SettingsWindowScene: Scene {
                     .keyboardShortcut(",", modifiers: .command)
             }
         }
+    }
+}
+
+private struct SettingsPresentation: View {
+    let store: CoreStore
+    let options: LaunchOptions
+    let submit: IntentSink
+    @StateObject private var systemAppearance = SystemAppearance()
+
+    var body: some View {
+        let preference = store.projection?.view.settings.appearance ?? .system
+        SettingsShell(store: store, options: options, submit: submit)
+            .preferredColorScheme(AppearanceResolver.preferredScheme(preference) ?? systemAppearance.scheme)
     }
 }

@@ -629,19 +629,19 @@ final class LayoutRenderTests: XCTestCase {
                                         tone: .lightHighContrast, transaction: accessibilityTransaction)
             XCTAssertEqual(light.size.width, 720, accuracy: 0.5, name)
             XCTAssertEqual(accessible.size.width, 720, accuracy: 0.5, name)
-            XCTAssertGreaterThan(light.size.height, 70, name)
-            XCTAssertGreaterThan(accessible.size.height, 70, name)
+            XCTAssertEqual(light.size.height, Grid.accountsRow, accuracy: 0.5, name)
+            XCTAssertEqual(accessible.size.height, Grid.accountsRow, accuracy: 0.5, name)
             XCTAssertNotNil(light.bounds(x: 0..<light.size.width), "no light-mode ink: \(name)")
             XCTAssertNotNil(accessible.bounds(x: 0..<accessible.size.width), "no accessible-mode ink: \(name)")
         }
         XCTAssertEqual(Set(routingStates.map(\.rawValue)), Set(CodexRoutingState.allCases.map(\.rawValue)))
     }
 
-    func testProxySettingsUsePrimaryAndCollapsedAdvancedRows() throws {
+    func testProxySettingsUseOneFailoverRow() throws {
         let projection = try JSONDecoder().decode(
             Projection.self, from: Data(contentsOf: Fixtures.exported("proxy-service-running")))
         let ink = try render(ProxyLifecyclePanel(settings: projection.view.settings), width: 720)
-        XCTAssertEqual(ink.size.height, Grid.accountsRow * 2 + 0.5, accuracy: 0.5)
+        XCTAssertEqual(ink.size.height, Grid.accountsRow, accuracy: 0.5)
         XCTAssertEqual(ink.size.width, 720, accuracy: 0.5)
         XCTAssertNotNil(ink.bounds(x: 0..<ink.size.width))
         let firstLabel = try XCTUnwrap(

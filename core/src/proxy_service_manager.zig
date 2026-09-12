@@ -1,4 +1,5 @@
 const std = @import("std");
+const copy: @import("strings.zig").Catalog = .{ .language = .en };
 const account_registry = @import("account_registry.zig");
 pub const codex_routing = @import("codex_routing_editor.zig");
 const proxy_control = @import("proxy_control_client.zig");
@@ -439,9 +440,10 @@ pub const ProxyServiceWorker = struct {
     }
 
     fn setEnabledOn(self: *ProxyServiceWorker, before: Discovery) bool {
-        if (!switchCanMutate(before) or before.routing.state == .conflicting or
+        if ((before.routing.state == .conflicting and !self.replace_conflicting) or
             !std.mem.eql(u8, self.live.control_base_url, default_control_base_url)) return false;
         if (before.state == .running) return self.enableRouting(before);
+        if (!switchCanMutate(before)) return false;
         const started = switch (before.state) {
             .not_installed => self.install(before),
             .installed_stale, .@"unreachable" => self.repair(before),
@@ -540,6 +542,29 @@ pub const Controller = struct {
     discovery: Discovery = .{},
     initialized: bool = false,
     switch_refusal_detail: ?Text(256) = null,
+    target_enabled: ?bool = null,
+    target_replace_conflicting: bool = false,
+    last_reconcile_at: ?i64 = null,
+    last_job_failed: bool = false,
+
+    pub fn wantsEnabled(self: *const Controller) bool {
+        return self.target_enabled orelse (self.discovery.routing.state == .on);
+    }
+
+    pub fn reconcile(self: *Controller, now_unix_s: i64, eligible_account: bool, live: Live) void {
+        if (!self.initialized or self.busy()) return;
+        const enabled = self.wantsEnabled();
+        if (enabled and self.discovery.state == .running and self.discovery.health.state == .healthy and self.discovery.routing.state == .on) return;
+        if (!enabled and (self.target_enabled == null or
+            (self.discovery.routing.state == .off and self.discovery.new_presence == .not_loaded))) return;
+        if (self.discovery.health.state == .healthy and self.discovery.health.in_flight != 0) return;
+        if (self.last_reconcile_at) |at| {
+            const delay: i64 = if (self.last_job_failed) 30 else 2;
+            if (now_unix_s >= at and now_unix_s - at < delay) return;
+        }
+        self.last_reconcile_at = now_unix_s;
+        _ = self.submit(if (enabled) .set_enabled_on else .set_enabled_off, self.target_replace_conflicting, eligible_account, live);
+    }
 
     pub fn refresh(self: *Controller, live: Live) void {
         var plist: [max_plist_bytes]u8 = undefined;
@@ -556,6 +581,9 @@ pub const Controller = struct {
     pub fn observeProxyHealth(self: *Controller, health: Health) void {
         if (!self.initialized or self.discovery.new_presence != .loaded) return;
         self.discovery.health = health;
+        if (self.discovery.artifacts.current() and self.discovery.new_arguments_match) {
+            self.discovery.state = if (health.state == .healthy) .running else .@"unreachable";
+        }
         if (health.state != .healthy or health.in_flight == 0) self.switch_refusal_detail = null;
     }
 
@@ -564,19 +592,22 @@ pub const Controller = struct {
     }
 
     pub fn submit(self: *Controller, kind: JobKind, replace_conflicting: bool, eligible_account: bool, live: Live) ui_model.CommandOutcome {
-        if (self.busy()) return .rejected_busy;
         const whole_switch = kind == .set_enabled_on or kind == .set_enabled_off;
+        if (self.busy()) {
+            if (!whole_switch) return .rejected_busy;
+            self.target_enabled = kind == .set_enabled_on;
+            self.target_replace_conflicting = replace_conflicting;
+            self.last_reconcile_at = null;
+            return .accepted_pending;
+        }
         if (whole_switch and self.discovery.new_presence == .loaded and
             self.discovery.health.state == .healthy and self.discovery.health.in_flight != 0)
         {
-            var buffer: [256]u8 = undefined;
-            const detail = std.fmt.bufPrint(
-                &buffer,
-                "{d} proxy request(s) are in flight. The switch will apply when they finish.",
-                .{self.discovery.health.in_flight},
-            ) catch "Proxy requests are in flight. The switch will apply when they finish.";
-            self.switch_refusal_detail = Text(256).init(detail) catch null;
-            return .rejected_busy;
+            if ((self.discovery.routing.state == .conflicting and !replace_conflicting) or !self.discovery.new_arguments_match) return .rejected_not_allowed;
+            self.target_enabled = kind == .set_enabled_on;
+            self.target_replace_conflicting = replace_conflicting;
+            self.last_reconcile_at = null;
+            return .accepted_pending;
         }
         const projected = self.fact(eligible_account, &live.paths);
         const allowed = switch (kind) {
@@ -587,7 +618,7 @@ pub const Controller = struct {
                 (self.discovery.routing.state != .conflicting or replace_conflicting) and
                 std.mem.eql(u8, live.control_base_url, default_control_base_url),
             .disable_routing => self.discovery.routing.readable and self.discovery.routing.state != .conflicting,
-            .set_enabled_on => self.discovery.routing.state != .conflicting and
+            .set_enabled_on => (self.discovery.routing.state != .conflicting or replace_conflicting) and
                 std.mem.eql(u8, live.control_base_url, default_control_base_url) and
                 switch (self.discovery.state) {
                     .running => self.discovery.health.state == .healthy,
@@ -598,7 +629,11 @@ pub const Controller = struct {
             .set_enabled_off => self.discovery.routing.readable and self.discovery.routing.state != .conflicting,
         };
         if (!allowed) return .rejected_not_allowed;
-        if (whole_switch) self.switch_refusal_detail = null;
+        if (whole_switch) {
+            self.switch_refusal_detail = null;
+            self.target_enabled = kind == .set_enabled_on;
+            self.target_replace_conflicting = replace_conflicting;
+        }
 
         self.worker = .{};
         self.worker.kind = kind;
@@ -621,6 +656,8 @@ pub const Controller = struct {
         self.worker.started = false;
         self.worker.state = .complete;
         self.discovery = self.worker.result.discovery;
+        self.last_job_failed = !self.worker.result.ok;
+        if (self.discovery.routing.state != .conflicting) self.target_replace_conflicting = false;
         self.initialized = true;
         self.worker.state = .idle;
     }
@@ -651,8 +688,8 @@ pub const Controller = struct {
                 .state = .starting,
                 .detail_text = if (count == 0) "Proxy service change is starting" else "Waiting for proxy requests to finish",
                 .routing_state = self.discovery.routing.state,
-                .enabled = self.discovery.routing.state == .on,
-                .enabled_detail_text = "Applying the failover proxy switch…",
+                .enabled = self.wantsEnabled(),
+                .enabled_detail_text = copy.text(.proxy_applying_switch),
                 .cli_default_path = paths.cli_path.slice(),
                 .node_default_path = paths.node_path.slice(),
             };
@@ -662,7 +699,7 @@ pub const Controller = struct {
         const repairable_loaded = self.discovery.new_presence == .loaded and
             self.discovery.new_arguments_match and self.discovery.artifacts.bundle_matches;
         const repairable_unloaded = self.discovery.new_presence == .not_loaded;
-        const enabled = self.discovery.routing.state == .on;
+        const enabled = self.wantsEnabled();
         return .{
             .state = state,
             .detail_text = self.discovery.detail.slice(),
@@ -671,16 +708,24 @@ pub const Controller = struct {
             .can_stop = no_job and state == .running and self.discovery.routing.state != .conflicting,
             .routing_state = self.discovery.routing.state,
             .enabled = enabled,
-            .enabled_detail_text = if (self.switch_refusal_detail) |*detail|
+            .enabled_detail_text = if (self.target_enabled != null and enabled != (self.discovery.routing.state == .on))
+                copy.text(if (enabled) .proxy_enabling_pending else .proxy_disabling_pending)
+            else if (self.last_job_failed and enabled)
+                copy.text(.proxy_retrying)
+            else if (self.switch_refusal_detail) |*detail|
                 detail.slice()
-            else if (enabled and state == .running)
-                "Codex routes through the running failover proxy."
+            else if (enabled and self.discovery.health.state == .healthy and state == .installed_stale)
+                copy.text(.proxy_update_pending)
+            else if (enabled and self.discovery.health.state == .healthy)
+                copy.text(.proxy_running_routing)
             else if (enabled)
-                "Codex still routes to an unavailable proxy. Turn this off to restore direct routing."
+                copy.text(.proxy_unavailable_routing)
             else if (self.discovery.routing.state == .conflicting)
-                "Codex routing has conflicting settings. Review advanced controls."
+                copy.text(.proxy_conflicting_routing)
+            else if (!eligible_account)
+                copy.text(.proxy_sign_in_first)
             else
-                "Codex routes directly; the failover proxy is off.",
+                copy.text(.proxy_direct_routing),
             .cli_default_path = paths.cli_path.slice(),
             .node_default_path = paths.node_path.slice(),
         };

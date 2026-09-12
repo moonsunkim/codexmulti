@@ -70,6 +70,12 @@ struct ShellIntentRouter {
             return
         }
 
+        switch intent {
+        case .tab_accounts, .open_account:
+            SettingsTabPresenter.shared.selectAccounts()
+        default:
+            break
+        }
         await core.submit(intent)
         guard case .set_launch_at_login(let enabled) = intent else { return }
 

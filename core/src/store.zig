@@ -52,6 +52,7 @@ pub const ProxySettingsDocument = struct {
     schema_version: u16 = current_schema_version,
     proxy: ProxySettings = .{},
     last_synced_accounts_fingerprint: ?[]const u8 = null,
+    enabled: ?bool = null,
 };
 
 pub const ProxyAttemptResult = enum {

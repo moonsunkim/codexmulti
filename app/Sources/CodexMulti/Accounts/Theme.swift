@@ -57,6 +57,7 @@ enum Grid {
     static let settingsLabelGap: CGFloat = 8
     static let planGap: CGFloat = 8
     static let settingsControlWidth: CGFloat = 600
+    static let languageMenuWidth: CGFloat = 240
     static let appearanceSegmentWidth: CGFloat = 68
     static let autoRefreshSegmentWidth: CGFloat = 62
     static let settingsSegmentHeight: CGFloat = 24
@@ -249,6 +250,18 @@ struct ResolvedAppearance {
 }
 
 enum AppearanceResolver {
+    static func preferredScheme(_ preference: Appearance) -> ColorScheme? {
+        switch preference {
+        case .system: nil
+        case .light: .light
+        case .dark: .dark
+        }
+    }
+
+    static func tone(for scheme: ColorScheme, contrast: ColorSchemeContrast) -> Tone {
+        resolve(.system, system: scheme, contrast: contrast).tone
+    }
+
     static func resolve(_ preference: Appearance, system: ColorScheme,
                         contrast: ColorSchemeContrast) -> ResolvedAppearance {
         let name: NSAppearance.Name?
@@ -277,6 +290,26 @@ enum AppearanceResolver {
         case (_, _): tone = .light
         }
         return ResolvedAppearance(name: name, tone: tone)
+    }
+}
+
+@MainActor
+final class SystemAppearance: ObservableObject {
+    @Published private(set) var scheme = SystemAppearance.current
+    private var observation: NSKeyValueObservation?
+
+    init() {
+        observation = NSApp?.observe(\.effectiveAppearance, options: [.new]) { [weak self] _, _ in
+            Task { @MainActor [weak self] in
+                guard let self else { return }
+                let current = SystemAppearance.current
+                if self.scheme != current { self.scheme = current }
+            }
+        }
+    }
+
+    private static var current: ColorScheme {
+        NSApp?.effectiveAppearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua ? .dark : .light
     }
 }
 
@@ -344,31 +377,5 @@ extension EnvironmentValues {
     var tone: Tone {
         get { self[ToneKey.self] }
         set { self[ToneKey.self] = newValue }
-    }
-}
-
-
-
-
-
-
-
-@MainActor
-final class SystemAppearance: ObservableObject {
-    @Published private(set) var scheme: ColorScheme = SystemAppearance.current
-    private var observation: NSKeyValueObservation?
-
-    init() {
-        observation = NSApp?.observe(\.effectiveAppearance, options: [.new]) { [weak self] _, _ in
-            Task { @MainActor [weak self] in
-                guard let self else { return }
-                let now = SystemAppearance.current
-                if self.scheme != now { self.scheme = now }
-            }
-        }
-    }
-
-    static var current: ColorScheme {
-        NSApp?.effectiveAppearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua ? .dark : .light
     }
 }

@@ -101,9 +101,8 @@ pub const ViewState = struct {
     claude_group_summary: []const u8 = "",
     codex_group_summary: []const u8 = "",
     onboarding_visible: bool = true,
-    onboarding_steps: [3]contracts.OnboardingStepView = .{
+    onboarding_steps: [2]contracts.OnboardingStepView = .{
         .{ .kind = .add_account, .title = default_copy.text(.onboarding_add_account) },
-        .{ .kind = .install_proxy_service, .title = default_copy.text(.onboarding_install_proxy) },
         .{ .kind = .enable_codex_routing, .title = default_copy.text(.onboarding_enable_routing) },
     },
     onboarding_next_action: ?contracts.OnboardingNextAction = .{
@@ -221,7 +220,6 @@ pub const ViewState = struct {
         self.onboarding_visible = true;
         self.onboarding_steps = .{
             .{ .kind = .add_account, .title = default_copy.text(.onboarding_add_account) },
-            .{ .kind = .install_proxy_service, .title = default_copy.text(.onboarding_install_proxy) },
             .{ .kind = .enable_codex_routing, .title = default_copy.text(.onboarding_enable_routing) },
         };
         self.onboarding_next_action = .{ .kind = .add_account, .label = default_copy.text(.add_codex) };
@@ -422,27 +420,18 @@ pub const ViewState = struct {
     fn renderOnboarding(self: *ViewState) void {
         const copy = self.localized().copy;
         const account_completed = self.codex_count != 0;
-        const service_completed = self.proxy_service_state == .running;
-        const routing_completed = self.codex_routing_state == .on;
         self.onboarding_steps = .{
             .{ .kind = .add_account, .title = copy.text(.onboarding_add_account), .completed = account_completed },
-            .{ .kind = .install_proxy_service, .title = copy.text(.onboarding_install_proxy), .completed = service_completed },
-            .{ .kind = .enable_codex_routing, .title = copy.text(.onboarding_enable_routing), .completed = routing_completed },
+            .{ .kind = .enable_codex_routing, .title = copy.text(.onboarding_enable_routing), .completed = self.proxy_enabled },
         };
-        self.onboarding_visible = !account_completed or !service_completed or !routing_completed;
+        self.onboarding_visible = !account_completed or !self.proxy_enabled;
         self.onboarding_next_action = if (!account_completed)
             .{ .kind = .add_account, .label = copy.text(.add_codex), .enabled = self.capabilities.accounts }
-        else if (!service_completed)
-            .{
-                .kind = .install_proxy_service,
-                .label = copy.text(if (self.proxy_service_state == .not_installed) .install_and_start else .repair_proxy_service),
-                .enabled = if (self.proxy_service_state == .not_installed) self.proxy_service_can_install else self.proxy_service_can_repair,
-            }
-        else if (!routing_completed)
+        else if (!self.proxy_enabled)
             .{
                 .kind = .enable_codex_routing,
-                .label = copy.text(.turn_on_routing),
-                .enabled = true,
+                .label = copy.text(.onboarding_enable_routing),
+                .enabled = self.proxy_service_can_install or self.proxy_service_can_repair or self.proxy_service_state == .running,
                 .replace_conflicting = self.codex_routing_state == .conflicting,
             }
         else
@@ -1040,6 +1029,7 @@ pub const ViewState = struct {
             .language_label_system = copy.text(.language_system),
             .language_label_english = copy.text(.language_english),
             .language_label_korean = copy.text(.language_korean),
+            .language_label_japanese = copy.text(.language_japanese),
             .codex_usage_window = self.codex_usage_window,
             .codex_show_model_limits = self.codex_show_model_limits,
             .app_version_text = copy.text(.app_version),

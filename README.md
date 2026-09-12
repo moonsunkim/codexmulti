@@ -1,121 +1,122 @@
 # CodexMulti
 
+**When one Codex account hits its limit, keep going with the next.**
+
+CodexMulti puts your Codex accounts in one macOS menu-bar app. See what each account has left,
+choose their order, and let automatic failover handle confirmed usage-limit errors.
+
+[Download](https://github.com/moonsunkim/codexmulti/releases/latest) · [Changelog](CHANGELOG.md) · [Security](SECURITY.md) · [Contributing](CONTRIBUTING.md)
+
 [![CI](https://github.com/moonsunkim/codexmulti/actions/workflows/ci.yml/badge.svg)](https://github.com/moonsunkim/codexmulti/actions/workflows/ci.yml)
-[Contributing](CONTRIBUTING.md) · [Security](SECURITY.md) · [Changelog](CHANGELOG.md)
 
-![CodexMulti hero showing one Mac routing across multiple Codex account folders](assets/hero.png)
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/accounts-dark.png">
+  <source media="(prefers-color-scheme: light)" srcset="assets/screenshots/accounts-light.png">
+  <img alt="CodexMulti account pool with remaining usage, reset times and active, ready, cooling and paused states" src="assets/screenshots/accounts-light.png">
+</picture>
 
-*CodexMulti is an independent open-source project and is not affiliated with or endorsed by OpenAI. Codex is a trademark of OpenAI.*
-
-A macOS menu-bar app that keeps several Codex accounts usable from one machine. When the Codex CLI
-hits a confirmed weekly limit on one account, the bundled failover proxy retries the same request on
-the next eligible account. The proxy and its Node runtime ship inside the app bundle and the app owns
-the LaunchAgent that runs them, so installing one `.app` is the whole setup — there is no separate
-proxy install and no system Node.js.
-
-## What is in here
-
-| Path | What it is |
-| --- | --- |
-| `app/` | The SwiftUI menu-bar shell: windows, menus, sheets, accessibility, macOS lifecycle. |
-| `core/` | The Zig core: application state, account and proxy logic, and every user-facing string. |
-| `proxy/` | The local failover proxy: dependency-free Node, loopback only. |
-
-The shell is a renderer. It draws the core's projection verbatim and sends typed intents back; it does
-not reconstruct provider state or business rules. The two meet at the versioned `cm.bridge/1` C ABI.
-The core drives the proxy through the proxy's loopback-only v2 control API.
-
-## Requirements
-
-- Apple Silicon Mac, macOS 26 or later
-- Codex CLI signed in with ChatGPT authentication
-- At least two Codex accounts, or failover has nowhere to go
-
-Proxy transport compatibility tracks the Codex CLI. Check the release notes before upgrading the CLI.
+- **See your whole pool.** Remaining usage, reset times and account availability are together in one window. The menu bar keeps the pool total close by; **Accounts…** opens the full list in one click.
+- **Set the order once.** Drag accounts into your preferred order. When an eligible request hits a confirmed usage limit, the proxy tries the next available account.
+- **Turn on one switch.** Failover setup includes the local proxy and its Node runtime. Added or reconnected accounts are picked up automatically while the app is open.
+- **Keep credentials local.** Each account has its own Codex directory and Keychain backup. There is no CodexMulti account to create or hosted service to connect to.
 
 ## Install
 
-The installer fetches the latest GitHub release, verifies its published SHA-256, keeps an existing app
-as `CodexMulti.app.previous`, installs to `/Applications`, does not remove Gatekeeper quarantine
-attributes, and opens the app in the background:
-
-```sh
-curl -fsSL https://raw.githubusercontent.com/moonsunkim/codexmulti/main/install.sh | bash
-```
-
-With Homebrew:
+You need **an Apple Silicon Mac running macOS 26 or later**, Codex CLI with ChatGPT sign-in,
+and at least two accounts for failover to be useful.
 
 ```sh
 brew install --cask moonsunkim/tap/codexmulti
 ```
 
-For a manual install, download `CodexMulti-<version>.zip` and its matching `.sha256` file from the
-[latest release](https://github.com/moonsunkim/codexmulti/releases/latest), put both in one directory,
-run `shasum -a 256 -c CodexMulti-<version>.zip.sha256`, expand the verified zip, move
-`CodexMulti.app` to `/Applications`, and open it.
+Or use the [latest release](https://github.com/moonsunkim/codexmulti/releases/latest).
+Releases from 0.2.1 onward are Developer ID signed and notarized by Apple.
 
-The SHA-256 check detects a download that differs from the checksum published with the GitHub
-release. A Developer ID signature additionally identifies the Apple developer and notarization adds
-Apple's automated review and a stapled ticket. The release notes state `DEVELOPER ID`,
-`LOCAL SELF-SIGNED`, or `UNSIGNED` and state `NOTARIZED` or `NOT NOTARIZED`; a self-signed release
-provides integrity but not an Apple-verified publisher identity. For any release marked
-`NOT NOTARIZED` (which none of the published releases are from 0.2.1 on), macOS blocks the first launch until you approve the app in **System Settings → Privacy & Security**. Neither the installer nor the
-manual procedure removes quarantine. There is no automatic updater yet.
+<details>
+<summary>Script installer or manual installation</summary>
 
-## Use
+```sh
+curl -fsSL https://raw.githubusercontent.com/moonsunkim/codexmulti/main/install.sh | bash
+```
 
-1. **Add accounts.** Choose **Add Codex…**, name the account, and complete the official browser
-   sign-in. Repeat for each account in the pool.
-2. **Install the proxy service.** In **Settings → Proxy**, install and start it. The app writes the
-   per-user LaunchAgent and proxy configuration, then checks local health.
-3. **Turn on Codex routing.** Also in **Settings → Proxy**. Installing the service never changes your
-   Codex routing silently; it is a separate, explicit action.
+The installer checks the release's published SHA-256, preserves an existing app as
+`CodexMulti.app.previous`, installs to `/Applications`, and opens the app in the background.
+It preserves Gatekeeper quarantine attributes.
 
-From then on the Codex CLI talks to the loopback proxy. Quitting the menu-bar app does not stop a
-healthy proxy service. Account order is the failover rotation order — drag rows to change it.
+For manual installation, download `CodexMulti-<version>.zip` and the matching `.sha256` file.
+Put both in one directory, then verify the archive before expanding it:
+
+```sh
+shasum -a 256 -c CodexMulti-<version>.zip.sha256
+```
+
+Move the verified `CodexMulti.app` into `/Applications` and open it.
+
+</details>
+
+## Two steps to get going
+
+1. **Add your accounts.** Click **+**, give the account a name, and complete the official browser sign-in. Repeat for the accounts you want in the pool.
+2. **Turn on Use Failover.** Open **Settings**. The app prepares its bundled proxy, checks that it is working, and connects Codex to it.
+
+Use Codex as usual. If an account returns a confirmed usage-limit error before a response starts,
+the same request can continue through the next eligible account. Paused, invalid and cooling
+accounts are skipped.
+
+Account additions, reconnections and order changes are applied automatically while the app is open.
+Changes that need a proxy reload wait for active requests to finish. Closing the menu-bar app leaves
+a healthy proxy running; turning Failover off restores direct Codex connections after active requests finish.
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/settings-dark.png">
+  <source media="(prefers-color-scheme: light)" srcset="assets/screenshots/settings-light.png">
+  <img alt="Current settings with one Failover switch and a wide language selector aligned to the right" src="assets/screenshots/settings-light.png">
+</picture>
+
+Choose your usage refresh interval, preferred usage window and theme. The language menu supports
+**System, English, 한국어 and 日本語**.
+
+<details>
+<summary>Take a closer look at an account</summary>
+
+Expand an account to see its usage windows, authentication and failover status, last refresh,
+and reported reset credits.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/accounts-expanded-dark.png">
   <source media="(prefers-color-scheme: light)" srcset="assets/screenshots/accounts-expanded-light.png">
-  <img alt="CodexMulti expanded account view showing weekly usage, connection and failover status, last refresh, one available reset credit, and update time" src="assets/screenshots/accounts-expanded-light.png">
+  <img alt="Expanded account details showing usage, token status, refresh time and available reset credits" src="assets/screenshots/accounts-expanded-light.png">
 </picture>
 
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/accounts-dark.png">
-  <source media="(prefers-color-scheme: light)" srcset="assets/screenshots/accounts-light.png">
-  <img alt="CodexMulti account list showing active, ready, cooldown, and paused synthetic accounts with varied weekly usage" src="assets/screenshots/accounts-light.png">
-</picture>
+All screenshots use synthetic accounts.
 
-<img alt="CodexMulti dark settings view with system, Codex, proxy, and version controls" src="assets/screenshots/settings-dark.png">
+</details>
 
-Settings is grouped as **System** (launch at login, auto refresh, theme), **Codex** (which usage
-window the rows show, whether per-model limits appear), **Proxy** (the failover proxy, routing, and
-connection paths), and **About**.
+## When will it switch accounts?
 
-### What counts as a failover
+Only after a confirmed usage-limit response: a pre-stream HTTP `429` with error type
+`usage_limit_reached`, or that same response during a WebSocket handshake. Each eligible account
+is tried at most once for the request.
 
-The proxy stays on the current account and switches only after a pre-stream HTTP `429` whose provider
-error type is `usage_limit_reached`. That account goes into cooldown and the same buffered request is
-tried against the next eligible account, at most once per account.
+Network failures, `5xx`, interrupted streams, plan mismatches, `usage_not_included` and unrecognized
+`429` responses stop the request. A response that has already started is not replayed on another account.
+If no eligible account remains, the request fails rather than retrying indefinitely.
 
-Network failures, TLS errors, `5xx`, interrupted streams, plan mismatches, `usage_not_included` and
-unrecognised `429`s do **not** switch accounts — replaying a request whose outcome is unknown is worse
-than failing it. Paused, invalid and cooling accounts are skipped until they are eligible again.
+The app does not increase an account's limits or change its subscription. Proxy compatibility tracks
+the Codex CLI; see the [release notes](https://github.com/moonsunkim/codexmulti/releases/latest) before upgrading.
 
-## Privacy
+## Your accounts stay on your Mac
 
-No telemetry, no analytics, no hosted control plane. Proxy control traffic never leaves `127.0.0.1`.
-The only requests that leave the Mac are the provider calls the Codex CLI would have made anyway.
+There is no telemetry, analytics or CodexMulti-hosted control plane. Authentication, usage checks and
+inference contact provider services directly. The proxy listens on loopback and its control API uses
+a private per-user capability.
 
-Account credentials stay on the machine. Each account gets its own isolated Codex home, and the proxy
-reads that account's token file in place rather than copying it — tokens never reach the account
-registry, the proxy state, the interface or the logs, and your own `~/.codex/auth.json` is never read
-or replaced. Logs are bounded and redacted: no labels, credential paths, authorization headers,
-cookies, tokens, provider account ids, request bodies or query strings.
+Each account uses an isolated Codex home. Credentials remain local, with a Keychain backup; your
+personal `~/.codex/auth.json` is not replaced. Enabling Failover edits only the two managed base-URL
+entries in `~/.codex/config.toml` and leaves a timestamped backup. Turning it off restores direct routing.
 
-The one file of yours the app edits is `~/.codex/config.toml`, and only the two base-URL assignments
-that route the CLI through the proxy. Every edit leaves a timestamped backup beside the file, and
-turning routing off restores direct access.
+See [Security](SECURITY.md) and [proxy security](proxy/README.md#state-logs-and-security) for the trust
+boundary and log-handling details.
 
 ## Build from source
 
@@ -143,29 +144,30 @@ Tests:
 (cd proxy && npm test)
 ```
 
-CI runs the Zig core and Node proxy checks on macOS. The SwiftUI shell tests require the macOS 26 SDK and remain a local gate.
+CI checks the Zig core, Node proxy, SwiftUI shell and distribution scripts on macOS.
+The SwiftUI shell job runs with the macOS 26 SDK.
 
 Signing and release packaging are separate from the ordinary build: `app/scripts/package-signed-macos.sh`
 audits the local signing identity, signs the bundled Node and then the app inside-out, and refuses a
 bundle whose provenance or designated requirement does not match.
 
-## Architecture
+## How it is built
 
-The shell submits typed intents to one serially owned core handle. The core admits work, advances
-what it already admitted, and returns a complete bounded projection; rendering never starts provider
-or proxy work. The core also owns guarded LaunchAgent changes and the exact edits to Codex routing.
-The proxy runs as its own per-user process, listens only on loopback, and forwards eligible requests
-with the selected account's identity.
+| Part | Responsibility |
+| --- | --- |
+| [SwiftUI app](app/) | Windows, menus, accessibility and macOS integration. |
+| [Zig core](core/) | Accounts, background work, guarded routing changes, and all UI text. |
+| [Node proxy](proxy/) | Local request forwarding and failover across eligible accounts. |
 
+The app sends typed intents to the core and renders its returned state. The proxy runs independently
+as a per-user LaunchAgent, so requests can continue after the menu-bar app closes. Both the proxy and
+its pinned Node runtime are bundled in the app.
 
-## License
+<details>
+<summary>Recovery, removal and manual routing repair</summary>
 
-MIT — see [LICENSE](LICENSE). The bundled Node.js runtime is MIT as well; its notices travel with any
-redistributed binary. See [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
-
-## Recovery and removal
-
-If the proxy is unavailable, its switch remains on while Codex still points to it. Turn it off to restore direct Codex routing, or use **Repair** to restart the app-owned service after closing active Codex clients.
+The app retries recovery while Failover is enabled. If a change must wait for active requests,
+its status explains the wait. Turn Failover off to restore direct Codex routing after those requests finish.
 
 Before removing the app, quit Codex clients and run:
 
@@ -186,3 +188,12 @@ openai_base_url = "http://127.0.0.1:8787/backend-api/codex"
 Then inspect `launchctl print "gui/$(id -u)/dev.codexmulti.app.proxy"`. Only if its program arguments point to your CodexMulti app's `Contents/Helpers/node`, `Contents/Resources/proxy/src/server.mjs`, `--config`, and your proxy config, stop it with `launchctl bootout "gui/$(id -u)/dev.codexmulti.app.proxy"` and remove `~/Library/LaunchAgents/dev.codexmulti.app.proxy.plist`. Restart Codex clients so they reread the direct-connection configuration. Do not replace the whole shared config with an old backup.
 
 Proxy control requires a private per-user capability. Ordinary Codex proxy traffic is trusted at the local-machine level, so use it only on a Mac with trusted local users and processes. See [proxy security](proxy/README.md#state-logs-and-security).
+
+</details>
+
+## License
+
+MIT — see [LICENSE](LICENSE). Bundled Node.js notices are included in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+
+CodexMulti is an independent open-source project. It is not affiliated with or endorsed by OpenAI.
+Codex is a trademark of OpenAI.

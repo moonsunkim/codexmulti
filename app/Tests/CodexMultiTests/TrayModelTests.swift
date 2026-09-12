@@ -61,6 +61,7 @@ final class TrayModelTests: XCTestCase {
     func testTrayCommandsMapToTheirIntents() {
         XCTAssertEqual(TrayModel.intent(for: "tray.refresh_all"), .refresh_all)
         XCTAssertEqual(TrayModel.intent(for: "tray.open_details"), .open_details)
+        XCTAssertEqual(TrayModel.intent(for: "tray.open_accounts"), .tab_accounts)
         XCTAssertEqual(TrayModel.intent(for: "tray.quit"), .quit_app)
         XCTAssertEqual(TrayModel.intent(for: "tray.open_account:acct-codex-0007"), .open_account(account_id: "acct-codex-0007"))
         XCTAssertNil(TrayModel.intent(for: ""))
@@ -75,8 +76,8 @@ final class TrayModelTests: XCTestCase {
     func testEmptyTrayKeepsTheCoreOrderAndEnablement() throws {
         let entries = TrayModel.entries(try view("empty-attached"))
         XCTAssertEqual(entries, [
-            .action(TrayModel.Action(id: 1, label: "Refresh All Accounts", enabled: false, intent: .refresh_all)),
-            .info(id: 2, label: "Failover status unknown — open Settings to check"),
+            .action(TrayModel.Action(id: 1, label: "Accounts…", enabled: true, intent: .tab_accounts)),
+            .action(TrayModel.Action(id: 2, label: "Refresh All Accounts", enabled: false, intent: .refresh_all)),
             .separator(position: 2),
             .info(id: 3, label: "No saved accounts"),
             .separator(position: 4),
@@ -119,15 +120,15 @@ final class TrayModelTests: XCTestCase {
         let view = try view("proxy-reachable-mapped")
         let entries = TrayModel.entries(view)
         XCTAssertEqual(entries.count, 6)
-        guard case .action(let refresh) = entries[0], case .info(_, let poolLine) = entries[1],
-              case .info(_, let proxyLine) = entries[2], case .section(let codex) = entries[3],
+        guard case .action(let refresh) = entries[1], case .info(_, let poolLine) = entries[2],
+              case .section(let codex) = entries[3],
               case .action(let settings) = entries[4], case .action(let quit) = entries[5] else {
             return XCTFail("unexpected shape: \(entries)")
         }
         XCTAssertEqual(refresh.intent, .refresh_all)
         XCTAssertTrue(refresh.enabled)
-        XCTAssertEqual(poolLine, view.tray.items[1].label)
-        XCTAssertEqual(proxyLine, view.proxy_tray_text)
+        XCTAssertEqual(poolLine, view.tray.items[2].label)
+        XCTAssertFalse(entries.contains { if case .info(_, let text) = $0 { return text == view.proxy_tray_text }; return false })
         XCTAssertEqual(codex.header, view.tray_provider_headers[0])
         XCTAssertEqual(codex.entries.count, 4)
         XCTAssertEqual(settings.intent, .open_details)
@@ -178,20 +179,20 @@ final class TrayModelTests: XCTestCase {
 
 
 
-    func testTruncationRowIsAnOpenDetailsActionInsideTheSection() throws {
+    func testTruncationRowOpensAccountsInsideTheSection() throws {
         let items: [[String: Any]] = [
             item(1, "Refresh All Accounts", "tray.refresh_all"), separator,
             item(2, "CODEX ACCOUNTS", enabled: false),
             item(3, "a@example.com — 10%", "tray.open_account:acct-codex-0001"),
-            item(4, "12 more accounts in Settings…", "tray.open_details"), separator,
+            item(4, "Show 12 More Accounts…", "tray.open_accounts"), separator,
             item(5, "Settings…", "tray.open_details"), item(6, "Quit", "tray.quit"),
         ]
         let entries = TrayModel.entries(try view("empty-attached", trayItems: items))
         guard entries.count == 4, case .section(let section) = entries[1] else { return XCTFail("\(entries)") }
         XCTAssertEqual(section.entries.count, 2)
         guard case .action(let more) = section.entries[1] else { return XCTFail("\(section.entries)") }
-        XCTAssertEqual(more.label, "12 more accounts in Settings…")
-        XCTAssertEqual(more.intent, .open_details)
+        XCTAssertEqual(more.label, "Show 12 More Accounts…")
+        XCTAssertEqual(more.intent, .tab_accounts)
         XCTAssertTrue(more.enabled)
         XCTAssertEqual(labels(entries), items.filter { ($0["separator"] as? Bool) == false }.map { $0["label"] as! String })
     }
@@ -261,7 +262,7 @@ final class TrayModelTests: XCTestCase {
         let projection = try JSONDecoder().decode(Projection.self, from: Data(contentsOf: Fixtures.exported("two-accounts-fresh")))
         let personal = try account(TrayModel.entries(projection.view), id: "acct-codex-personal")
         XCTAssertEqual(personal.submenu?.refreshLabel, "Refresh Usage")
-        XCTAssertEqual(personal.submenu?.openLabel, "Open in Settings…")
+        XCTAssertEqual(personal.submenu?.openLabel, "Show Account…")
         XCTAssertEqual(TrayModel.helpText(projection), "CodexMulti — saved usage and CLI accounts")
         XCTAssertNil(TrayModel.helpText(nil))
 

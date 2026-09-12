@@ -259,12 +259,12 @@ const Harness = struct {
     fn drainProxy(self: *Harness) !void {
         var spins: usize = 0;
         while (self.service.proxyWorkerBusy()) {
-            self.service.pump(now);
+            self.service.pump(self.service.now_unix_s);
             spins += 1;
             if (spins > 4_000) return error.WorkerDidNotFinish;
             testing.io.sleep(.fromMilliseconds(1), .awake) catch {};
         }
-        self.service.pump(now);
+        self.service.pump(self.service.now_unix_s);
     }
 };
 
@@ -682,4 +682,61 @@ test "service shutdown cancels and joins its one proxy worker" {
     }
     harness.service.destroy();
     try testing.expect(blocking.canceled.load(.acquire));
+}
+
+test "managed failover automatically includes a new account after busy requests drain" {
+    const busy = "{\"version\":2,\"config_path\":\"" ++ config_path ++ "\",\"active\":\"codex-1\",\"cursor\":\"codex-1\",\"in_flight\":1,\"accounts\":[{\"name\":\"codex-1\",\"label\":\"Fixture\",\"auth_file\":\"" ++ auth_file ++ "\",\"state\":\"READY\",\"cooldown_until\":null,\"reason\":null,\"token_expires_at\":null,\"in_flight\":1}]}";
+    const updated = "{\"version\":2,\"config_path\":\"" ++ config_path ++ "\",\"active\":\"codex-1\",\"cursor\":\"codex-1\",\"in_flight\":0,\"accounts\":[{\"name\":\"codex-1\",\"label\":\"Fixture\",\"auth_file\":\"" ++ auth_file ++ "\",\"state\":\"READY\",\"cooldown_until\":null,\"reason\":null,\"token_expires_at\":null,\"in_flight\":0},{\"name\":\"codex-2\",\"label\":\"New\",\"auth_file\":\"" ++ app_root ++ "/accounts/new/codex/auth.json\",\"state\":\"READY\",\"cooldown_until\":null,\"reason\":null,\"token_expires_at\":null,\"in_flight\":0}]}";
+    const harness = try Harness.create(&.{
+        .{ .response = .{ .status = 200, .body = status_v2 } },
+        .{ .response = .{ .status = 200, .body = busy } },
+        .{ .response = .{ .status = 200, .body = status_v2 } },
+        .{ .response = .{ .status = 200, .body = updated } },
+    });
+    defer harness.destroy();
+    try harness.addCodex();
+    harness.attach();
+    try harness.saveSettings();
+    _ = harness.service.submit(.proxy_refresh_status);
+    try harness.drainProxy();
+    harness.service.proxy_service.initialized = true;
+    harness.service.proxy_service.discovery.routing.state = .on;
+    _ = try harness.core.addAccount(.{ .id = "acct-new", .provider = .codex, .label = "New", .storage_key = "new", .created_at_unix_s = now });
+    _ = try harness.core.registry.markConnected("acct-new", null);
+    harness.service.pump(now + 3);
+    try testing.expect(harness.service.proxyWorkerBusy());
+    try harness.drainProxy();
+    try testing.expectEqual(@as(usize, 0), harness.import_runner.calls);
+    try testing.expectEqual(app_service.ProxySyncState.needed, harness.service.proxyState().sync_state);
+    harness.service.pump(now + 6);
+    try harness.drainProxy();
+    try testing.expectEqual(@as(usize, 1), harness.import_runner.calls);
+    try testing.expectEqual(app_service.ProxySyncState.synced, harness.service.proxyState().sync_state);
+    try testing.expectEqual(@as(usize, 2), harness.service.proxyState().last_success.?.accountCount());
+    try testing.expectEqual(@as(usize, 0), harness.service.activity.refreshes_started);
+}
+
+test "background failover checks keep status current without writing on every poll" {
+    const reply: FakeExchange.Reply = .{ .response = .{ .status = 200, .body = status_v2 } };
+    const harness = try Harness.create(&.{ reply, reply, reply, reply, reply });
+    defer harness.destroy();
+    try harness.addCodex();
+    harness.attach();
+    try harness.saveSettings();
+    _ = harness.service.submit(.proxy_refresh_status);
+    try harness.drainProxy();
+    harness.service.proxy_service.initialized = true;
+    harness.service.proxy_service.discovery.routing.state = .on;
+    harness.service.pump(now + 3);
+    try harness.drainProxy();
+    harness.service.pump(now + 6);
+    try harness.drainProxy();
+    try testing.expectEqual(@as(i64, now + 6), harness.service.proxyState().last_success_at_unix_s.?);
+    try testing.expectEqual(@as(usize, 1), harness.sink.countOf(.proxy_status));
+    harness.service.pump(now + 31);
+    try harness.drainProxy();
+    try testing.expectEqual(@as(usize, 2), harness.sink.countOf(.proxy_status));
+    _ = harness.service.submit(.proxy_refresh_status);
+    try harness.drainProxy();
+    try testing.expectEqual(@as(usize, 3), harness.sink.countOf(.proxy_status));
 }

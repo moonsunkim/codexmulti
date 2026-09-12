@@ -178,14 +178,7 @@ enum DialogModel {
 
     static func removeButtons(_ remove: RemoveFlow, proxyCanRefresh: Bool) -> [Button] {
         var buttons = [Button(.cancel, Copy.cancel, .ghost, intent: .cancel_remove)]
-        if remove.uses_proxy {
-            if remove.pause_requested {
-                buttons.append(Button(.refresh, Copy.refreshDrainStatus, .secondary, enabled: proxyCanRefresh, intent: .refresh_proxy_status))
-                buttons.append(Button(.finish, Copy.finishRemoval, .destructive, enabled: remove.can_finish, intent: .finish_mapped_remove))
-            } else {
-                buttons.append(Button(.confirm, Copy.removeAndSync, .destructive, intent: .confirm_remove))
-            }
-        } else {
+        if !remove.uses_proxy || !remove.pause_requested {
             buttons.append(Button(.confirm, Copy.removeConfirm, .destructive, intent: .confirm_remove))
         }
         return buttons

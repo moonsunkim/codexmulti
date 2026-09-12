@@ -56,9 +56,9 @@ final class TrayMenuBridgeTests: XCTestCase {
         XCTAssertEqual(lines(menu).map(\.title), view.tray.items.filter { !$0.separator && !isProviderHeader($0, view) }.map(\.label),
                        "every non-separator item but the provider header, verbatim, in the core's order")
         XCTAssertEqual(describe(menu), [
+            "Accounts…|on|-|-|-",
             "Refresh All Accounts|on|-|-|-",
-            "\(view.tray.items[1].label)|off|-|-|-",
-            "Failover last seen · Active active · 1 cooling · 2026-Jul-25 02:59 UTC|off|-|-|-",
+            "\(view.tray.items[2].label)|off|-|-|-",
             "---",
             "active@example.com — 73% · in 3d 0h|on|-|-|submenu",
             "ready@example.com — 73% · in 3d 0h|on|-|-|submenu",
@@ -69,6 +69,9 @@ final class TrayMenuBridgeTests: XCTestCase {
             "Quit|on|-|-|-",
         ])
         XCTAssertEqual(lines(menu).last?.keyEquivalent, "q")
+        if let settings = lines(menu).first(where: { $0.title == "Settings…" }) {
+            XCTAssertEqual(settings.keyEquivalent, ",")
+        }
         XCTAssertTrue(sink.intents.isEmpty, "building and updating the menu submits nothing (P-64)")
 
 
@@ -84,7 +87,7 @@ final class TrayMenuBridgeTests: XCTestCase {
             "Refresh Usage|on|-|-|-",
             "Active in failover proxy|off|checked|-|-",
             "---",
-            "Open in Settings…|on|-|-|-",
+            "Show Account…|on|-|-|-",
         ])
 
 
@@ -109,7 +112,8 @@ final class TrayMenuBridgeTests: XCTestCase {
         try fire(try XCTUnwrap(ready.items.first { $0.title == "Refresh Usage" }))
         XCTAssertEqual(sink.intents, [.refresh_account_id(account_id: "acct-codex-ready")])
         try fire(try XCTUnwrap(ready.items.first { $0.title == "Use in failover proxy…" }))
-        try fire(try XCTUnwrap(ready.items.first { $0.title == "Open in Settings…" }))
+        try fire(try XCTUnwrap(ready.items.first { $0.title == "Show Account…" }))
+        try fire(try XCTUnwrap(lines(menu).first { $0.title == "Accounts…" }))
         try fire(try XCTUnwrap(lines(menu).first { $0.title == "Refresh All Accounts" }))
         try fire(try XCTUnwrap(lines(menu).first { $0.title == "Settings…" }))
         try fire(try XCTUnwrap(lines(menu).first { $0.title == "Quit" }))
@@ -117,6 +121,7 @@ final class TrayMenuBridgeTests: XCTestCase {
             .refresh_account_id(account_id: "acct-codex-ready"),
             .begin_failover_switch_id(account_id: "acct-codex-ready"),
             .open_account(account_id: "acct-codex-ready"),
+            .tab_accounts,
             .refresh_all,
             .open_details,
             .quit_app,
@@ -128,8 +133,8 @@ final class TrayMenuBridgeTests: XCTestCase {
     func testEmptyTrayRendersDisabledRefreshAndTheEmptyLine() throws {
         let menu = try menu("empty-attached", sink: Sink())
         XCTAssertEqual(describe(menu), [
+            "Accounts…|on|-|-|-",
             "Refresh All Accounts|off|-|-|-",
-            "Failover status unknown — open Settings to check|off|-|-|-",
             "---",
             "No saved accounts|off|-|-|-",
             "---",
@@ -152,7 +157,7 @@ final class TrayMenuBridgeTests: XCTestCase {
             "---",
             "Refresh Usage|off|-|-|-",
             "---",
-            "Open in Settings…|on|-|-|-",
+            "Show Account…|on|-|-|-",
         ], "Refresh Usage disabled when the row cannot refresh")
     }
 
@@ -164,7 +169,7 @@ final class TrayMenuBridgeTests: XCTestCase {
         var view = try XCTUnwrap(root["view"] as? [String: Any])
         var tray = try XCTUnwrap(view["tray"] as? [String: Any])
         tray["refresh_usage_label"] = "Refresh Usage (projected)"
-        tray["open_in_settings_label"] = "Open in Settings… (projected)"
+        tray["open_in_settings_label"] = "Show Account… (projected)"
         view["tray"] = tray
         root["view"] = view
         let store = CoreStore()
@@ -175,7 +180,7 @@ final class TrayMenuBridgeTests: XCTestCase {
         let personal = try XCTUnwrap(lines(menu).first { $0.title.hasPrefix("Codex Personal") }?.submenu)
         personal.update()
         XCTAssertEqual(describe(personal)[4], "Refresh Usage (projected)|on|-|-|-")
-        XCTAssertEqual(describe(personal)[6], "Open in Settings… (projected)|on|-|-|-")
+        XCTAssertEqual(describe(personal)[6], "Show Account… (projected)|on|-|-|-")
     }
 
 
@@ -214,6 +219,9 @@ final class TrayMenuBridgeTests: XCTestCase {
         let menu = try menu(nil, sink: Sink())
         XCTAssertEqual(describe(menu), ["Starting…|off|-|-|-", "---", "Quit|on|-|-|-"])
         XCTAssertEqual(lines(menu).last?.keyEquivalent, "q")
+        if let settings = lines(menu).first(where: { $0.title == "Settings…" }) {
+            XCTAssertEqual(settings.keyEquivalent, ",")
+        }
     }
 
 

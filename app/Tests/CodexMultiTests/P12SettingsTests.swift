@@ -24,12 +24,14 @@ final class P12SettingsTests: XCTestCase {
 
     func testF18LanguageRowRendersEveryCatalogLanguageAndUsesTheSystemPreference() throws {
         let settings = try projection("settings-appearance-system").view.settings
-        XCTAssertEqual(settings.language_supported, [.system, .en, .ko])
+        XCTAssertEqual(settings.language_supported, [.system, .en, .ko, .ja])
         XCTAssertEqual(PreferencesModel.Row.language.label(settings: settings), settings.language_label)
-        XCTAssertEqual(PreferencesModel.languageOptions(settings: settings).map(\.label), ["System", "English", "한국어"])
+        XCTAssertEqual(PreferencesModel.languageOptions(settings: settings).map(\.label), ["System", "English", "한국어", "日本語"])
         XCTAssertEqual(PreferencesModel.languageIntent(.ko, system: .en), .set_language(value: .ko, system: .en))
         XCTAssertEqual(SystemLanguageResolver.resolve(["ko-KR", "en-US"]), .ko)
         XCTAssertEqual(SystemLanguageResolver.resolve(["en-US", "ko-KR"]), .en)
+        XCTAssertEqual(SystemLanguageResolver.resolve(["ja-JP", "en-US"]), .ja)
+        XCTAssertEqual(SystemLanguageResolver.resolve(["ja_JP"]), .ja)
     }
 
     func testWholeProxySwitchUsesProjectedStateAndRefusalDetail() throws {
@@ -38,7 +40,7 @@ final class P12SettingsTests: XCTestCase {
         XCTAssertEqual(settings.proxy_enabled_detail_text,
                        "4 proxy request(s) are in flight. The switch will apply when they finish.")
         XCTAssertEqual(FailoverModel.proxyEnabledIntent(false), .set_proxy_enabled(on: false))
-        XCTAssertEqual(Copy.useFailoverProxy, "Use the failover proxy")
+        XCTAssertEqual(Copy.useFailoverProxy, "Use Failover")
     }
 
     func testInjectedLaunchRegistrationReportsSuccessAndFailureAfterPreference() async {

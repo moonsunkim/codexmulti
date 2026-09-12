@@ -6,6 +6,28 @@ import XCTest
 
 @MainActor
 final class WindowPresentationTests: XCTestCase {
+    func testTrayAccountNavigationSelectsAccountsFromSettingsAndAfterWindowReopens() async {
+        let recorder = PresentationRecorder()
+        let router = ShellIntentRouter(
+            core: PresentationRecordingCore(recorder: recorder),
+            launchAtLogin: LaunchAtLoginRegistrar { _ in },
+            presentSettings: { recorder.append("bring-to-front") })
+        var selected: ShellTab = .settings
+        defer { SettingsTabPresenter.shared.unregister() }
+        for intent in [Intent.tab_accounts, .open_account(account_id: "acct-codex-ready")] {
+            SettingsTabPresenter.shared.register { selected = $0 }
+            SettingsTabPresenter.shared.selectSettings()
+            await router.route(intent, origin: .tray)
+            XCTAssertEqual(selected, .accounts)
+            SettingsTabPresenter.shared.unregister()
+            selected = .settings
+            await router.route(intent, origin: .tray)
+            SettingsTabPresenter.shared.register { selected = $0 }
+            XCTAssertEqual(selected, .accounts)
+        }
+        XCTAssertEqual(recorder.events.filter { $0 == "bring-to-front" }.count, 4)
+    }
+
     func testExistingWindowUserOpenForcesTheApplicationAndWindowToTheFrontInOrder() {
         let recorder = PresentationRecorder()
         let window = NSWindow(

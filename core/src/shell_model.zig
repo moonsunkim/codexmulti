@@ -13,7 +13,7 @@ pub const max_effect_text_bytes: usize = 2048;
 pub const starting_text = "Starting…";
 pub const quit_label = "Quit";
 pub const tray_refresh_usage_label = "Refresh Usage";
-pub const tray_open_in_settings_label = "Open in Settings…";
+pub const tray_open_in_settings_label = "Show Account…";
 pub const tray_help_text = "CodexMulti — saved usage and CLI accounts";
 pub const proxy_empty_unattached_text = "Proxy control is not attached.";
 pub const proxy_empty_attached_text = "No proxy accounts have been read yet. Use Refresh failover status in the … menu to read the failover order from the proxy.";
@@ -693,6 +693,12 @@ pub fn pump(model: *Model, now_unix_s: i64) void {
     model.service.pump(now_unix_s);
     model.now_unix_s = @divFloor(now_unix_s, 60) * 60;
     reproject(model);
+    if (model.removeCanFinish()) {
+        const outcome = model.service.submit(.{ .remove_account = model.remove.accountId() });
+        model.notice.setOutcome("Remove", model.remove.label(), outcome);
+        if (outcome.accepted()) model.remove = .{};
+        reproject(model);
+    }
 }
 
 pub fn update(model: *Model, intent: Intent, effects: *Effects) void {

@@ -479,7 +479,7 @@ pub const ViewWire = struct {
     claude_group_summary: []const u8,
     codex_group_summary: []const u8,
     onboarding_visible: bool,
-    onboarding_steps: [3]ui_model.OnboardingStepView,
+    onboarding_steps: [2]ui_model.OnboardingStepView,
     onboarding_next_action: ?ui_model.OnboardingNextAction,
     toolbar_status_text: []const u8,
     busy_suffix_text: []const u8,
@@ -795,9 +795,9 @@ pub fn viewToWire(
         .tray = TrayWire{
             .title = "",
             .items = tray_items,
-            .refresh_usage_label = shell.tray_refresh_usage_label,
-            .open_in_settings_label = shell.tray_open_in_settings_label,
-            .help_text = shell.tray_help_text,
+            .refresh_usage_label = @import("strings.zig").catalog(v.resolved_language).text(.tray_refresh_usage),
+            .open_in_settings_label = @import("strings.zig").catalog(v.resolved_language).text(.tray_open_in_settings),
+            .help_text = @import("strings.zig").catalog(v.resolved_language).text(.tray_help),
         },
     };
 }

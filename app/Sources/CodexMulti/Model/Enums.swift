@@ -15,7 +15,7 @@ enum Appearance: String, Codable, Sendable, Equatable, CaseIterable { case syste
 enum CodexUsageWindow: String, Codable, Sendable, Equatable, CaseIterable { case auto, weekly, session }
 
 
-enum Language: String, Codable, Sendable, Equatable, CaseIterable { case system, en, ko }
+enum Language: String, Codable, Sendable, Equatable, CaseIterable { case system, en, ko, ja }
 
 
 enum AutoUpdateState: String, Codable, Sendable, Equatable, CaseIterable { case unavailable }

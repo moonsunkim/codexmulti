@@ -117,8 +117,9 @@ final class UnifiedScreenTests: XCTestCase {
         XCTAssertNil(AppearanceResolver.resolve(.system, system: .dark, contrast: .standard).name)
         XCTAssertEqual(AppearanceResolver.resolve(.system, system: .dark, contrast: .standard).tone.paneMaterial,
                        Tone.dark.paneMaterial)
-        XCTAssertEqual(SystemAppearance.current, NSApp?.effectiveAppearance
-            .bestMatch(from: [.aqua, .darkAqua]) == .darkAqua ? ColorScheme.dark : .light)
+        XCTAssertNil(AppearanceResolver.preferredScheme(.system))
+        XCTAssertEqual(AppearanceResolver.preferredScheme(.light), .light)
+        XCTAssertEqual(AppearanceResolver.preferredScheme(.dark), .dark)
         XCTAssertEqual(AppearanceResolver.resolve(.light, system: .dark, contrast: .standard).name, .aqua)
         XCTAssertEqual(AppearanceResolver.resolve(.dark, system: .light, contrast: .standard).name, .darkAqua)
         XCTAssertEqual(PreferencesModel.appearanceIntent(.dark), .set_appearance(value: .dark))
@@ -127,12 +128,12 @@ final class UnifiedScreenTests: XCTestCase {
         XCTAssertEqual(SettingsWindowScene.id, "main")
     }
 
-    func testSettingsRegroupingPreservesEveryRowAndAssignsExpectedSection() throws {
+    func testSettingsExposeOneFailoverSwitchWithoutInternalControls() throws {
         let settings = try projection("settings-appearance-system").view.settings
         let previouslyRenderedLabels: Set<String> = [
             Copy.launchAtLogin, Copy.autoRefresh, Copy.theme, settings.language_label,
             settings.codex_usage_window_label, settings.codex_show_model_limits_label,
-            Copy.useFailoverProxy, Copy.advancedProxyControls, Copy.factStatus, Copy.codexRouting,
+            Copy.useFailoverProxy,
             Copy.version,
         ]
         let regroupedLabels = PreferencesModel.sectionLayout.flatMap(\.rows).map { $0.label(settings: settings) }
@@ -145,7 +146,7 @@ final class UnifiedScreenTests: XCTestCase {
             .init(id: .system, rows: [.launchAtLogin, .autoRefresh, .theme, .language]),
             .init(id: .codex, rows: [.codexUsageWindow, .codexShowModelLimits]),
             .init(id: .proxy, rows: [
-                .useFailoverProxy, .advancedProxyControls, .proxyServiceStatus, .codexRouting,
+                .useFailoverProxy,
             ]),
             .init(id: .about, rows: [.version]),
         ])
@@ -212,8 +213,6 @@ final class UnifiedScreenTests: XCTestCase {
         XCTAssertTrue(scene.contains(".keyboardShortcut(\",\", modifiers: .command)"),
                       "Command-, must keep selecting the Settings tab")
         XCTAssertFalse(try source("Tray/TrayMenu.swift").contains("openSettings"))
-        XCTAssertFalse(main.contains("preferredColorScheme"),
-                       "the window appearance, not a SwiftUI preference, owns explicit schemes")
         XCTAssertFalse(try source("Dialogs/DialogSheet.swift").contains("preferredColorScheme"),
                        "sheets inherit the configured window")
     }

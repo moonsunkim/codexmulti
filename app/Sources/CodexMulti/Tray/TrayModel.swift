@@ -111,6 +111,7 @@ enum TrayModel {
     static func intent(for command: String) -> Intent? {
         switch command {
         case "tray.refresh_all": .refresh_all
+        case "tray.open_accounts": .tab_accounts
         case "tray.open_details": .open_details
         case "tray.quit": .quit_app
         default:

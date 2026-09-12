@@ -146,7 +146,7 @@ final class FailoverTabTests: XCTestCase {
         let mismatch = try fixture("proxy-config-mismatch").view
         XCTAssertEqual(mismatch.proxy_sync_state, .needed)
         XCTAssertEqual(FailoverModel.settingsSummary(mismatch, expanded: false),
-                       "Account changes reach the proxy on the next refresh.")
+                       "Account changes are being applied automatically.")
         XCTAssertEqual(FailoverModel.settingsSummary(mismatch, expanded: true), "127.0.0.1:8787 · CLI path set · config not confirmed")
         let synced = try view(["proxy_sync_state": "synced", "proxy_detail_text": "Saved accounts and proxy mappings are synchronized."])
         XCTAssertEqual(FailoverModel.settingsSummary(synced, expanded: false), "127.0.0.1:8787 · CLI path set · config matches")

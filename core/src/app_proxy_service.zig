@@ -16,6 +16,7 @@ pub const SyncState = ui_model.ProxySyncState;
 pub const Attempt = struct { at_unix_s: i64, result: AttemptResult };
 
 pub const Settings = struct {
+    enabled: ?bool = null,
     base_url: proxy_control.BaseUrl = proxy_control.BaseUrl.init(store.default_proxy_base_url) catch unreachable,
 
     cli_path: ?runtime_paths.Path = null,
@@ -66,6 +67,20 @@ pub const Controller = struct {
     removal_pause_account: proxy_control.BoundedText(account_registry.max_id_bytes) = .{},
     removal_pause_set: bool = false,
     removal_pause_revision: u64 = 0,
+    background_refresh: bool = false,
+    last_status_persist_at: ?i64 = null,
+    observed_registry_fingerprint: ?proxy_control.BoundedText(store.max_proxy_fingerprint_bytes) = null,
+
+    pub fn observeRegistry(self: *Controller, core: *const coordinator.Coordinator) void {
+        const current = computeFingerprint(core);
+        if (self.observed_registry_fingerprint) |previous| {
+            if (!previous.eql(current.slice())) self.recordRegistryChange();
+        }
+        self.observed_registry_fingerprint = current;
+        if (self.state.last_success) |*status| {
+            if (self.state.sync_state != .failed and !mappingMatchesRegistry(core, status)) self.recordRegistryChange();
+        }
+    }
 
     pub fn statePtr(self: *const Controller) *const State {
         return &self.state;
@@ -81,6 +96,15 @@ pub const Controller = struct {
 
     pub fn recordRegistryChange(self: *Controller) void {
         self.state.sync_state = .needed;
+    }
+
+    pub fn setEnabled(self: *Controller, enabled: ?bool, drivers: Drivers) !void {
+        const previous = self.state.settings.enabled;
+        self.state.settings.enabled = enabled;
+        self.persistSettings(drivers) catch |err| {
+            self.state.settings.enabled = previous;
+            return err;
+        };
     }
 
     pub fn allowsRemoval(self: *const Controller, account_id: []const u8) bool {
@@ -109,6 +133,7 @@ pub const Controller = struct {
         } };
         store.validateProxySettings(document) catch return .rejected_not_allowed;
         self.state.settings = .{
+            .enabled = self.state.settings.enabled,
             .base_url = proxy_control.BaseUrl.init(draft.base_url) catch return .rejected_not_allowed,
             .cli_path = if (draft.cli_path.len == 0) null else (runtime_paths.Path.init(draft.cli_path) catch return .rejected_not_allowed),
             .config_path = proxy_control.BoundedText(runtime_paths.max_path_bytes).init(draft.config_path) catch return .rejected_not_allowed,
@@ -154,6 +179,7 @@ pub const Controller = struct {
         now_unix_s: i64,
     ) ui_model.CommandOutcome {
         if (self.busy()) return .rejected_busy;
+        self.background_refresh = false;
         var proxy_name: []const u8 = "";
         if (account_id) |id| {
             if (self.state.reachability != .reachable or !self.state.config_path_matches) return .rejected_not_allowed;
@@ -401,18 +427,21 @@ pub const Controller = struct {
                 return;
             };
             const current = computeFingerprint(core);
-            if (!admitted.eql(current.slice()) or !mappingMatchesRegistry(core, &mapped)) {
+            if (!admitted.eql(current.slice())) {
+                self.state.sync_state = .needed;
+            } else if (!mappingMatchesRegistry(core, &mapped)) {
                 self.state.sync_state = .failed;
                 self.recordFailure(.mapping_failed, now_unix_s, drivers);
                 return;
+            } else {
+                self.state.settings.last_synced_fingerprint = current;
+                self.state.sync_state = .synced;
+                self.persistSettings(drivers) catch {
+                    self.state.sync_state = .failed;
+                    self.recordFailure(.persist_failed, now_unix_s, drivers);
+                    return;
+                };
             }
-            self.state.settings.last_synced_fingerprint = current;
-            self.state.sync_state = .synced;
-            self.persistSettings(drivers) catch {
-                self.state.sync_state = .failed;
-                self.recordFailure(.persist_failed, now_unix_s, drivers);
-                return;
-            };
         } else if (self.state.settings.last_synced_fingerprint) |fingerprint| {
             const current = computeFingerprint(core);
             self.state.sync_state = if (fingerprint.eql(current.slice()) and mappingMatchesRegistry(core, &mapped)) .synced else .needed;
@@ -451,6 +480,7 @@ pub const Controller = struct {
                 .node_path = if (self.state.settings.node_path) |*path| path.slice() else null,
             },
             .last_synced_accounts_fingerprint = fingerprint,
+            .enabled = self.state.settings.enabled,
         };
         try store.validateProxySettings(document);
         const bytes = try store.encode(drivers.allocator, document);
@@ -458,7 +488,13 @@ pub const Controller = struct {
         try drivers.sink.write(.proxy_settings, bytes);
     }
 
-    fn persistStatus(self: *const Controller, drivers: Drivers) !void {
+    fn persistStatus(self: *Controller, drivers: Drivers) !void {
+        const now_unix_s = if (self.state.last_attempt) |attempt| attempt.at_unix_s else 0;
+        if (self.background_refresh) {
+            if (self.last_status_persist_at) |at| {
+                if (now_unix_s >= at and now_unix_s - at < 30) return;
+            }
+        }
         var accounts: [account_registry.max_accounts]store.ProxyStoredAccount = undefined;
         var count: usize = 0;
         var cooldown_count: u8 = 0;
@@ -497,6 +533,7 @@ pub const Controller = struct {
         const bytes = try store.encode(drivers.allocator, document);
         defer drivers.allocator.free(bytes);
         try drivers.sink.write(.proxy_status, bytes);
+        self.last_status_persist_at = now_unix_s;
     }
 
     pub fn shutdown(self: *Controller, io: std.Io) void {
@@ -508,6 +545,7 @@ pub const Controller = struct {
         if (settings) |*loaded| {
             defer loaded.deinit();
             const value = loaded.value;
+            self.state.settings.enabled = value.enabled;
             self.state.settings.base_url = proxy_control.BaseUrl.init(value.proxy.base_url) catch self.state.settings.base_url;
             self.state.settings.cli_path = if (value.proxy.cli_path.len == 0)
                 null

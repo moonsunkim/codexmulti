@@ -204,18 +204,18 @@ final class AccountsTabTests: XCTestCase {
         let empty = try fixture("empty-attached")
         XCTAssertTrue(empty.view.onboarding_visible)
         XCTAssertEqual(empty.view.onboarding_steps.map(\.title), [
-            "Add a Codex account", "Install the proxy service", "Turn on Codex routing",
+            "Add a Codex account", "Turn on Failover",
         ])
-        XCTAssertEqual(empty.view.onboarding_steps.map(\.completed), [false, false, false])
+        XCTAssertEqual(empty.view.onboarding_steps.map(\.completed), [false, false])
         XCTAssertEqual(OnboardingChecklistModel.intent(empty.view.onboarding_next_action), .begin_add_account)
 
         let accounts = try fixture("two-accounts-fresh")
-        XCTAssertEqual(accounts.view.onboarding_steps.map(\.completed), [true, false, false])
-        XCTAssertEqual(accounts.view.onboarding_next_action?.label, "Install & Start")
-        XCTAssertEqual(OnboardingChecklistModel.intent(accounts.view.onboarding_next_action), .install_proxy_service)
+        XCTAssertEqual(accounts.view.onboarding_steps.map(\.completed), [true, false])
+        XCTAssertEqual(accounts.view.onboarding_next_action?.label, "Turn on Failover")
+        XCTAssertEqual(OnboardingChecklistModel.intent(accounts.view.onboarding_next_action), .set_proxy_enabled(on: true))
 
         let routing = try fixture("proxy-service-running")
-        XCTAssertEqual(routing.view.onboarding_steps.map(\.completed), [false, true, false])
+        XCTAssertEqual(routing.view.onboarding_steps.map(\.completed), [false, false])
         XCTAssertEqual(OnboardingChecklistModel.intent(routing.view.onboarding_next_action), .begin_add_account)
 
         let complete = try fixture("unified-proxy-order")
@@ -229,9 +229,9 @@ final class AccountsTabTests: XCTestCase {
     func testOnboardingRepairsAnInstalledUnreachableProxy() throws {
         let projection = try fixture("two-accounts-fresh")
         let action = try XCTUnwrap(projection.view.onboarding_next_action)
-        XCTAssertEqual(action.kind, .install_proxy_service)
-        XCTAssertEqual(OnboardingChecklistModel.intent(action, serviceState: .unreachable), .repair_proxy_service)
-        XCTAssertEqual(OnboardingChecklistModel.intent(action, serviceState: .installed_stale), .repair_proxy_service)
+        XCTAssertEqual(action.kind, .enable_codex_routing)
+        XCTAssertEqual(OnboardingChecklistModel.intent(action, serviceState: .unreachable), .set_proxy_enabled(on: true))
+        XCTAssertEqual(OnboardingChecklistModel.intent(action, serviceState: .installed_stale), .set_proxy_enabled(on: true))
     }
 
     func testShellCopyUsesCoreKoreanCatalogAndChangesImmediately() {
@@ -241,6 +241,16 @@ final class AccountsTabTests: XCTestCase {
         XCTAssertEqual(Copy.theme, "테마")
         XCTAssertEqual(Copy.rowMenuAccessibility, "더 많은 작업")
         XCTAssertEqual(Copy.repairProxyService, "복구")
+        Copy.setLanguage(.en)
+        XCTAssertEqual(Copy.tabSettings, "Settings")
+    }
+
+    func testJapaneseCopyChangesImmediatelyAndReturnsToEnglish() {
+        Copy.setLanguage(.ja)
+        defer { Copy.setLanguage(.en) }
+        XCTAssertEqual(Copy.tabSettings, "設定")
+        XCTAssertEqual(Copy.theme, "テーマ")
+        XCTAssertEqual(Copy.useFailoverProxy, "Failoverを使用")
         Copy.setLanguage(.en)
         XCTAssertEqual(Copy.tabSettings, "Settings")
     }

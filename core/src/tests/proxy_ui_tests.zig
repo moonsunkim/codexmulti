@@ -60,7 +60,7 @@ test "proxy projection remains passive across initial projection tray expansion 
     for (wire.tray.items) |item| {
         if (std.mem.startsWith(u8, item.label, "Failover last seen")) saw_proxy = true;
     }
-    try testing.expect(saw_proxy);
+    try testing.expect(!saw_proxy);
     try testing.expectEqual(@as(usize, 0), service.submissions);
 }
 
@@ -342,11 +342,11 @@ test "an unreachable proxy raises a banner with retry and the header pill says s
     shell.reproject(model);
     try testing.expect(model.proxyShowsBanner());
     try testing.expectEqualStrings(
-        "Account changes reach the proxy on the next refresh.",
+        "Account changes are being applied automatically.",
         model.proxyBannerText(),
     );
     try testing.expectEqualStrings(
-        "Account changes reach the proxy on the next refresh.",
+        "Account changes are being applied automatically.",
         model.view.proxy_detail_text,
     );
     try testing.expect(model.proxyPillOk());
@@ -366,7 +366,7 @@ test "busy proxy sync copy says account changes will be retried" {
     model.service = service.port();
     shell.reproject(model);
 
-    const expected = "The proxy was busy · account changes will be retried on the next refresh.";
+    const expected = "Account changes will be applied automatically after current requests finish.";
     try testing.expectEqualStrings(expected, model.view.proxy_detail_text);
     try testing.expectEqualStrings(expected, model.proxyBannerText());
 }

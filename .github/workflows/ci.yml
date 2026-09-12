@@ -103,7 +103,7 @@ jobs:
         run: ./app/scripts/build-app.sh
       - name: Test Swift shell
         working-directory: app
-        run: swift test
+        run: CODEXMULTI_TEST_HEADLESS=1 swift test
       - name: Verify distribution scripts and bundle
         run: |
           ./app/scripts/tests/build-version.test.sh

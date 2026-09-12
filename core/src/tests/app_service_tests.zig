@@ -1275,8 +1275,8 @@ test "C9 refresh defers a busy config reload until the next refresh without retr
     try testing.expectEqual(app_service.ProxySyncState.needed, harness.service.proxyState().sync_state);
     const view = try projectView(harness.service);
     defer testing.allocator.destroy(view);
-    try testing.expect(std.mem.indexOf(u8, view.proxy_detail_text, "next refresh") != null);
-    try testing.expect(std.mem.indexOf(u8, view.proxy_banner_text, "next refresh") != null);
+    try testing.expect(std.mem.indexOf(u8, view.proxy_detail_text, "automatically") != null);
+    try testing.expect(std.mem.indexOf(u8, view.proxy_banner_text, "automatically") != null);
 }
 
 test "C9 cooldown reconciliation accepts a proxy status read completed after fresh usage" {

@@ -1,3 +1,4 @@
+import AppKit
 import Foundation
 import SwiftUI
 
@@ -14,7 +15,7 @@ enum ShellRoute {
 
     static func requiresSettingsPresentation(_ intent: Intent) -> Bool {
         switch intent {
-        case .open_details, .open_account,
+        case .open_details, .open_account, .tab_accounts,
              .begin_proxy_switch, .begin_clear_cooldown,
              .begin_failover_switch, .begin_failover_switch_id,
              .begin_clear_cooldown_account,
@@ -39,9 +40,13 @@ final class SettingsTabPresenter {
         selectSettings()
     }
 
-    func selectSettings() {
-        if let select { select(.settings) }
-        else { pending = .settings }
+    func selectSettings() { selectTab(.settings) }
+
+    func selectAccounts() { selectTab(.accounts) }
+
+    private func selectTab(_ tab: ShellTab) {
+        if let select { select(tab) }
+        else { pending = tab }
     }
 
     func register(select: @escaping (ShellTab) -> Void) {
@@ -127,7 +132,7 @@ enum PreferencesModel {
         Section(id: .system, rows: [.launchAtLogin, .autoRefresh, .theme, .language]),
         Section(id: .codex, rows: [.codexUsageWindow, .codexShowModelLimits]),
         Section(id: .proxy, rows: [
-            .useFailoverProxy, .advancedProxyControls, .proxyServiceStatus, .codexRouting,
+            .useFailoverProxy,
         ]),
         Section(id: .about, rows: [.version]),
     ]
@@ -206,6 +211,7 @@ enum PreferencesModel {
             case .system: label = settings.language_label_system
             case .en: label = settings.language_label_english
             case .ko: label = settings.language_label_korean
+            case .ja: label = settings.language_label_japanese ?? Copy.text("language_japanese", fallback: "日本語")
             }
             return LanguageOption(language: language, label: label)
         }
@@ -218,7 +224,9 @@ enum SystemLanguageResolver {
     static func resolve(_ preferredLanguages: [String]) -> Language {
         guard let first = preferredLanguages.first else { return .en }
         let identifier = first.lowercased().replacingOccurrences(of: "_", with: "-")
-        return identifier == "ko" || identifier.hasPrefix("ko-") ? .ko : .en
+        if identifier == "ko" || identifier.hasPrefix("ko-") { return .ko }
+        if identifier == "ja" || identifier.hasPrefix("ja-") { return .ja }
+        return .en
     }
 }
 
@@ -497,35 +505,73 @@ struct AppearanceSegments: View {
 
 struct LanguageSettingsRow: View {
     let settings: SettingsView
-    @Environment(\.tone) private var tone
     @Environment(\.submit) private var submit
 
     var body: some View {
         SettingsRow(label: settings.language_label) {
-            HStack(spacing: 0) {
-                ForEach(PreferencesModel.languageOptions(settings: settings)) { option in
-                    Button {
-                        guard option.language != settings.language else { return }
-                        submit(PreferencesModel.languageIntent(option.language, system: SystemLanguageResolver.current))
-                    } label: {
-                        Text(verbatim: option.label)
-                            .font(option.language == settings.language ? Face.bandStrong : Face.band)
-                            .foregroundStyle(option.language == settings.language ? tone.text : tone.text2)
-                            .frame(width: Grid.appearanceSegmentWidth, height: Grid.settingsSegmentHeight)
-                            .background {
-                                if option.language == settings.language { Capsule().fill(tone.segment) }
-                            }
-                            .contentShape(Capsule())
-                    }
-                    .buttonStyle(.plain)
-                }
+            LanguageSelect(
+                options: PreferencesModel.languageOptions(settings: settings),
+                selection: settings.language,
+                label: settings.language_label
+            ) { language in
+                guard language != settings.language else { return }
+                submit(PreferencesModel.languageIntent(language, system: SystemLanguageResolver.current))
             }
-            .padding(Grid.settingsSegmentPadding)
-            .background(Capsule().fill(tone.pill))
-            .accessibilityElement(children: .ignore)
-            .accessibilityLabel(settings.language_label)
-            .accessibilityValue(PreferencesModel.languageOptions(settings: settings)
-                .first(where: { $0.language == settings.language })?.label ?? settings.language_label_system)
+            .frame(width: Grid.languageMenuWidth, height: Grid.fieldHeight)
+        }
+    }
+}
+
+private struct LanguageSelect: NSViewRepresentable {
+    let options: [PreferencesModel.LanguageOption]
+    let selection: Language
+    let label: String
+    let onSelection: (Language) -> Void
+
+    func makeNSView(context: Context) -> NSPopUpButton {
+        let button = NSPopUpButton(frame: .zero, pullsDown: false)
+        button.controlSize = .regular
+        button.setContentHuggingPriority(.defaultLow, for: .horizontal)
+        button.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+        button.target = context.coordinator
+        button.action = #selector(Coordinator.selectLanguage(_:))
+        return button
+    }
+
+    func updateNSView(_ button: NSPopUpButton, context: Context) {
+        context.coordinator.onSelection = onSelection
+        if button.itemTitles != options.map(\.label) {
+            button.removeAllItems()
+            for option in options {
+                button.addItem(withTitle: option.label)
+                button.lastItem?.representedObject = option.language.rawValue
+            }
+        }
+        if let index = options.firstIndex(where: { $0.language == selection }) {
+            button.selectItem(at: index)
+        }
+        button.setAccessibilityLabel(label)
+    }
+
+    func sizeThatFits(_ proposal: ProposedViewSize, nsView: NSPopUpButton, context: Context) -> CGSize? {
+        CGSize(width: proposal.width ?? Grid.languageMenuWidth, height: Grid.fieldHeight)
+    }
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator(onSelection: onSelection)
+    }
+
+    final class Coordinator: NSObject {
+        var onSelection: (Language) -> Void
+
+        init(onSelection: @escaping (Language) -> Void) {
+            self.onSelection = onSelection
+        }
+
+        @objc func selectLanguage(_ sender: NSPopUpButton) {
+            guard let raw = sender.selectedItem?.representedObject as? String,
+                  let language = Language(rawValue: raw) else { return }
+            onSelection(language)
         }
     }
 }

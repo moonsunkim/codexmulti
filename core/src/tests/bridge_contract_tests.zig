@@ -195,7 +195,7 @@ test "cm.bridge schema 1 projects Swift shell wording additions and enabled beha
     try testing.expectEqualStrings("12m ago", view.get("inspector").?.object.get("updated_ago_text").?.string);
     const tray = view.get("tray").?.object;
     try testing.expectEqualStrings("Refresh Usage", tray.get("refresh_usage_label").?.string);
-    try testing.expectEqualStrings("Open in Settings…", tray.get("open_in_settings_label").?.string);
+    try testing.expectEqualStrings("Show Account…", tray.get("open_in_settings_label").?.string);
     try testing.expectEqualStrings("CodexMulti — saved usage and CLI accounts", tray.get("help_text").?.string);
 
     model.view.finish(.{ .selected = 1 });
@@ -581,7 +581,7 @@ fn expectedViewWire(
             .title = "",
             .items = tray_items,
             .refresh_usage_label = "Refresh Usage",
-            .open_in_settings_label = "Open in Settings…",
+            .open_in_settings_label = "Show Account…",
             .help_text = "CodexMulti — saved usage and CLI accounts",
         },
     };
@@ -1164,7 +1164,6 @@ test "source-to-wire sibling fields use distinguishable sentinels and complement
     model.view.onboarding_visible = false;
     model.view.onboarding_steps = .{
         .{ .kind = .add_account, .title = "view:onboarding_step_1", .completed = true },
-        .{ .kind = .install_proxy_service, .title = "view:onboarding_step_2" },
         .{ .kind = .enable_codex_routing, .title = "view:onboarding_step_3" },
     };
     model.view.onboarding_next_action = .{

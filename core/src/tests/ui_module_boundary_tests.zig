@@ -67,51 +67,26 @@ test "ui facade preserves extracted contract and projection types" {
     );
 }
 
-test "F17 onboarding checklist projects every completion combination and its next action" {
-    const Case = struct {
-        account: bool,
-        service: contracts.ProxyServiceState,
-        routing: contracts.CodexRoutingState,
-        completed: [3]bool,
-        visible: bool,
-        next: ?contracts.OnboardingStepKind,
-    };
-    const cases = [_]Case{
-        .{ .account = false, .service = .not_installed, .routing = .off, .completed = .{ false, false, false }, .visible = true, .next = .add_account },
-        .{ .account = true, .service = .not_installed, .routing = .off, .completed = .{ true, false, false }, .visible = true, .next = .install_proxy_service },
-        .{ .account = false, .service = .running, .routing = .off, .completed = .{ false, true, false }, .visible = true, .next = .add_account },
-        .{ .account = false, .service = .not_installed, .routing = .on, .completed = .{ false, false, true }, .visible = true, .next = .add_account },
-        .{ .account = true, .service = .running, .routing = .off, .completed = .{ true, true, false }, .visible = true, .next = .enable_codex_routing },
-        .{ .account = true, .service = .not_installed, .routing = .on, .completed = .{ true, false, true }, .visible = true, .next = .install_proxy_service },
-        .{ .account = false, .service = .running, .routing = .on, .completed = .{ false, true, true }, .visible = true, .next = .add_account },
-        .{ .account = true, .service = .running, .routing = .on, .completed = .{ true, true, true }, .visible = false, .next = null },
-    };
-
-    for (cases) |case| {
-        var view: projection.ViewState = .{};
-        view.begin(band_now, .{ .connected = true, .accounts = true, .proxy_control = true }, .kst);
-        if (case.account) _ = try view.pushAccount(.{
-            .account_id = "acct-onboarding",
-            .label = "onboarding@example.com",
-            .provider = .codex,
-        });
-        view.applyProxyService(.{
-            .state = case.service,
-            .can_install = case.service == .not_installed and case.account,
-            .routing_state = case.routing,
-        });
-        view.finish(.{});
-
-        try testing.expectEqual(case.visible, view.onboarding_visible);
-        try testing.expectEqualStrings("Add a Codex account", view.onboarding_steps[0].title);
-        try testing.expectEqualStrings("Install the proxy service", view.onboarding_steps[1].title);
-        try testing.expectEqualStrings("Turn on Codex routing", view.onboarding_steps[2].title);
-        for (case.completed, view.onboarding_steps) |expected, step| try testing.expectEqual(expected, step.completed);
-        if (case.next) |expected| {
-            const action = view.onboarding_next_action orelse return error.MissingOnboardingAction;
-            try testing.expectEqual(expected, action.kind);
-            try testing.expectEqual(case.account or expected == .add_account, action.enabled);
-        } else try testing.expect(view.onboarding_next_action == null);
+test "onboarding only asks for an account and the Failover switch" {
+    for ([_]bool{ false, true }) |has_account| {
+        for ([_]bool{ false, true }) |enabled| {
+            var view: projection.ViewState = .{};
+            view.begin(band_now, .{ .connected = true, .accounts = true, .proxy_control = true }, .kst);
+            if (has_account) _ = try view.pushAccount(.{ .account_id = "acct-onboarding", .label = "Fixture", .provider = .codex });
+            view.applyProxyService(.{ .state = .not_installed, .can_install = has_account, .enabled = enabled, .routing_state = if (enabled) .on else .off });
+            view.finish(.{});
+            try testing.expectEqual(!has_account or !enabled, view.onboarding_visible);
+            try testing.expectEqualStrings("Add a Codex account", view.onboarding_steps[0].title);
+            try testing.expectEqualStrings("Turn on Failover", view.onboarding_steps[1].title);
+            try testing.expectEqual(has_account, view.onboarding_steps[0].completed);
+            try testing.expectEqual(enabled, view.onboarding_steps[1].completed);
+            if (!has_account) {
+                try testing.expectEqual(contracts.OnboardingStepKind.add_account, view.onboarding_next_action.?.kind);
+            } else if (!enabled) {
+                try testing.expectEqual(contracts.OnboardingStepKind.enable_codex_routing, view.onboarding_next_action.?.kind);
+                try testing.expect(view.onboarding_next_action.?.enabled);
+            } else try testing.expect(view.onboarding_next_action == null);
+        }
     }
 }
 
@@ -126,7 +101,7 @@ test "F17 conflicting routing projects replacement through the existing routing 
     try testing.expectEqual(contracts.OnboardingStepKind.enable_codex_routing, action.kind);
     try testing.expect(action.enabled);
     try testing.expect(action.replace_conflicting);
-    try testing.expectEqualStrings("Turn on routing", action.label);
+    try testing.expectEqualStrings("Turn on Failover", action.label);
 }
 
 test "ui facade preserves extracted formatting results" {

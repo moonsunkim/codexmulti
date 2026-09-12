@@ -60,12 +60,14 @@ test "the tray stays inside the 32-item bound and always keeps its actions" {
     var items: [ui_model.max_tray_items]ui_model.TrayItem = @splat(.{});
     const count = ui_model.buildTray(&model.view, &items);
     try testing.expect(count <= ui_model.max_tray_items);
-    try testing.expectEqualStrings("Refresh All Accounts", items[0].label);
-    try testing.expectEqualStrings(ui_model.tray_command_refresh_all, items[0].command);
+    try testing.expectEqualStrings("Accounts…", items[0].label);
+    try testing.expectEqualStrings("tray.open_accounts", items[0].command);
+    try testing.expectEqualStrings("Refresh All Accounts", items[1].label);
+    try testing.expectEqualStrings(ui_model.tray_command_refresh_all, items[1].command);
     try testing.expectEqualStrings("Settings…", items[count - 2].label);
     try testing.expectEqualStrings("Quit", items[count - 1].label);
     try testing.expect(items[count - 3].separator);
-    try testing.expect(items[0].enabled);
+    try testing.expect(items[1].enabled);
 
     var account_rows: usize = 0;
     for (items[0..count]) |item| {
@@ -99,16 +101,16 @@ test "the tray gives every Codex account one complete provider-grouped native ro
 
     var items: [ui_model.max_tray_items]ui_model.TrayItem = @splat(.{});
     const count = ui_model.buildTray(&model.view, &items);
-    try testing.expectEqual(@as(usize, 7), count);
-    try testing.expectEqualStrings("Refresh All Accounts", items[0].label);
-    try testing.expect(items[1].separator);
-    try testing.expectEqualStrings("CODEX ACCOUNTS", items[2].label);
-    try testing.expectEqualStrings("Codex Personal — 81% · in 2h 0m", items[3].label);
-    try testing.expect(std.mem.startsWith(u8, items[3].command, ui_model.tray_command_open_account_prefix));
-    try testing.expect(items[3].enabled);
-    try testing.expect(items[4].separator);
-    try testing.expectEqualStrings("Settings…", items[5].label);
-    try testing.expectEqualStrings("Quit", items[6].label);
+    try testing.expectEqual(@as(usize, 8), count);
+    try testing.expectEqualStrings("Refresh All Accounts", items[1].label);
+    try testing.expect(items[2].separator);
+    try testing.expectEqualStrings("CODEX ACCOUNTS", items[3].label);
+    try testing.expectEqualStrings("Codex Personal — 81% · in 2h 0m", items[4].label);
+    try testing.expect(std.mem.startsWith(u8, items[4].command, ui_model.tray_command_open_account_prefix));
+    try testing.expect(items[4].enabled);
+    try testing.expect(items[5].separator);
+    try testing.expectEqualStrings("Settings…", items[6].label);
+    try testing.expectEqualStrings("Quit", items[7].label);
 
     for (items[0..count]) |item| {
         try testing.expect(std.mem.indexOf(u8, item.command, "switch") == null);
@@ -128,7 +130,7 @@ test "the bridge projects the native tray submenu labels" {
     const view_wire = projectedView(model, items[0..count]);
     const shell_wire = bridge.shellToWire(model);
     try testing.expectEqualStrings("Refresh Usage", view_wire.tray.refresh_usage_label);
-    try testing.expectEqualStrings("Open in Settings…", view_wire.tray.open_in_settings_label);
+    try testing.expectEqualStrings("Show Account…", view_wire.tray.open_in_settings_label);
     try testing.expectEqualStrings("Quit", shell_wire.quit_label);
 }
 
@@ -168,7 +170,7 @@ test "the tray disables refresh all when no enabled account exists" {
 
     var items: [ui_model.max_tray_items]ui_model.TrayItem = @splat(.{});
     var count = ui_model.buildTray(&model.view, &items);
-    try testing.expect(!items[0].enabled);
+    try testing.expect(!items[1].enabled);
 
     var accounts = [_]RecordingService.Account{.{ .fact = claudeFact() }};
     accounts[0].fact.enabled = false;
@@ -177,7 +179,7 @@ test "the tray disables refresh all when no enabled account exists" {
     shell.reproject(model);
 
     count = ui_model.buildTray(&model.view, &items);
-    try testing.expect(!items[0].enabled);
+    try testing.expect(!items[1].enabled);
 }
 
 test "a tray that cannot hold every account truncates deterministically" {
@@ -204,7 +206,7 @@ test "a tray that cannot hold every account truncates deterministically" {
 
     var summary_rows: usize = 0;
     for (items[0..count]) |item| {
-        if (std.mem.indexOf(u8, item.label, "more accounts in Settings") != null) summary_rows += 1;
+        if (std.mem.indexOf(u8, item.label, "More Accounts") != null) summary_rows += 1;
     }
     try testing.expectEqual(@as(usize, 1), summary_rows);
 

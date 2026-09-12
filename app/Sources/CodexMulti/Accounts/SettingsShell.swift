@@ -95,7 +95,7 @@ struct SettingsShell: View {
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.colorSchemeContrast) private var contrast
-    @StateObject private var systemAppearance = SystemAppearance()
+    @Environment(\.colorScheme) private var colorScheme
     @State private var selectedTab: ShellTab
     @State private var launchIntentsSent = false
     @State private var languageResolutionSent = false
@@ -114,8 +114,7 @@ struct SettingsShell: View {
     }
 
     var body: some View {
-        let resolved = AppearanceResolver.resolve(appearance, system: systemAppearance.scheme, contrast: contrast)
-        let tone = resolved.tone
+        let tone = AppearanceResolver.tone(for: colorScheme, contrast: contrast)
         ZStack(alignment: .top) {
             PaneBackdrop()
                 .environment(\.tone, tone)
@@ -165,7 +164,7 @@ struct SettingsShell: View {
         .ignoresSafeArea().frame(minWidth: Grid.minWidth, minHeight: Grid.minHeight)
         .background {
             if options.capturePath == nil {
-                WindowChrome(options: options, appearanceName: resolved.name)
+                WindowChrome(options: options)
             }
         }
         .dialogs(store: store)

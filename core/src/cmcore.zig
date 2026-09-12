@@ -314,7 +314,11 @@ pub export fn cm_service_version() callconv(.c) u32 {
 pub export fn cm_copy_text(language: u8, key: ?[*]const u8, key_len: usize, out: ?[*]u8, capacity: usize) callconv(.c) usize {
     const input = key orelse return 0;
     if (key_len > 128) return 0;
-    const copy = @import("strings.zig").catalog(if (language == 1) .ko else .en);
+    const copy = @import("strings.zig").catalog(switch (language) {
+        1 => .ko,
+        2 => .ja,
+        else => .en,
+    });
     const value = copy.lookup(input[0..key_len]) orelse return 0;
     if (out) |buffer| {
         if (capacity >= value.len) @memcpy(buffer[0..value.len], value);

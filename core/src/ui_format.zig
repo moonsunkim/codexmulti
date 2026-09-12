@@ -18,6 +18,7 @@ const TrayItem = contracts.TrayItem;
 const max_tray_items = contracts.max_tray_items;
 const max_line_bytes = contracts.max_line_bytes;
 const tray_command_refresh_all = contracts.tray_command_refresh_all;
+const tray_command_open_accounts = contracts.tray_command_open_accounts;
 const tray_command_open_details = contracts.tray_command_open_details;
 const tray_command_quit = contracts.tray_command_quit;
 const default_copy = strings.system;
@@ -275,7 +276,7 @@ fn humanizeWindowLabelWith(localized: strings.Catalog, buffer: []u8, label: []co
     for (known) |candidate| {
         if (std.mem.eql(u8, label, candidate.source)) return localized.text(candidate.key);
         if (!std.ascii.eqlIgnoreCase(label, candidate.source)) continue;
-        if (localized.language == .ko) return localized.text(candidate.key);
+        if (localized.language == .ko or localized.language == .ja) return localized.text(candidate.key);
         const take = @min(label.len, buffer.len);
         if (take == 0) return label;
         @memcpy(buffer[0..take], label[0..take]);
@@ -656,7 +657,7 @@ pub fn buildTray(view: anytype, out: []TrayItem) usize {
 
     const footer_items: usize = 3;
     if (capacity <= footer_items) {
-        push(out[0..capacity], &count, &next_id, .{ .separator = true });
+        push(out[0..capacity], &count, &next_id, .{ .label = copy.text(.tray_accounts), .command = tray_command_open_accounts });
         push(out[0..capacity], &count, &next_id, .{ .label = copy.text(.tray_settings), .command = tray_command_open_details });
         push(out[0..capacity], &count, &next_id, .{ .label = copy.text(.tray_quit), .command = tray_command_quit });
         return count;
@@ -664,12 +665,10 @@ pub fn buildTray(view: anytype, out: []TrayItem) usize {
     const body_limit = capacity - footer_items;
     const body = out[0..body_limit];
 
+    push(body, &count, &next_id, .{ .label = copy.text(.tray_accounts), .command = tray_command_open_accounts });
     push(body, &count, &next_id, .{ .label = copy.text(.tray_refresh_all_accounts), .command = tray_command_refresh_all, .enabled = can_refresh });
     if (view.pool_tray_text.len != 0) {
         push(body, &count, &next_id, .{ .label = view.pool_tray_text, .enabled = false });
-    }
-    if (view.capabilities.proxy_control) {
-        push(body, &count, &next_id, .{ .label = view.proxy_tray_text, .enabled = false });
     }
     push(body, &count, &next_id, .{ .separator = true });
 
@@ -718,7 +717,7 @@ pub fn buildTray(view: anytype, out: []TrayItem) usize {
         if (shown < view.row_count) {
             push(body, &count, &next_id, .{
                 .label = truncationLabel(copy, view.row_count - shown),
-                .command = tray_command_open_details,
+                .command = tray_command_open_accounts,
                 .enabled = true,
             });
         }

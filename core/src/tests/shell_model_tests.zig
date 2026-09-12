@@ -692,10 +692,10 @@ test "proxy menu gates and mapped removal produce only the exact typed command s
     service.proxy_fact.?.success_revision = 2;
     shell.reproject(model);
     try testing.expect(model.removeCanFinish());
-    shell.update(model, .finish_mapped_remove, &effects);
-    try testing.expectEqual(@as(usize, 7), service.submissions);
+    shell.pump(model, now + 1);
+    try testing.expectEqual(@as(usize, 6), service.submissions);
     try testing.expectEqual(std.meta.Tag(ui_model.Command).remove_account, service.tags[5]);
-    try testing.expectEqual(std.meta.Tag(ui_model.Command).proxy_sync_config, service.tags[6]);
+    try testing.expect(!model.remove.open);
 }
 
 test "proxy and account intents submit exact target account ids including plain removal" {

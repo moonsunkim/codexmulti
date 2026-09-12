@@ -7,21 +7,6 @@ import XCTest
 
 @MainActor
 final class WindowLifecycleTests: XCTestCase {
-    private final class AppearanceWriterSpy: WindowAppearanceWriting {
-        private(set) var explicitAppearanceName: NSAppearance.Name?
-        private(set) var writes: [NSAppearance.Name?] = []
-
-        init(_ name: NSAppearance.Name? = nil) {
-            explicitAppearanceName = name
-        }
-
-        func writeAppearance(named name: NSAppearance.Name?) {
-            writes.append(name)
-            explicitAppearanceName = name
-        }
-    }
-
-
     private final class InnerDelegate: NSObject, NSWindowDelegate {
         var shouldCloseAsked = 0
         var resizes = 0
@@ -49,28 +34,19 @@ final class WindowLifecycleTests: XCTestCase {
 
 
 
-    func testWindowChromeAppliesSystemLightAndDarkAppearance() {
+    func testWindowChromePreservesThePresentationAppearance() {
         let window = hiddenWindow()
         let options = LaunchOptions(arguments: [], environment: [:])
-
-        window.appearance = NSAppearance(named: .darkAqua)
-        WindowChrome.configure(window, options, appearanceName: nil)
-        XCTAssertNil(window.appearance)
-
-        WindowChrome.configure(window, options, appearanceName: .aqua)
-        XCTAssertEqual(window.appearance?.name, .aqua)
-
-        WindowChrome.configure(window, options, appearanceName: .darkAqua)
-        XCTAssertEqual(window.appearance?.name, .darkAqua)
-
-        WindowChrome.configure(window, options, appearanceName: nil)
-        XCTAssertNil(window.appearance, "switching back to System removes the explicit override")
+        for name: NSAppearance.Name? in [.aqua, .darkAqua, nil] {
+            window.appearance = name.flatMap(NSAppearance.init(named:))
+            WindowChrome.configure(window, options)
+            XCTAssertEqual(window.appearance?.name, name)
+        }
     }
-
 
     func testWindowChromeMakesTheNativeTitlebarTransparentOverFullSizeContent() {
         let window = hiddenWindow()
-        WindowChrome.configure(window, LaunchOptions(arguments: [], environment: [:]), appearanceName: .aqua)
+        WindowChrome.configure(window, LaunchOptions(arguments: [], environment: [:]))
 
         XCTAssertTrue(window.styleMask.contains(.fullSizeContentView))
         XCTAssertTrue(window.titlebarAppearsTransparent)
@@ -123,61 +99,6 @@ final class WindowLifecycleTests: XCTestCase {
         XCTAssertTrue(try canMoveWindow(at: band, "band"))
         XCTAssertTrue(try canMoveWindow(at: emptyPane, "empty pane"))
     }
-
-
-
-    func testWindowChromeUpdateTwiceWithTheSamePreferenceWritesAtMostOnce() {
-        let writer = AppearanceWriterSpy()
-        let hook = WindowChrome.HookView()
-        hook.appearanceWriterOverride = writer
-        let light = AppearanceResolver.resolve(.light, system: .dark, contrast: .standard)
-
-        hook.updateWindowAppearance(to: light.name)
-        hook.updateWindowAppearance(to: light.name)
-
-        XCTAssertEqual(writer.writes.count, 1)
-        XCTAssertEqual(writer.writes.first!, .aqua)
-    }
-
-
-
-    func testWindowChromeLightDarkSystemWritesExactlyOncePerChange() {
-        let writer = AppearanceWriterSpy()
-        let hook = WindowChrome.HookView()
-        hook.appearanceWriterOverride = writer
-        let names = [
-            AppearanceResolver.resolve(.light, system: .dark, contrast: .standard).name,
-            AppearanceResolver.resolve(.dark, system: .light, contrast: .standard).name,
-            AppearanceResolver.resolve(.system, system: .light, contrast: .standard).name,
-        ]
-
-        for name in names {
-            hook.updateWindowAppearance(to: name)
-            hook.updateWindowAppearance(to: name)
-        }
-
-
-        var expectedWrites = 0
-        var previous: NSAppearance.Name?? = nil
-        for name in names where previous != .some(name) {
-            expectedWrites += 1
-            previous = .some(name)
-        }
-
-        XCTAssertEqual(writer.writes.count, expectedWrites)
-
-        var expected: [NSAppearance.Name?] = []
-        var seen: NSAppearance.Name?? = nil
-        for name in names where seen != .some(name) {
-            expected.append(name)
-            seen = .some(name)
-        }
-        XCTAssertEqual(writer.writes.map { $0 }, expected)
-        XCTAssertEqual(writer.writes.first, .aqua)
-    }
-
-
-
 
 
 

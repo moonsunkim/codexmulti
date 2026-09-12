@@ -14,7 +14,7 @@ enum Copy {
 
     static func setLanguage(_ selection: Language) {
         let resolved = selection == .system ? SystemLanguageResolver.current : selection
-        language.set(resolved == .ko ? 1 : 0)
+        language.set(resolved == .ko ? 1 : resolved == .ja ? 2 : 0)
     }
 
     static func text(_ key: String, fallback: String) -> String {

@@ -165,11 +165,11 @@ const FixtureService = struct {
             .routing_state = self.codex_routing_state,
             .enabled = self.codex_routing_state == .on,
             .enabled_detail_text = self.proxy_enabled_detail_text orelse if (self.proxy_service_state == .running and self.codex_routing_state == .on)
-                "Codex routes through the running failover proxy."
+                "Failover is on. New accounts are included automatically."
             else if (self.codex_routing_state == .on)
-                "Codex still routes to an unavailable proxy. Turn this off to restore direct routing."
+                "Reconnecting Failover automatically. You can turn it off to connect directly."
             else
-                "Codex routes directly; the failover proxy is off.",
+                "Failover is off. Codex connects directly.",
             .cli_default_path = "/Applications/CodexMulti.app/Contents/Resources/proxy/bin/codexmulti-proxy",
             .node_default_path = "/Applications/CodexMulti.app/Contents/Helpers/node",
         });
@@ -635,7 +635,7 @@ fn makeProjectionLanguage(allocator: std.mem.Allocator, name: []const u8, langua
         attach(&model, &service);
     } else return error.UnknownFixture;
 
-    if (language == .ko) shell.update(&model, .{ .set_language = .{ .value = language, .system = .en } }, &effects);
+    if (language != .en) shell.update(&model, .{ .set_language = .{ .value = language, .system = .en } }, &effects);
     return bridge.serialize(allocator, 1, runtime, &model, &effects);
 }
 
@@ -812,8 +812,8 @@ fn exportAll(allocator: std.mem.Allocator, io: std.Io) !void {
 
 pub fn main(init: std.process.Init) !void {
     const args = try init.minimal.args.toSlice(init.arena.allocator());
-    if (args.len == 4 and std.mem.eql(u8, args[1], "--korean")) {
-        const bytes = try makeProjectionLanguage(init.gpa, args[2], .ko);
+    if (args.len == 4 and (std.mem.eql(u8, args[1], "--korean") or std.mem.eql(u8, args[1], "--japanese"))) {
+        const bytes = try makeProjectionLanguage(init.gpa, args[2], if (std.mem.eql(u8, args[1], "--japanese")) .ja else .ko);
         defer init.gpa.free(bytes);
         try std.Io.Dir.cwd().writeFile(init.io, .{ .sub_path = args[3], .data = bytes });
         return;
@@ -842,10 +842,9 @@ test "F17 empty fixture exports the core-owned onboarding checklist" {
 
     try testing.expect(view.get("onboarding_visible").?.bool);
     const steps = view.get("onboarding_steps").?.array.items;
-    try testing.expectEqual(@as(usize, 3), steps.len);
+    try testing.expectEqual(@as(usize, 2), steps.len);
     try testing.expectEqualStrings("Add a Codex account", steps[0].object.get("title").?.string);
-    try testing.expectEqualStrings("Install the proxy service", steps[1].object.get("title").?.string);
-    try testing.expectEqualStrings("Turn on Codex routing", steps[2].object.get("title").?.string);
+    try testing.expectEqualStrings("Turn on Failover", steps[1].object.get("title").?.string);
     const action = view.get("onboarding_next_action").?.object;
     try testing.expectEqualStrings("add_account", action.get("kind").?.string);
     try testing.expectEqualStrings("Add Codex", action.get("label").?.string);
@@ -1053,7 +1052,7 @@ test "C9 mismatch projection advances from next-refresh repair to synchronized" 
     var pending = try std.json.parseFromSlice(bridge.ProjectionWire, testing.allocator, pending_bytes, .{ .allocate = .alloc_always });
     defer pending.deinit();
     try testing.expectEqual(ui_model.ProxySyncState.needed, pending.value.view.proxy_sync_state);
-    try testing.expect(std.mem.indexOf(u8, pending.value.view.proxy_banner_text, "next refresh") != null);
+    try testing.expect(std.mem.indexOf(u8, pending.value.view.proxy_banner_text, "automatically") != null);
 
     const fixed_bytes = try makeProjection(testing.allocator, "viewstate-c9-refresh-mismatch-fixed");
     defer testing.allocator.free(fixed_bytes);
@@ -1404,7 +1403,7 @@ test "every named projection fixture proves its distinguishing state" {
                 .system;
             try testing.expectEqual(expected, wire.view.settings.appearance);
             try testing.expectEqual(ui_model.Language.en, wire.view.settings.language);
-            try testing.expectEqual([3]ui_model.Language{ .system, .en, .ko }, wire.view.settings.language_supported);
+            try testing.expectEqual([4]ui_model.Language{ .system, .en, .ko, .ja }, wire.view.settings.language_supported);
             try testing.expectEqual(ui_model.AutoUpdateState.unavailable, wire.view.settings.auto_update_state);
             try testing.expect(std.mem.indexOf(u8, wire.view.settings.auto_update_detail_text, "no update channel is configured") != null);
             try testing.expectEqualStrings("Version 0.1.0 (build 0.1.0)", wire.view.settings.app_version_text);
@@ -1415,7 +1414,7 @@ test "every named projection fixture proves its distinguishing state" {
             try testing.expectEqualStrings(wire.view.proxy_node_default_path, wire.view.settings.proxy_node_default_path);
         } else if (std.mem.eql(u8, name, "viewstate-c9-refresh-mismatch-pending")) {
             try testing.expectEqual(ui_model.ProxySyncState.needed, wire.view.proxy_sync_state);
-            try testing.expect(std.mem.indexOf(u8, wire.view.proxy_banner_text, "next refresh") != null);
+            try testing.expect(std.mem.indexOf(u8, wire.view.proxy_banner_text, "automatically") != null);
             try testing.expectEqual(@as(u64, 5), wire.view.proxy_success_revision);
         } else if (std.mem.eql(u8, name, "viewstate-c9-refresh-mismatch-fixed")) {
             try testing.expectEqual(ui_model.ProxySyncState.synced, wire.view.proxy_sync_state);
