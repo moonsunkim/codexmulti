@@ -468,9 +468,9 @@ pub const ViewWire = struct {
     codex_group_title: []const u8,
     claude_group_summary: []const u8,
     codex_group_summary: []const u8,
-    no_accounts_title_text: []const u8,
-    no_accounts_body_text: []const u8,
-    no_accounts_action_text: []const u8,
+    onboarding_visible: bool,
+    onboarding_steps: [3]ui_model.OnboardingStepView,
+    onboarding_next_action: ?ui_model.OnboardingNextAction,
     toolbar_status_text: []const u8,
     busy_suffix_text: []const u8,
     header_fresh_text: []const u8,
@@ -751,9 +751,9 @@ pub fn viewToWire(
         .codex_group_title = v.codex_group_title,
         .claude_group_summary = v.claude_group_summary,
         .codex_group_summary = v.codex_group_summary,
-        .no_accounts_title_text = v.no_accounts_title_text,
-        .no_accounts_body_text = v.no_accounts_body_text,
-        .no_accounts_action_text = v.no_accounts_action_text,
+        .onboarding_visible = v.onboarding_visible,
+        .onboarding_steps = v.onboarding_steps,
+        .onboarding_next_action = v.onboarding_next_action,
         .toolbar_status_text = v.toolbar_status_text,
         .busy_suffix_text = shell.busySuffixText(v),
         .header_fresh_text = v.header_fresh_text,
@@ -917,7 +917,7 @@ pub fn assertProjectionFieldCoverage() void {
             "proxy_in_flight",           "proxy_accounts",           "proxy_rows",             "proxy_summary_text",           "proxy_detail_text",         "proxy_tray_text",              "proxy_service_state",    "proxy_service_detail_text",
             "proxy_service_can_install", "proxy_service_can_repair", "proxy_service_can_stop", "codex_routing_state",          "proxy_cli_default_path",    "proxy_node_default_path",      "rows",                   "usage_rows",
             "inspector",                 "account_row_count",        "claude_row_count",       "codex_exhausted_count",        "account_rows",              "claude_group_title",           "codex_group_title",      "claude_group_summary",
-            "codex_group_summary",       "no_accounts_title_text",   "no_accounts_body_text",  "no_accounts_action_text",      "toolbar_status_text",       "header_fresh_text",            "header_failed_text",     "header_has_failures",
+            "codex_group_summary",       "onboarding_visible",       "onboarding_steps",       "onboarding_next_action",       "toolbar_status_text",       "header_fresh_text",            "header_failed_text",     "header_has_failures",
             "proxy_pill_text",           "proxy_pill_ok",            "proxy_pill_warn",        "proxy_pill_bad",               "proxy_active_label",        "proxy_cooling_count",          "proxy_mapped_count",     "proxy_settings_summary_text",
             "proxy_node_hint_text",      "proxy_banner_text",        "claude_count",           "codex_count",                  "reauth_count",              "error_count",                  "stale_count",            "busy_count",
             "snapshot_count",            "newest_success_at_unix_s", "headline_text",          "summary_text",                 "tray_summary_text",         "service_text",                 "appearance",             "unified_order_source",
@@ -935,6 +935,8 @@ pub fn assertProjectionFieldCoverage() void {
         assertDirectStruct(ui_model.SettingsView);
         assertDirectStruct(ui_model.ProxyAccountView);
         assertDirectStruct(ui_model.ProxyAccountFact);
+        assertDirectStruct(ui_model.OnboardingStepView);
+        assertDirectStruct(ui_model.OnboardingNextAction);
         assertDirectStruct(ui_model.UsageRow);
         assertDirectStruct(ui_model.WindowCell);
         assertDirectStruct(ui_model.RowChip);

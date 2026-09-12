@@ -22,6 +22,7 @@ pub const ProxySyncState = contracts.ProxySyncState;
 pub const ProxyAttemptResult = contracts.ProxyAttemptResult;
 pub const ProxyServiceState = contracts.ProxyServiceState;
 pub const CodexRoutingState = contracts.CodexRoutingState;
+pub const OnboardingStepKind = contracts.OnboardingStepKind;
 
 pub const max_rows = contracts.max_rows;
 pub const max_windows_per_row = contracts.max_windows_per_row;
@@ -40,6 +41,8 @@ pub const ProxyAccountFact = contracts.ProxyAccountFact;
 pub const ProxyAccountView = contracts.ProxyAccountView;
 pub const ProxyFact = contracts.ProxyFact;
 pub const ProxyServiceFact = contracts.ProxyServiceFact;
+pub const OnboardingStepView = contracts.OnboardingStepView;
+pub const OnboardingNextAction = contracts.OnboardingNextAction;
 pub const WindowView = contracts.WindowView;
 pub const AccountView = contracts.AccountView;
 pub const UsageRow = contracts.UsageRow;

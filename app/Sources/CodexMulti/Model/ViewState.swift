@@ -61,9 +61,9 @@ struct ViewState: Decodable, Sendable, Equatable {
     let codex_group_title: String
     let claude_group_summary: String
     let codex_group_summary: String
-    let no_accounts_title_text: String
-    let no_accounts_body_text: String
-    let no_accounts_action_text: String
+    let onboarding_visible: Bool
+    let onboarding_steps: [OnboardingStepView]
+    let onboarding_next_action: OnboardingNextAction?
     let toolbar_status_text: String
 
 
@@ -112,7 +112,7 @@ struct ViewState: Decodable, Sendable, Equatable {
         case rows, usage_rows, inspector
         case account_row_count, claude_row_count, codex_exhausted_count, account_rows
         case claude_group_title, codex_group_title, claude_group_summary, codex_group_summary
-        case no_accounts_title_text, no_accounts_body_text, no_accounts_action_text
+        case onboarding_visible, onboarding_steps, onboarding_next_action
         case toolbar_status_text, busy_suffix_text, header_fresh_text, header_failed_text, header_has_failures
         case proxy_pill_text, proxy_pill_ok, proxy_pill_warn, proxy_pill_bad
         case proxy_active_label, proxy_cooling_count, proxy_mapped_count
@@ -122,6 +122,25 @@ struct ViewState: Decodable, Sendable, Equatable {
         case headline_text, summary_text, tray_summary_text, service_text
         case tray
     }
+}
+
+
+struct OnboardingStepView: Decodable, Sendable, Equatable {
+    let kind: OnboardingStepKind
+    let title: String
+    let completed: Bool
+
+    enum CodingKeys: String, CodingKey, CaseIterable { case kind, title, completed }
+}
+
+
+struct OnboardingNextAction: Decodable, Sendable, Equatable {
+    let kind: OnboardingStepKind
+    let label: String
+    let enabled: Bool
+    let replace_conflicting: Bool
+
+    enum CodingKeys: String, CodingKey, CaseIterable { case kind, label, enabled, replace_conflicting }
 }
 
 

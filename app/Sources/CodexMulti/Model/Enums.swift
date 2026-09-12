@@ -117,6 +117,11 @@ enum ProxyServiceState: String, Codable, Sendable, Equatable, CaseIterable {
 enum CodexRoutingState: String, Codable, Sendable, Equatable, CaseIterable { case off, on, conflicting }
 
 
+enum OnboardingStepKind: String, Codable, Sendable, Equatable, CaseIterable {
+    case add_account, install_proxy_service, enable_codex_routing
+}
+
+
 enum UsageWindowKind: String, Codable, Sendable, Equatable, CaseIterable { case session, weekly, model_scoped, other }
 
 
@@ -155,6 +160,7 @@ enum ProjectionEnums {
         ("ProxyAttemptResult", ProxyAttemptResult.allCases.map(\.rawValue)),
         ("ProxyServiceState", ProxyServiceState.allCases.map(\.rawValue)),
         ("CodexRoutingState", CodexRoutingState.allCases.map(\.rawValue)),
+        ("OnboardingStepKind", OnboardingStepKind.allCases.map(\.rawValue)),
         ("UsageWindowKind", UsageWindowKind.allCases.map(\.rawValue)),
         ("CreditOffer", CreditOffer.allCases.map(\.rawValue)),
         ("EffectKind", EffectKind.allCases.map(\.rawValue)),

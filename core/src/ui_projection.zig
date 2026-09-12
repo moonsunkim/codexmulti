@@ -98,9 +98,16 @@ pub const ViewState = struct {
 
     claude_group_summary: []const u8 = "",
     codex_group_summary: []const u8 = "",
-    no_accounts_title_text: []const u8 = copy.text(.no_accounts_yet),
-    no_accounts_body_text: []const u8 = copy.text(.no_accounts_body),
-    no_accounts_action_text: []const u8 = copy.text(.add_codex),
+    onboarding_visible: bool = true,
+    onboarding_steps: [3]contracts.OnboardingStepView = .{
+        .{ .kind = .add_account, .title = copy.text(.onboarding_add_account) },
+        .{ .kind = .install_proxy_service, .title = copy.text(.onboarding_install_proxy) },
+        .{ .kind = .enable_codex_routing, .title = copy.text(.onboarding_enable_routing) },
+    },
+    onboarding_next_action: ?contracts.OnboardingNextAction = .{
+        .kind = .add_account,
+        .label = copy.text(.add_codex),
+    },
 
     toolbar_status_text: []const u8 = "",
     pool_remaining_percent: ?u8 = null,
@@ -207,9 +214,13 @@ pub const ViewState = struct {
         self.pool_total_count = 0;
         self.pool_tray_text = "";
         self.service_text = "";
-        self.no_accounts_title_text = copy.text(.no_accounts_yet);
-        self.no_accounts_body_text = copy.text(.no_accounts_body);
-        self.no_accounts_action_text = copy.text(.add_codex);
+        self.onboarding_visible = true;
+        self.onboarding_steps = .{
+            .{ .kind = .add_account, .title = copy.text(.onboarding_add_account) },
+            .{ .kind = .install_proxy_service, .title = copy.text(.onboarding_install_proxy) },
+            .{ .kind = .enable_codex_routing, .title = copy.text(.onboarding_enable_routing) },
+        };
+        self.onboarding_next_action = .{ .kind = .add_account, .label = copy.text(.add_codex) };
     }
 
     pub fn pushAccount(self: *ViewState, fact: AccountFact) error{ViewFull}!usize {
@@ -393,9 +404,35 @@ pub const ViewState = struct {
         self.renderAccountRows(options);
         self.renderInspector(options);
         self.renderUnifiedRows();
+        self.renderOnboarding();
         self.renderSettings();
         self.renderPool();
         self.renderHeaderView();
+    }
+
+    fn renderOnboarding(self: *ViewState) void {
+        const account_completed = self.codex_count != 0;
+        const service_completed = self.proxy_service_state == .running;
+        const routing_completed = self.codex_routing_state == .on;
+        self.onboarding_steps = .{
+            .{ .kind = .add_account, .title = copy.text(.onboarding_add_account), .completed = account_completed },
+            .{ .kind = .install_proxy_service, .title = copy.text(.onboarding_install_proxy), .completed = service_completed },
+            .{ .kind = .enable_codex_routing, .title = copy.text(.onboarding_enable_routing), .completed = routing_completed },
+        };
+        self.onboarding_visible = !account_completed or !service_completed or !routing_completed;
+        self.onboarding_next_action = if (!account_completed)
+            .{ .kind = .add_account, .label = copy.text(.add_codex), .enabled = self.capabilities.accounts }
+        else if (!service_completed)
+            .{ .kind = .install_proxy_service, .label = copy.text(.install_and_start), .enabled = self.proxy_service_can_install }
+        else if (!routing_completed)
+            .{
+                .kind = .enable_codex_routing,
+                .label = copy.text(.turn_on_routing),
+                .enabled = true,
+                .replace_conflicting = self.codex_routing_state == .conflicting,
+            }
+        else
+            null;
     }
 
     fn resetOverview(self: *ViewState) void {

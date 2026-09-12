@@ -127,9 +127,12 @@ pub const StaticKey = enum {
     app_version,
     proxy_service_not_installed,
     proxy_direct_routing,
-    no_accounts_yet,
-    no_accounts_body,
+    onboarding_add_account,
+    onboarding_install_proxy,
+    onboarding_enable_routing,
     add_codex,
+    install_and_start,
+    turn_on_routing,
     proxy_ready,
     proxy_cooldown,
     proxy_paused,
@@ -551,9 +554,12 @@ const English = struct {
     const app_version = "Version 0.1.0 (build 0.1.0)";
     const proxy_service_not_installed = "Proxy service is not installed";
     const proxy_direct_routing = "Codex routes directly; the failover proxy is off.";
-    const no_accounts_yet = "No accounts yet";
-    const no_accounts_body = "Add a Codex account to get started. Then install the proxy service and turn on routing in Settings.";
+    const onboarding_add_account = "Add a Codex account";
+    const onboarding_install_proxy = "Install the proxy service";
+    const onboarding_enable_routing = "Turn on Codex routing";
     const add_codex = "Add Codex";
+    const install_and_start = "Install & Start";
+    const turn_on_routing = "Turn on routing";
     const proxy_ready = "Ready";
     const proxy_cooldown = "Cooldown";
     const proxy_paused = "Paused";

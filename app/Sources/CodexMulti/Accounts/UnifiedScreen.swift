@@ -80,6 +80,10 @@ struct UnifiedPage: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
+            if projection.view.onboarding_visible, !projection.view.unified_rows.isEmpty {
+                OnboardingChecklist(projection: projection, compact: true)
+                    .padding(.bottom, Grid.bannerToContainer)
+            }
             if AccountsModel.bannerIsShown(projection.view) {
                 ProxyBanner(text: projection.view.proxy_banner_text,
                             showsRetry: AccountsModel.bannerShowsRetry(projection.view),

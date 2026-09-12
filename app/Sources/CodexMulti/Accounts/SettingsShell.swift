@@ -135,6 +135,7 @@ struct SettingsShell: View {
             }.scrollIndicators(.hidden)
             if selectedTab == .accounts,
                let projection = store.projection,
+               projection.view.onboarding_visible,
                projection.view.unified_rows.isEmpty {
                 EmptyAccountsPage(projection: projection)
             }

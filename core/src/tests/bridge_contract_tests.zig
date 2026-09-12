@@ -541,9 +541,9 @@ fn expectedViewWire(
         .codex_group_title = v.codex_group_title,
         .claude_group_summary = v.claude_group_summary,
         .codex_group_summary = v.codex_group_summary,
-        .no_accounts_title_text = v.no_accounts_title_text,
-        .no_accounts_body_text = v.no_accounts_body_text,
-        .no_accounts_action_text = v.no_accounts_action_text,
+        .onboarding_visible = v.onboarding_visible,
+        .onboarding_steps = v.onboarding_steps,
+        .onboarding_next_action = v.onboarding_next_action,
         .toolbar_status_text = v.toolbar_status_text,
         .busy_suffix_text = if (v.busy_count != 0 or v.proxy_work != .idle) " · refreshing" else "",
         .header_fresh_text = v.header_fresh_text,
@@ -1154,9 +1154,18 @@ test "source-to-wire sibling fields use distinguishable sentinels and complement
     model.view.codex_group_title = "view:codex_group_title";
     model.view.claude_group_summary = "view:claude_group_summary";
     model.view.codex_group_summary = "view:codex_group_summary";
-    model.view.no_accounts_title_text = "view:no_accounts_title_text";
-    model.view.no_accounts_body_text = "view:no_accounts_body_text";
-    model.view.no_accounts_action_text = "view:no_accounts_action_text";
+    model.view.onboarding_visible = false;
+    model.view.onboarding_steps = .{
+        .{ .kind = .add_account, .title = "view:onboarding_step_1", .completed = true },
+        .{ .kind = .install_proxy_service, .title = "view:onboarding_step_2" },
+        .{ .kind = .enable_codex_routing, .title = "view:onboarding_step_3" },
+    };
+    model.view.onboarding_next_action = .{
+        .kind = .enable_codex_routing,
+        .label = "view:onboarding_next_action",
+        .enabled = true,
+        .replace_conflicting = true,
+    };
     model.view.toolbar_status_text = "view:toolbar_status_text";
     model.view.header_fresh_text = "view:header_fresh_text";
     model.view.header_failed_text = "view:header_failed_text";

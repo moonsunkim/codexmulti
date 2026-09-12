@@ -252,6 +252,22 @@ final class LayoutRenderTests: XCTestCase {
                        "the empty-state card centre follows the window centre")
     }
 
+    func testF17OnboardingChecklistRendersHeadlesslyForEmptyAndPopulatedAccounts() throws {
+        let empty = try JSONDecoder().decode(Projection.self, from: Fixtures.emptyAttachedData())
+        let emptyInk = try render(
+            OnboardingChecklist(projection: empty, compact: false),
+            width: Grid.emptyStateWidth
+        )
+        XCTAssertGreaterThan(emptyInk.size.height, Grid.accountsRow * 2)
+        XCTAssertNotNil(emptyInk.bounds(x: 0..<emptyInk.size.width, threshold: 8))
+
+        let accounts = try JSONDecoder().decode(
+            Projection.self, from: Data(contentsOf: Fixtures.exported("two-accounts-fresh")))
+        let pageInk = try render(UnifiedPage(projection: accounts), width: Grid.width)
+        XCTAssertGreaterThan(pageInk.size.height, Grid.accountsRow * CGFloat(accounts.view.unified_rows.count))
+        XCTAssertNotNil(pageInk.bounds(x: 0..<pageInk.size.width, threshold: 8))
+    }
+
 
 
     func testUnifiedCollapsedRowsAreOneLineAtOneUniformHeight() throws {

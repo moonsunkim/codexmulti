@@ -132,6 +132,21 @@ pub const ProxyServiceState = enum {
 
 pub const CodexRoutingState = enum { off, on, conflicting };
 
+pub const OnboardingStepKind = enum { add_account, install_proxy_service, enable_codex_routing };
+
+pub const OnboardingStepView = struct {
+    kind: OnboardingStepKind = .add_account,
+    title: []const u8 = "",
+    completed: bool = false,
+};
+
+pub const OnboardingNextAction = struct {
+    kind: OnboardingStepKind = .add_account,
+    label: []const u8 = "",
+    enabled: bool = false,
+    replace_conflicting: bool = false,
+};
+
 pub const ProxyServiceFact = struct {
     state: ProxyServiceState = .not_installed,
     detail_text: []const u8 = "Proxy service is not installed",

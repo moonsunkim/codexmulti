@@ -665,6 +665,7 @@ fn enumsJson(allocator: std.mem.Allocator) ![]u8 {
         .{ .name = "ProxyAttemptResult", .tags = enumTagNames(ui_model.ProxyAttemptResult) },
         .{ .name = "ProxyServiceState", .tags = enumTagNames(ui_model.ProxyServiceState) },
         .{ .name = "CodexRoutingState", .tags = enumTagNames(ui_model.CodexRoutingState) },
+        .{ .name = "OnboardingStepKind", .tags = enumTagNames(ui_model.OnboardingStepKind) },
         .{ .name = "ResetProxyClear", .tags = enumTagNames(ui_model.ResetProxyClear) },
         .{ .name = "CreditOffer", .tags = enumTagNames(ui_model.CreditOffer) },
         .{ .name = "CommandOutcome", .tags = enumTagNames(ui_model.CommandOutcome) },
@@ -810,19 +811,22 @@ test "P6 R1 unified_rows and unified_order_source are projected" {
     try testing.expectEqualStrings("registry", source.string);
 }
 
-test "F3 empty fixture exports the core-owned empty-screen copy" {
+test "F17 empty fixture exports the core-owned onboarding checklist" {
     const bytes = try makeProjection(testing.allocator, "viewstate-empty-attached");
     defer testing.allocator.free(bytes);
     var parsed = try std.json.parseFromSlice(std.json.Value, testing.allocator, bytes, .{});
     defer parsed.deinit();
     const view = parsed.value.object.get("view").?.object;
 
-    try testing.expectEqualStrings("No accounts yet", view.get("no_accounts_title_text").?.string);
-    try testing.expectEqualStrings(
-        "Add a Codex account to get started. Then install the proxy service and turn on routing in Settings.",
-        view.get("no_accounts_body_text").?.string,
-    );
-    try testing.expectEqualStrings("Add Codex", view.get("no_accounts_action_text").?.string);
+    try testing.expect(view.get("onboarding_visible").?.bool);
+    const steps = view.get("onboarding_steps").?.array.items;
+    try testing.expectEqual(@as(usize, 3), steps.len);
+    try testing.expectEqualStrings("Add a Codex account", steps[0].object.get("title").?.string);
+    try testing.expectEqualStrings("Install the proxy service", steps[1].object.get("title").?.string);
+    try testing.expectEqualStrings("Turn on Codex routing", steps[2].object.get("title").?.string);
+    const action = view.get("onboarding_next_action").?.object;
+    try testing.expectEqualStrings("add_account", action.get("kind").?.string);
+    try testing.expectEqualStrings("Add Codex", action.get("label").?.string);
 }
 
 test "P6 R2 settings projection set_appearance intent and persistence are present" {

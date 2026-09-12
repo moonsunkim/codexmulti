@@ -166,6 +166,8 @@ enum ProjectionKeyWalker {
         "view.capabilities": keys(ServiceCapabilities.CodingKeys.self),
         "view.proxy_accounts[]": keys(ProxyAccountFact.CodingKeys.self),
         "view.proxy_rows[]": keys(ProxyAccountView.CodingKeys.self),
+        "view.onboarding_steps[]": keys(OnboardingStepView.CodingKeys.self),
+        "view.onboarding_next_action": keys(OnboardingNextAction.CodingKeys.self),
         "view.unified_rows[]": keys(UnifiedRowView.CodingKeys.self),
         "view.settings": keys(SettingsView.CodingKeys.self),
         "view.rows[]": keys(AccountView.CodingKeys.self),

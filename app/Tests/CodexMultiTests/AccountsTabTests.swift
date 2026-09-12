@@ -200,23 +200,28 @@ final class AccountsTabTests: XCTestCase {
         XCTAssertTrue(AccountsModel.hasNoAccounts(otherOnly))
     }
 
-    func testEmptyScreenCopyComesFromTheCoreProjection() throws {
-        let root = try Fixtures.emptyAttachedObject()
-        let view = try XCTUnwrap(root["view"] as? [String: Any])
-        XCTAssertEqual(view["no_accounts_title_text"] as? String, "No accounts yet")
-        XCTAssertEqual(
-            view["no_accounts_body_text"] as? String,
-            "Add a Codex account to get started. Then install the proxy service and turn on routing in Settings."
-        )
-        XCTAssertEqual(view["no_accounts_action_text"] as? String, "Add Codex")
+    func testF17OnboardingChecklistUsesProjectedStepsAndExistingIntents() throws {
+        let empty = try fixture("empty-attached")
+        XCTAssertTrue(empty.view.onboarding_visible)
+        XCTAssertEqual(empty.view.onboarding_steps.map(\.title), [
+            "Add a Codex account", "Install the proxy service", "Turn on Codex routing",
+        ])
+        XCTAssertEqual(empty.view.onboarding_steps.map(\.completed), [false, false, false])
+        XCTAssertEqual(OnboardingChecklistModel.intent(empty.view.onboarding_next_action), .begin_add_account)
 
-        let sources = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
-            .appending(path: "Sources/CodexMulti", directoryHint: .isDirectory)
-        let copy = try String(contentsOf: sources.appending(path: "Accounts/Copy.swift"), encoding: .utf8)
-        let panel = try String(contentsOf: sources.appending(path: "Accounts/NoAccountsPanel.swift"), encoding: .utf8)
-        XCTAssertFalse(copy.contains("Usage is read only after you press Refresh."))
-        XCTAssertTrue(panel.contains("bodyText:"))
-        XCTAssertTrue(panel.contains("actionTitle:"))
+        let accounts = try fixture("two-accounts-fresh")
+        XCTAssertEqual(accounts.view.onboarding_steps.map(\.completed), [true, false, false])
+        XCTAssertEqual(accounts.view.onboarding_next_action?.label, "Install & Start")
+        XCTAssertEqual(OnboardingChecklistModel.intent(accounts.view.onboarding_next_action), .install_proxy_service)
+
+        let routing = try fixture("proxy-service-running")
+        XCTAssertEqual(routing.view.onboarding_steps.map(\.completed), [false, true, false])
+        XCTAssertEqual(OnboardingChecklistModel.intent(routing.view.onboarding_next_action), .begin_add_account)
+
+        let complete = try fixture("unified-proxy-order")
+        XCTAssertFalse(complete.view.onboarding_visible)
+        XCTAssertNil(complete.view.onboarding_next_action)
+        XCTAssertNil(OnboardingChecklistModel.intent(complete.view.onboarding_next_action))
     }
 
 

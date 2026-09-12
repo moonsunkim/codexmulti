@@ -67,6 +67,68 @@ test "ui facade preserves extracted contract and projection types" {
     );
 }
 
+test "F17 onboarding checklist projects every completion combination and its next action" {
+    const Case = struct {
+        account: bool,
+        service: contracts.ProxyServiceState,
+        routing: contracts.CodexRoutingState,
+        completed: [3]bool,
+        visible: bool,
+        next: ?contracts.OnboardingStepKind,
+    };
+    const cases = [_]Case{
+        .{ .account = false, .service = .not_installed, .routing = .off, .completed = .{ false, false, false }, .visible = true, .next = .add_account },
+        .{ .account = true, .service = .not_installed, .routing = .off, .completed = .{ true, false, false }, .visible = true, .next = .install_proxy_service },
+        .{ .account = false, .service = .running, .routing = .off, .completed = .{ false, true, false }, .visible = true, .next = .add_account },
+        .{ .account = false, .service = .not_installed, .routing = .on, .completed = .{ false, false, true }, .visible = true, .next = .add_account },
+        .{ .account = true, .service = .running, .routing = .off, .completed = .{ true, true, false }, .visible = true, .next = .enable_codex_routing },
+        .{ .account = true, .service = .not_installed, .routing = .on, .completed = .{ true, false, true }, .visible = true, .next = .install_proxy_service },
+        .{ .account = false, .service = .running, .routing = .on, .completed = .{ false, true, true }, .visible = true, .next = .add_account },
+        .{ .account = true, .service = .running, .routing = .on, .completed = .{ true, true, true }, .visible = false, .next = null },
+    };
+
+    for (cases) |case| {
+        var view: projection.ViewState = .{};
+        view.begin(band_now, .{ .connected = true, .accounts = true, .proxy_control = true }, .kst);
+        if (case.account) _ = try view.pushAccount(.{
+            .account_id = "acct-onboarding",
+            .label = "onboarding@example.com",
+            .provider = .codex,
+        });
+        view.applyProxyService(.{
+            .state = case.service,
+            .can_install = case.service == .not_installed and case.account,
+            .routing_state = case.routing,
+        });
+        view.finish(.{});
+
+        try testing.expectEqual(case.visible, view.onboarding_visible);
+        try testing.expectEqualStrings("Add a Codex account", view.onboarding_steps[0].title);
+        try testing.expectEqualStrings("Install the proxy service", view.onboarding_steps[1].title);
+        try testing.expectEqualStrings("Turn on Codex routing", view.onboarding_steps[2].title);
+        for (case.completed, view.onboarding_steps) |expected, step| try testing.expectEqual(expected, step.completed);
+        if (case.next) |expected| {
+            const action = view.onboarding_next_action orelse return error.MissingOnboardingAction;
+            try testing.expectEqual(expected, action.kind);
+            try testing.expectEqual(case.account or expected == .add_account, action.enabled);
+        } else try testing.expect(view.onboarding_next_action == null);
+    }
+}
+
+test "F17 conflicting routing projects replacement through the existing routing intent" {
+    var view: projection.ViewState = .{};
+    view.begin(band_now, .{ .connected = true, .accounts = true, .proxy_control = true }, .kst);
+    _ = try view.pushAccount(.{ .account_id = "acct-onboarding", .label = "onboarding@example.com", .provider = .codex });
+    view.applyProxyService(.{ .state = .running, .routing_state = .conflicting });
+    view.finish(.{});
+
+    const action = view.onboarding_next_action orelse return error.MissingOnboardingAction;
+    try testing.expectEqual(contracts.OnboardingStepKind.enable_codex_routing, action.kind);
+    try testing.expect(action.enabled);
+    try testing.expect(action.replace_conflicting);
+    try testing.expectEqualStrings("Turn on routing", action.label);
+}
+
 test "ui facade preserves extracted formatting results" {
     var direct_buffer: [contracts.max_line_bytes]u8 = undefined;
     var facade_buffer: [ui_model.max_line_bytes]u8 = undefined;
