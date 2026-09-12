@@ -15,6 +15,33 @@ final class UnifiedScreenTests: XCTestCase {
         }
     }
 
+    func testPollingKeepsFailoverMenuItemsVisibleWhileDisablingActions() throws {
+        let data = try Data(contentsOf: Fixtures.exported("unified-proxy-order"))
+        let object = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        let view = try XCTUnwrap(object["view"] as? [String: Any])
+        var row = try XCTUnwrap((view["unified_rows"] as? [[String: Any]])?.first)
+        row["show_switch"] = true
+        row["show_pause"] = true
+        row["show_resume"] = false
+        row["show_clear_cooldown"] = false
+        row["can_resume"] = false
+        row["can_clear_cooldown"] = false
+        row["can_reset"] = false
+        let shell = try projection("unified-proxy-order").shell
+        var expectedIDs: [String]?
+        for available in [true, false, true, false, true] {
+            for key in ["has_actions", "can_switch_proxy", "can_pause_proxy", "can_switch", "can_pause"] {
+                row[key] = available
+            }
+            let decoded = try JSONDecoder().decode(UnifiedRowView.self, from: Fixtures.data(from: row))
+            let menu = UnifiedModel.rowMenu(decoded, shell: shell).flatMap { $0 }
+            if expectedIDs == nil { expectedIDs = menu.map(\.id) }
+            XCTAssertEqual(menu.map(\.id), expectedIDs)
+            XCTAssertEqual(menu.first { $0.id == "switch" }?.enabled, available)
+            XCTAssertEqual(menu.first { $0.id == "pause" }?.enabled, available)
+        }
+    }
+
     func testMenusAndInspectorUseTheirOwnIndices() throws {
         let p = try projection("unified-proxy-order")
         let top = try XCTUnwrap(p.view.unified_rows.first?.account_id)
@@ -261,7 +288,7 @@ final class UnifiedScreenTests: XCTestCase {
                        "status, refresh and add are the only three projected band controls")
     }
 
-    func testProxyFacetGatesOnlyProxyItemsAndProxyResumeUsesProxyIndex() throws {
+    func testCoreVisibilityGatesOnlyProxyItemsAndProxyResumeUsesProxyIndex() throws {
         let data = try Data(contentsOf: Fixtures.exported("unified-proxy-order"))
         let object = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
         let view = try XCTUnwrap(object["view"] as? [String: Any])
@@ -269,6 +296,7 @@ final class UnifiedScreenTests: XCTestCase {
             $0["account_id"] as? String == "acct-codex-gamma"
         })
         row["has_actions"] = false
+        for key in ["show_switch", "show_pause", "show_resume", "show_clear_cooldown"] { row[key] = false }
         row["can_resume"] = true
         row["action_refresh"] = true
         row["can_reset"] = false
@@ -277,6 +305,7 @@ final class UnifiedScreenTests: XCTestCase {
         let accountOnly = UnifiedModel.rowMenu(try decode(), shell: shell, topAccountID: "acct-codex-top").flatMap { $0 }
         XCTAssertEqual(accountOnly.map(\.id), ["refresh", "move_to_top", "rename", "remove"])
         row["has_actions"] = true
+        for key in ["show_switch", "show_pause", "show_resume"] { row[key] = true }
         row["account_index"] = 8
         row["proxy_index"] = 3
         row["can_switch"] = true

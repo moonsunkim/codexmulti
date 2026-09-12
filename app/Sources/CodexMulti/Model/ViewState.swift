@@ -180,6 +180,10 @@ struct UnifiedRowView: Decodable, Sendable, Equatable {
     let action_sign_in_again: Bool
     let action_busy: Bool
     let busy_label: String
+    let show_switch: Bool?
+    let show_pause: Bool?
+    let show_resume: Bool?
+    let show_clear_cooldown: Bool?
     let can_switch_proxy: Bool
     let switch_label: String
     let can_pause_proxy: Bool
@@ -201,6 +205,7 @@ struct UnifiedRowView: Decodable, Sendable, Equatable {
         case failover_in_flight, failover_in_flight_text
         case expanded, inspector_index, account_menu_open, proxy_menu_open, menu_open
         case action_refresh, action_sign_in, action_sign_in_again, action_busy, busy_label
+        case show_switch, show_pause, show_resume, show_clear_cooldown
         case can_switch_proxy, switch_label, can_pause_proxy, can_clear_cooldown, can_reset, reset_label
         case can_switch, can_pause, can_resume, can_reload, has_actions
     }

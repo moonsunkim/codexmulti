@@ -1,5 +1,7 @@
 # CodexMulti
 
+**English** · [한국어](README.ko.md) · [日本語](README.ja.md)
+
 <p align="center">
   <img src="assets/hero.png" width="100%" alt="CodexMulti — one Mac, many Codex accounts, with automatic failover">
 </p>
@@ -18,6 +20,24 @@ choose their order, and let automatic failover handle confirmed usage-limit erro
 - **Set the order once.** Drag accounts into your preferred order. When an eligible request hits a confirmed usage limit, the proxy tries the next available account.
 - **Turn on one switch.** Failover setup includes the local proxy and its Node runtime. Added or reconnected accounts are picked up automatically while the app is open.
 - **Keep credentials local.** Each account has its own Codex directory and Keychain backup. There is no CodexMulti account to create or hosted service to connect to.
+
+## What is Failover, and why use it?
+
+A coding task can stop when one Codex account reaches its usage limit, even if another account
+still has capacity. Without automatic switching, you have to choose another account and retry
+the request yourself.
+
+**Failover automatically tries the next available account when the current one returns a confirmed
+usage-limit error.** Add your accounts, put them in your preferred order, and turn on **Use Failover**.
+CodexMulti routes eligible Codex requests through a local proxy on your Mac.
+
+For example, if account A reaches its limit before a response starts, the proxy retries that request
+with account B. If B is also at its limit, it tries the next eligible account. You can keep working
+without manually changing the account for each limit error.
+
+The accounts keep their own subscriptions and limits; Failover makes their available capacity
+easier to use. It does not replay a response that has already started or retry every kind of error.
+See [when account switching happens](#when-will-it-switch-accounts) for the exact conditions.
 
 ## Install
 
@@ -67,6 +87,9 @@ Changes that need a proxy reload wait for active requests to finish. Closing the
 a healthy proxy running; turning Failover off restores direct Codex connections after active requests finish.
 
 Open **Accounts…** from the menu bar to see your full pool.
+In an account's **…** menu, **Use in failover…** selects that account for new requests.
+**Pause in failover** excludes it from receiving new requests; **Resume in failover** includes it again.
+Requests already in flight continue on their current account.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/accounts-dark.png">

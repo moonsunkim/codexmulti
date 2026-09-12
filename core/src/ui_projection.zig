@@ -943,6 +943,8 @@ pub const ViewState = struct {
         if (self.unified_row_count >= self.unified_rows.len) return;
         const proxy_position = self.proxyIndexOfAccount(self.rows[account.index].account_id);
         const proxy: ?*const ProxyAccountView = if (proxy_position) |index| &self.proxy_rows[index] else null;
+        const show_proxy_actions = self.proxy_reachability == .reachable and self.proxy_config_path_matches and
+            if (proxy) |row| row.mapped else false;
         const inspector_index: ?u32 = if (account.expanded and self.inspector.present and self.inspector.index == account.index)
             self.inspector.index
         else
@@ -979,6 +981,10 @@ pub const ViewState = struct {
             .action_sign_in_again = account.action_sign_in_again,
             .action_busy = account.action_busy,
             .busy_label = account.busy_label,
+            .show_switch = show_proxy_actions and proxy.?.state == .ready and !proxy.?.active,
+            .show_pause = show_proxy_actions and proxy.?.state != .paused,
+            .show_resume = show_proxy_actions and (proxy.?.state == .paused or proxy.?.state == .invalid),
+            .show_clear_cooldown = show_proxy_actions and proxy.?.state == .cooldown,
             .can_switch_proxy = account.can_switch_proxy,
             .switch_label = account.switch_label,
             .can_pause_proxy = account.can_pause_proxy,

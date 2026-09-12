@@ -33,6 +33,47 @@ fn proxyFact(reachability: ui_model.ProxyReachability) ui_model.ProxyFact {
     };
 }
 
+test "failover menu visibility survives polling while commands remain blocked" {
+    const model = try support.newModel();
+    defer testing.allocator.destroy(model);
+    var rows = mapped_ready;
+    var accounts = [_]RecordingService.Account{.{ .fact = support.codexFact() }};
+    var service: RecordingService = .{
+        .accounts = &accounts,
+        .capabilities = .{ .connected = true, .proxy_control = true },
+        .proxy_fact = proxyFact(.reachable),
+    };
+    service.proxy_fact.?.accounts = &rows;
+    model.service = service.port();
+    inline for (.{ ui_model.ProxyWork.idle, ui_model.ProxyWork.checking, ui_model.ProxyWork.pausing, ui_model.ProxyWork.idle }) |work| {
+        service.proxy_fact.?.work = work;
+        shell.reproject(model);
+        const row = model.view.unifiedRowSlice()[0];
+        try testing.expect(row.show_switch and row.show_pause);
+        try testing.expect(!row.show_resume and !row.show_clear_cooldown);
+        try testing.expectEqual(work == .idle, row.can_switch_proxy);
+        try testing.expectEqual(work == .idle, row.can_pause_proxy);
+        if (work != .idle) {
+            var effects: shell.Effects = .{};
+            shell.update(model, .{ .begin_failover_switch = 0 }, &effects);
+            shell.update(model, .{ .pause_failover_account = 0 }, &effects);
+            try testing.expect(!model.failoverSwitchIsOpen());
+            try testing.expectEqual(@as(usize, 0), service.submissions);
+        }
+    }
+    rows[0].state = .paused;
+    shell.reproject(model);
+    try testing.expect(model.view.unifiedRowSlice()[0].show_resume);
+    try testing.expect(!model.view.unifiedRowSlice()[0].show_pause);
+    rows[0].state = .cooldown;
+    shell.reproject(model);
+    try testing.expect(model.view.unifiedRowSlice()[0].show_clear_cooldown);
+    service.proxy_fact.?.config_path_matches = false;
+    shell.reproject(model);
+    const mismatch = model.view.unifiedRowSlice()[0];
+    try testing.expect(!mismatch.show_switch and !mismatch.show_pause and !mismatch.show_resume and !mismatch.show_clear_cooldown);
+}
+
 test "proxy projection remains passive across initial projection tray expansion tabs menus and pump" {
     const model = try support.newModel();
     defer testing.allocator.destroy(model);

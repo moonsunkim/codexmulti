@@ -6,6 +6,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.2.5]
+
+### Fixed
+
+- Keep account actions visible while background status checks temporarily disable them, so open popovers no longer shrink and expand on each poll.
+- Use clear Korean labels for switching to an account and excluding or including it in automatic account switching.
+
+### Added
+
+- Explain what Failover does and the interrupted-work problem it solves in English, Korean and Japanese READMEs, with links to switch languages.
+
 ## [0.2.4]
 
 ### Added

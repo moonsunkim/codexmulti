@@ -25,24 +25,22 @@ enum UnifiedModel {
         if row.action_refresh { actions.append(Item("refresh", Copy.refresh, enabled: shell.can_refresh && !row.action_busy, intent: .refresh_account(row: account))) }
 
 
-        if row.has_actions {
-            if row.can_switch_proxy {
-                actions.append(Item("switch", row.switch_label, intent: .begin_failover_switch(row: account)))
-            } else if row.can_switch, let proxy = row.proxy_index {
-                actions.append(Item("switch", Copy.useInFailover, intent: .begin_proxy_switch(row: proxy)))
-            }
-            if row.can_pause_proxy {
-                actions.append(Item("pause", Copy.pauseInFailover, intent: .pause_failover_account(row: account)))
-            } else if row.can_pause, let proxy = row.proxy_index {
-                actions.append(Item("pause", Copy.pauseInFailover, intent: .pause_proxy_account(row: proxy)))
-            }
-            if row.can_resume, let proxy = row.proxy_index {
-                actions.append(Item("resume", Copy.resumeInFailover, intent: .resume_proxy_account(row: proxy)))
-            }
+        if row.show_switch ?? (row.has_actions && (row.can_switch_proxy || row.can_switch)) {
+            actions.append(Item("switch", row.switch_label, enabled: row.can_switch_proxy || row.can_switch,
+                                intent: .begin_failover_switch(row: account)))
+        }
+        if row.show_pause ?? (row.has_actions && (row.can_pause_proxy || row.can_pause)) {
+            actions.append(Item("pause", Copy.pauseInFailover, enabled: row.can_pause_proxy || row.can_pause,
+                                intent: .pause_failover_account(row: account)))
+        }
+        if row.show_resume ?? (row.has_actions && row.can_resume), let proxy = row.proxy_index {
+            actions.append(Item("resume", Copy.resumeInFailover, enabled: row.can_resume,
+                                intent: .resume_proxy_account(row: proxy)))
         }
         if row.can_reset { actions.append(Item("reset", row.reset_label, intent: .begin_reset(row: account))) }
-        if row.has_actions && row.can_clear_cooldown {
-            actions.append(Item("clear_cooldown", Copy.clearCooldown, intent: .begin_clear_cooldown_account(row: account)))
+        if row.show_clear_cooldown ?? (row.has_actions && row.can_clear_cooldown) {
+            actions.append(Item("clear_cooldown", Copy.clearCooldown, enabled: row.can_clear_cooldown,
+                                intent: .begin_clear_cooldown_account(row: account)))
         }
         let top = topAccountID ?? accountID
         var management = [
