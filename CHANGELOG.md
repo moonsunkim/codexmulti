@@ -8,6 +8,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- Releases are now signed with a Developer ID certificate and notarized by Apple, so the first launch opens directly on macOS.
 - Added proactive token renewal: the proxy refreshes access tokens that expire within 48 hours ahead of time, backs off on failure, and reports renewal status; an account whose renewal keeps failing says "Refresh failed · sign in again".
 - Added a Keychain backup of each account's credentials that is restored automatically if the account's files go missing, and kept in sync after every refresh.
 - Added WebSocket passthrough in the proxy, which Codex remote control and the CLI's streaming transport need.

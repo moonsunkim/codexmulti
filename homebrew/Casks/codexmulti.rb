@@ -20,9 +20,4 @@ cask "codexmulti" do
     "~/Library/Preferences/dev.codexmulti.app.plist",
   ]
 
-  caveats <<~EOS
-    This release is not notarized. macOS blocks the first launch: open CodexMulti once,
-    dismiss the dialog, then in System Settings > Privacy & Security press "Open Anyway"
-    next to CodexMulti and confirm. Notarized releases will open directly.
-  EOS
 end
