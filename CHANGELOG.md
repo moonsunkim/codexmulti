@@ -6,6 +6,29 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.2.7]
+
+### Added
+
+- Check for signed app updates from Settings and install them without interrupting active proxy requests.
+- Keep the running proxy in a separate, verified runtime while the app is replaced; apply runtime changes after HTTP requests, WebSockets and credential refreshes finish.
+- Guide existing installations through one-time update setup after Codex clients are closed.
+
+### Changed
+
+- Show update progress, pending runtime changes, cancellation and deferred Off controls in Settings.
+- Run Homebrew's removal-preparation guard before quitting the app during uninstall, upgrade and reinstall.
+
+### Fixed
+
+- Resume interrupted update transactions after the coordinator exits, including lost installation and GUI-ready replies.
+- Preserve an Off request across a crash before its preference write, and keep cancelled or rolled-back updates deferred until explicitly retried.
+- Count incomplete HTTP request bodies as active work so updates wait for those requests to finish.
+
+### Updating from 0.2.6 or earlier
+
+Install this version once from the release ZIP or with `brew upgrade --cask --greedy moonsunkim/tap/codexmulti` after `brew update`. Older versions do not have the in-app updater. Close active Codex clients for the first update setup; later updates can wait for active requests themselves.
+
 ## [0.2.6]
 
 ### Fixed
