@@ -118,13 +118,15 @@ final class TrayModelTests: XCTestCase {
     func testMappedFixtureFoldsTheCodexHeaderIntoASection() throws {
         let view = try view("proxy-reachable-mapped")
         let entries = TrayModel.entries(view)
-        XCTAssertEqual(entries.count, 5)
-        guard case .action(let refresh) = entries[0], case .info(_, let proxyLine) = entries[1],
-              case .section(let codex) = entries[2], case .action(let settings) = entries[3], case .action(let quit) = entries[4] else {
+        XCTAssertEqual(entries.count, 6)
+        guard case .action(let refresh) = entries[0], case .info(_, let poolLine) = entries[1],
+              case .info(_, let proxyLine) = entries[2], case .section(let codex) = entries[3],
+              case .action(let settings) = entries[4], case .action(let quit) = entries[5] else {
             return XCTFail("unexpected shape: \(entries)")
         }
         XCTAssertEqual(refresh.intent, .refresh_all)
         XCTAssertTrue(refresh.enabled)
+        XCTAssertEqual(poolLine, view.tray.items[1].label)
         XCTAssertEqual(proxyLine, view.proxy_tray_text)
         XCTAssertEqual(codex.header, view.tray_provider_headers[0])
         XCTAssertEqual(codex.entries.count, 4)

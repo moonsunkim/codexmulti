@@ -44,7 +44,8 @@ final class TrayMenuStabilityTests: XCTestCase {
             root["generation"] = generation
             var tray = view["tray"] as! [String: Any]
             var items = tray["items"] as! [[String: Any]]
-            items[3]["label"] = "active@example.com — 73% · in 2d 23h"
+            let active = items.firstIndex { ($0["command"] as? String)?.hasSuffix("acct-codex-active") == true }!
+            items[active]["label"] = "active@example.com — 73% · in 2d 23h"
             tray["items"] = items
             view["tray"] = tray
             var rows = view["rows"] as! [[String: Any]]

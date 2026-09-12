@@ -330,6 +330,88 @@ test "an account with no reported window says so instead of showing zero" {
     try testing.expect(std.mem.indexOf(u8, model.inspectorNoUsage(), "no usage window") != null);
 }
 
+test "pool projection excludes unavailable proxy accounts and rounds remaining weekly capacity" {
+    var view: ui_model.ViewState = .{};
+    view.begin(now, .{ .connected = true, .proxy_control = true }, .kst);
+
+    const ids = [_][]const u8{
+        "acct-active",
+        "acct-ready-a",
+        "acct-cooldown",
+        "acct-ready-b",
+        "acct-paused",
+        "acct-invalid",
+        "acct-unmapped",
+        "acct-refreshing",
+        "acct-missing",
+    };
+    const used = [_]u8{ 33, 32, 32, 33, 0, 0, 0, 0, 0 };
+    for (ids, used) |account_id, used_percent| {
+        var fact = codexFact();
+        fact.account_id = account_id;
+        const slot = try view.pushAccount(fact);
+        try view.pushWindow(slot, .{
+            .kind = .weekly,
+            .label = "Weekly",
+            .used_percent = used_percent,
+            .reset_at_unix_s = now + 7 * 86400,
+        });
+    }
+    const proxy_accounts = [_]ui_model.ProxyAccountFact{
+        .{ .app_id = ids[0], .proxy_name = "active", .label = "Active", .state = .unknown, .active = true, .mapped = true },
+        .{ .app_id = ids[1], .proxy_name = "ready-a", .label = "Ready A", .state = .ready, .mapped = true },
+        .{ .app_id = ids[2], .proxy_name = "cooldown", .label = "Cooldown", .state = .cooldown, .mapped = true },
+        .{ .app_id = ids[3], .proxy_name = "ready-b", .label = "Ready B", .state = .ready, .mapped = true },
+        .{ .app_id = ids[4], .proxy_name = "paused", .label = "Paused", .state = .paused, .mapped = true },
+        .{ .app_id = ids[5], .proxy_name = "invalid", .label = "Invalid", .state = .invalid, .active = true, .mapped = true },
+        .{ .app_id = ids[6], .proxy_name = "unmapped", .label = "Unmapped", .state = .ready, .mapped = false },
+        .{ .app_id = ids[7], .proxy_name = "refreshing", .label = "Refreshing", .state = .refreshing, .mapped = true },
+    };
+    view.applyProxy(.{
+        .base_url = "",
+        .cli_path = "",
+        .config_path = "",
+        .reachability = .reachable,
+        .config_path_matches = true,
+        .accounts = &proxy_accounts,
+    });
+    view.applyProxyService(.{ .state = .running, .routing_state = .on });
+    view.finish(.{});
+
+    try testing.expectEqual(@as(?u8, 68), view.pool_remaining_percent);
+    try testing.expectEqual(@as(u32, 4), view.pool_usable_count);
+    try testing.expectEqual(@as(u32, 9), view.pool_total_count);
+}
+
+test "pool projection uses every registered account when the proxy is not installed" {
+    var view: ui_model.ViewState = .{};
+    view.begin(now, .{ .connected = true }, .kst);
+
+    const values = [_]u8{ 20, 80 };
+    for (values, 0..) |used_percent, index| {
+        var fact = codexFact();
+        fact.account_id = if (index == 0) "acct-one" else "acct-two";
+        const slot = try view.pushAccount(fact);
+        try view.pushWindow(slot, weeklyWindow(used_percent, now + 7 * 86400));
+    }
+    view.finish(.{});
+
+    try testing.expectEqual(@as(?u8, 50), view.pool_remaining_percent);
+    try testing.expectEqual(@as(u32, 2), view.pool_usable_count);
+    try testing.expectEqual(@as(u32, 2), view.pool_total_count);
+}
+
+test "pool projection stays absent when no accounts are registered" {
+    var view: ui_model.ViewState = .{};
+    view.begin(now, .{ .connected = true }, .kst);
+    view.finish(.{});
+
+    try testing.expectEqual(@as(?u8, null), view.pool_remaining_percent);
+    try testing.expectEqual(@as(u32, 0), view.pool_usable_count);
+    try testing.expectEqual(@as(u32, 0), view.pool_total_count);
+    try testing.expectEqualStrings("", view.pool_tray_text);
+}
+
 test "reauth and deferred accounts are counted and worded apart" {
     const model = try newModel();
     defer testing.allocator.destroy(model);

@@ -103,6 +103,10 @@ pub const ViewState = struct {
     no_accounts_action_text: []const u8 = copy.text(.add_codex),
 
     toolbar_status_text: []const u8 = "",
+    pool_remaining_percent: ?u8 = null,
+    pool_usable_count: u32 = 0,
+    pool_total_count: u32 = 0,
+    pool_tray_text: []const u8 = "",
     header_fresh_text: []const u8 = "",
     header_failed_text: []const u8 = "",
     header_has_failures: bool = false,
@@ -198,6 +202,10 @@ pub const ViewState = struct {
         self.headline_text = "";
         self.summary_text = "";
         self.tray_summary_text = "";
+        self.pool_remaining_percent = null;
+        self.pool_usable_count = 0;
+        self.pool_total_count = 0;
+        self.pool_tray_text = "";
         self.service_text = "";
         self.no_accounts_title_text = copy.text(.no_accounts_yet);
         self.no_accounts_body_text = copy.text(.no_accounts_body);
@@ -386,6 +394,7 @@ pub const ViewState = struct {
         self.renderInspector(options);
         self.renderUnifiedRows();
         self.renderSettings();
+        self.renderPool();
         self.renderHeaderView();
     }
 
@@ -401,6 +410,10 @@ pub const ViewState = struct {
         self.header_failed_text = "";
         self.header_has_failures = false;
         self.toolbar_status_text = "";
+        self.pool_remaining_percent = null;
+        self.pool_usable_count = 0;
+        self.pool_total_count = 0;
+        self.pool_tray_text = "";
         self.proxy_pill_text = "";
         self.proxy_pill_ok = false;
         self.proxy_pill_warn = false;
@@ -1047,8 +1060,53 @@ pub const ViewState = struct {
         } else {
             writer.writeAll(self.header_fresh_text) catch {};
         }
+        if (self.pool_remaining_percent) |remaining| {
+            copy.write(&writer, .toolbar_pool_suffix, .{remaining});
+        }
         if (self.error_count != 0) copy.write(&writer, .toolbar_failed_suffix, .{self.error_count});
         self.toolbar_status_text = self.internText(writer.buffered());
+    }
+
+    fn renderPool(self: *ViewState) void {
+        self.pool_total_count = @intCast(self.row_count);
+        if (self.row_count == 0) return;
+
+        var remaining_sum: u32 = 0;
+        var observed_count: u32 = 0;
+        for (self.rows[0..self.row_count]) |*row| {
+            if (!self.poolAccountUsable(row)) continue;
+            self.pool_usable_count += 1;
+            for (row.windows[0..row.window_count]) |window| {
+                if (window.kind != .weekly) continue;
+                remaining_sum += 100 - @min(@as(u32, window.used_percent), 100);
+                observed_count += 1;
+                break;
+            }
+        }
+        if (observed_count == 0) return;
+
+        const remaining: u8 = @intCast((remaining_sum + observed_count / 2) / observed_count);
+        self.pool_remaining_percent = remaining;
+        self.pool_tray_text = self.fmtText(.tray_pool, .{
+            remaining,
+            self.pool_usable_count,
+            self.pool_total_count,
+        });
+    }
+
+    fn poolAccountUsable(self: *const ViewState, row: *const AccountView) bool {
+        if (self.proxy_service_state == .not_installed) return true;
+        for (self.proxy_accounts[0..self.proxy_account_count]) |account| {
+            const app_id = account.app_id orelse continue;
+            if (!std.mem.eql(u8, app_id, row.account_id)) continue;
+            if (!account.mapped) return false;
+            return switch (account.state) {
+                .ready, .cooldown => true,
+                .paused, .invalid => false,
+                .refreshing, .unknown => account.active,
+            };
+        }
+        return false;
     }
 
     fn renderRow(self: *ViewState, row: *AccountView, row_index: usize) void {

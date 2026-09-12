@@ -57,6 +57,7 @@ final class TrayMenuBridgeTests: XCTestCase {
                        "every non-separator item but the provider header, verbatim, in the core's order")
         XCTAssertEqual(describe(menu), [
             "Refresh All Accounts|on|-|-|-",
+            "\(view.tray.items[1].label)|off|-|-|-",
             "Failover last seen · Active active · 1 cooling · 2026-Jul-25 02:59 UTC|off|-|-|-",
             "---",
             "active@example.com — 73% · in 3d 0h|on|-|-|submenu",

@@ -499,6 +499,9 @@ pub fn buildTray(view: anytype, out: []TrayItem) usize {
     const body = out[0..body_limit];
 
     push(body, &count, &next_id, .{ .label = copy.text(.tray_refresh_all_accounts), .command = tray_command_refresh_all, .enabled = can_refresh });
+    if (view.pool_tray_text.len != 0) {
+        push(body, &count, &next_id, .{ .label = view.pool_tray_text, .enabled = false });
+    }
     if (view.capabilities.proxy_control) {
         push(body, &count, &next_id, .{ .label = view.proxy_tray_text, .enabled = false });
     }

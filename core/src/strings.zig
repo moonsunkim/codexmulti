@@ -276,6 +276,7 @@ pub const FormatKey = enum {
     toolbar_none_ready,
     toolbar_ready_in_flight,
     toolbar_ready,
+    toolbar_pool_suffix,
     toolbar_proxy_status,
     toolbar_failed_suffix,
     row_usage_summary,
@@ -291,6 +292,7 @@ pub const FormatKey = enum {
     header_in_progress,
     header_updated,
     tray_summary,
+    tray_pool,
     default_account_label,
     numbered_account_label,
     last_good_reading,
@@ -354,6 +356,7 @@ pub fn FormatArgs(comptime key: FormatKey) type {
         .active_in_flight,
         .paused_draining,
         .credits_available,
+        .toolbar_pool_suffix,
         => @Tuple(&.{u32}),
         .decimal_usize,
         .header_accounts,
@@ -393,6 +396,7 @@ pub fn FormatArgs(comptime key: FormatKey) type {
         .header_unreadable,
         .header_in_progress,
         => @Tuple(&.{u32}),
+        .tray_pool => @Tuple(&.{ u32, u32, u32 }),
         .numbered_account_label => @Tuple(&.{ []const u8, u32 }),
     };
 }
@@ -701,6 +705,7 @@ const EnglishFormat = struct {
     const toolbar_none_ready = "None ready · {s}";
     const toolbar_ready_in_flight = "{d} ready · {d} in flight";
     const toolbar_ready = "{d} ready · {s}";
+    const toolbar_pool_suffix = " · pool {d}%";
     const toolbar_proxy_status = "{s} · {s}";
     const toolbar_failed_suffix = " · {d} failed";
     const row_usage_summary = "{d}% · {s}";
@@ -716,6 +721,7 @@ const EnglishFormat = struct {
     const header_in_progress = " · {d} in progress";
     const header_updated = " · updated {s}";
     const tray_summary = "Saved usage · {s}";
+    const tray_pool = "Pool {d}% left · {d} of {d} usable";
     const default_account_label = "{s} account";
     const numbered_account_label = "{s} {d}";
     const last_good_reading = " Last good reading: {s}.";

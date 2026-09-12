@@ -899,7 +899,7 @@ fn assertDirectStruct(comptime T: type) void {
 pub fn assertProjectionFieldCoverage() void {
     comptime {
         @setEvalBranchQuota(20_000);
-        assertSourceFieldsBackedByWire(ui_model.ViewState, ViewWire, &.{ "time_zone", "appearance", "codex_usage_window", "codex_show_model_limits", "launch_at_login", "launch_at_login_registration_failed", "auto_refresh_minutes", "auto_refresh_account_count", "proxy_enabled", "proxy_enabled_detail_text", "proxy_account_count", "proxy_token_refresh_failed", "proxy_row_count", "row_count", "usage_count", "unified_row_count", "names", "names_len", "text", "text_len" });
+        assertSourceFieldsBackedByWire(ui_model.ViewState, ViewWire, &.{ "time_zone", "appearance", "codex_usage_window", "codex_show_model_limits", "launch_at_login", "launch_at_login_registration_failed", "auto_refresh_minutes", "auto_refresh_account_count", "proxy_enabled", "proxy_enabled_detail_text", "proxy_account_count", "proxy_token_refresh_failed", "proxy_row_count", "row_count", "usage_count", "unified_row_count", "pool_remaining_percent", "pool_usable_count", "pool_total_count", "pool_tray_text", "names", "names_len", "text", "text_len" });
         assertSourceFieldsBackedByWire(ui_model.AccountView, AccountWire, &.{"window_count"});
         assertSourceFieldsBackedByWire(ui_model.Inspector, InspectorWire, &.{});
         assertSourceFieldsBackedByWire(shell.Model, ShellWire, &.{ "view", "service", "now_unix_s", "time_zone" });
@@ -922,7 +922,7 @@ pub fn assertProjectionFieldCoverage() void {
             "proxy_node_hint_text",      "proxy_banner_text",        "claude_count",           "codex_count",                  "reauth_count",              "error_count",                  "stale_count",            "busy_count",
             "snapshot_count",            "newest_success_at_unix_s", "headline_text",          "summary_text",                 "tray_summary_text",         "service_text",                 "appearance",             "unified_order_source",
             "unified_rows",              "settings",
-        }, &.{ "time_zone", "codex_usage_window", "codex_show_model_limits", "launch_at_login", "launch_at_login_registration_failed", "auto_refresh_minutes", "auto_refresh_account_count", "proxy_enabled", "proxy_enabled_detail_text", "proxy_account_count", "proxy_token_refresh_failed", "proxy_row_count", "row_count", "usage_count", "unified_row_count", "names", "names_len", "text", "text_len" });
+        }, &.{ "time_zone", "codex_usage_window", "codex_show_model_limits", "launch_at_login", "launch_at_login_registration_failed", "auto_refresh_minutes", "auto_refresh_account_count", "proxy_enabled", "proxy_enabled_detail_text", "proxy_account_count", "proxy_token_refresh_failed", "proxy_row_count", "row_count", "usage_count", "unified_row_count", "pool_remaining_percent", "pool_usable_count", "pool_total_count", "pool_tray_text", "names", "names_len", "text", "text_len" });
         assertFieldsCovered(ui_model.AccountView, &.{
             "account_id",                  "label",                  "provider_email",         "plan_label",        "provider",           "enabled",              "auth_state",          "freshness",                   "snapshot_status",   "has_snapshot",
             "snapshot_captured_at_unix_s", "last_attempt_at_unix_s", "last_success_at_unix_s", "last_attempt_code", "reset_credit_count", "credit_detail_status", "credit_detail_count", "operation_in_flight",         "queued",            "pending_reset_attempt",
