@@ -11,6 +11,10 @@ import urllib.request
 root = pathlib.Path(sys.argv[1]).resolve()
 assert root.name.startswith('codexmulti-sparkle-') and root.parent == pathlib.Path('/private/tmp')
 plan = json.loads((root / 'plan.json').read_text())
+with socket.socket() as reservation:
+    reservation.bind(('127.0.0.1', 0))
+    plan['port'] = reservation.getsockname()[1]
+(root / 'plan.json').write_text(json.dumps(plan, indent=2) + '\n')
 app = root / 'Installed/CodexMulti.app'
 binary = app / 'Contents/MacOS/CodexMulti'
 runtime = root / 'Home/Library/Application Support/CodexMulti'
@@ -91,13 +95,16 @@ try:
                 assert current['boot_id'] == initial['boot_id'] and current['work_total'] == 1
                 assert current['generation'] == initial['generation']
             shutdown = [event for event in events if event['event'] == 'core-shutdown-joined' and event['pid'] == old_pid]
-            download = [event for event in events if event['event'] == 'transport' and event['path'] == '/CodexMulti.zip']
+            download = ([event for event in events if event['event'] == 'state' and event['status'] == 'downloading']
+                        if plan.get('transport') == 'https' else
+                        [event for event in events if event['event'] == 'transport' and event['path'] == '/CodexMulti.zip'])
             assert shutdown and download and shutdown[0]['time'] < download[0]['time']
             assert auth_before == (runtime / 'auth.json').read_bytes()
             receipt = dict(success, changed_runtime=plan['changedRuntime'], old_pid=old_pid,
                            old_boot_id=initial['boot_id'], new_boot_id=current['boot_id'],
                            active_connection_preserved=True, core_shutdown_preceded_download=True,
-                           transport='local URLProtocol fixture', actual_sparkle_install=True)
+                           transport='HTTPS' if plan.get('transport') == 'https' else 'local URLProtocol fixture',
+                           actual_sparkle_install=True)
             (root / 'verified.json').write_text(json.dumps(receipt, indent=2) + '\n')
             print(json.dumps(receipt, indent=2), flush=True)
             break

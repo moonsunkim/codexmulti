@@ -24,6 +24,7 @@ jobs:
       APPLE_NOTARY_KEY_SECRET: ${{ secrets.APPLE_NOTARY_KEY }}
       SPARKLE_PUBLIC_KEY: ${{ vars.SPARKLE_PUBLIC_KEY }}
       SPARKLE_FEED_URL: ${{ vars.SPARKLE_FEED_URL }}
+      CODEXMULTI_SPARKLE_TEST_FEED_BASE: ${{ vars.UPDATER_TEST_FEED_BASE }}
       SPARKLE_PRIVATE_KEY_SECRET: ${{ secrets.SPARKLE_PRIVATE_KEY }}
     steps:
       - name: Check out repository
@@ -104,6 +105,9 @@ jobs:
           printf 'SPARKLE_PRIVATE_KEY_FILE=%s\n' "$key_path" >> "$GITHUB_ENV"
       - name: Build and notarize candidate
         run: bash app/scripts/build-updater-candidate.sh
+      - name: Build notarized hosted installation fixtures
+        if: ${{ env.CODEXMULTI_SPARKLE_TEST_FEED_BASE != '' }}
+        run: bash app/scripts/build-hosted-updater-fixture.sh
       - name: Upload verified candidate
         uses: actions/upload-artifact@v4
         with:

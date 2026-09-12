@@ -25,6 +25,7 @@ struct ProbePlan: Codable {
     let oldBuild: String
     let newBuild: String
     let changedRuntime: Bool
+    let transport: String?
 }
 
 enum Probe {
@@ -165,10 +166,12 @@ extension URLSessionConfiguration {
             Probe.event("prepared", ["runtime_id": manifest.runtimeID])
             return
         }
-        URLProtocol.registerClass(FixtureTransport.self)
-        let original = class_getClassMethod(URLSessionConfiguration.self, #selector(getter: URLSessionConfiguration.default))!
-        let fixture = class_getClassMethod(URLSessionConfiguration.self, #selector(URLSessionConfiguration.fixtureConfiguration))!
-        method_exchangeImplementations(original, fixture)
+        if plan.transport != "https" {
+            URLProtocol.registerClass(FixtureTransport.self)
+            let original = class_getClassMethod(URLSessionConfiguration.self, #selector(getter: URLSessionConfiguration.default))!
+            let fixture = class_getClassMethod(URLSessionConfiguration.self, #selector(URLSessionConfiguration.fixtureConfiguration))!
+            method_exchangeImplementations(original, fixture)
+        }
         let application = NSApplication.shared
         application.setActivationPolicy(.accessory)
         let delegate = ProbeDelegate(plan: plan)
