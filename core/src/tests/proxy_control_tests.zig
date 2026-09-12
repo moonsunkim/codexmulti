@@ -118,6 +118,25 @@ test "status v2 parses bounded states and maps exact auth paths" {
     try testing.expectEqual(@as(?usize, 0), mapped.active_index);
 }
 
+test "F15 status parser carries proactive token renewal health without credential values" {
+    const body =
+        "{\"version\":2,\"config_path\":\"" ++ fixture_config ++
+        "\",\"active\":\"codex-1\",\"cursor\":\"codex-1\",\"in_flight\":0,\"accounts\":[{" ++
+        "\"name\":\"codex-1\",\"label\":\"Primary\",\"auth_file\":\"" ++ fixture_auth_a ++
+        "\",\"state\":\"INVALID\",\"cooldown_until\":null,\"reason\":\"invalid_credentials\"," ++
+        "\"token_expires_at\":\"2030-01-01T00:00:00.000Z\",\"in_flight\":0," ++
+        "\"token_refresh\":{\"last_ok_at\":\"2029-12-31T18:00:00.000Z\"," ++
+        "\"last_error\":\"rejected\",\"next_attempt_at\":\"2030-01-01T02:00:00.000Z\"}}]}";
+
+    const status = try proxy.parseStatus(testing.allocator, body);
+    const account = status.accountAt(0).?;
+    try testing.expectEqual(proxy.AccountState.invalid, account.state);
+    try testing.expectEqual(@as(?i64, 1_893_434_400), account.token_refresh_last_ok_at_unix_s);
+    try testing.expect(account.has_token_refresh_last_error);
+    try testing.expectEqualStrings("rejected", account.token_refresh_last_error.slice());
+    try testing.expectEqual(@as(?i64, 1_893_463_200), account.token_refresh_next_attempt_at_unix_s);
+}
+
 test "mapping refuses case path confusion and leaves unknown rows unmapped" {
     const confused =
         "{\"version\":2,\"config_path\":\"" ++ fixture_config ++

@@ -11,6 +11,7 @@ pub const max_request_path_bytes: usize = 192;
 pub const max_base_url_bytes: usize = 32;
 pub const max_proxy_name_bytes: usize = 64;
 pub const max_label_bytes: usize = account_registry.max_label_bytes;
+pub const max_refresh_error_kind_bytes: usize = 64;
 pub const default_timeout_ms: u32 = 5_000;
 
 pub fn BoundedText(comptime capacity: usize) type {
@@ -122,6 +123,10 @@ pub const RawAccount = struct {
     state: AccountState = .ready,
     cooldown_until_unix_s: ?i64 = null,
     token_expires_at_unix_s: ?i64 = null,
+    token_refresh_last_ok_at_unix_s: ?i64 = null,
+    token_refresh_last_error: BoundedText(max_refresh_error_kind_bytes) = .{},
+    has_token_refresh_last_error: bool = false,
+    token_refresh_next_attempt_at_unix_s: ?i64 = null,
     in_flight: u32 = 0,
 };
 
@@ -171,6 +176,10 @@ pub const MappedAccount = struct {
     state: AccountState = .ready,
     cooldown_until_unix_s: ?i64 = null,
     token_expires_at_unix_s: ?i64 = null,
+    token_refresh_last_ok_at_unix_s: ?i64 = null,
+    token_refresh_last_error: BoundedText(max_refresh_error_kind_bytes) = .{},
+    has_token_refresh_last_error: bool = false,
+    token_refresh_next_attempt_at_unix_s: ?i64 = null,
     in_flight: u32 = 0,
     active: bool = false,
     mapped: bool = false,
@@ -251,6 +260,12 @@ const AccountV2Wire = struct {
     reason: ?[]const u8,
     token_expires_at: ?[]const u8,
     in_flight: u32,
+    token_refresh: ?TokenRefreshWire = null,
+};
+const TokenRefreshWire = struct {
+    last_ok_at: ?[]const u8,
+    last_error: ?[]const u8,
+    next_attempt_at: ?[]const u8,
 };
 const StatusV1Wire = struct {
     version: u8,
@@ -343,6 +358,10 @@ fn parseStatusV2(allocator: std.mem.Allocator, bytes: []const u8) ParseError!Sta
             .state = try parseState(account.state),
             .cooldown_until_unix_s = try optionalTimestamp(account.cooldown_until),
             .token_expires_at_unix_s = try optionalTimestamp(account.token_expires_at),
+            .token_refresh_last_ok_at_unix_s = if (account.token_refresh) |refresh| try optionalTimestamp(refresh.last_ok_at) else null,
+            .token_refresh_last_error = if (account.token_refresh) |refresh| try refreshErrorKind(refresh.last_error) else .{},
+            .has_token_refresh_last_error = if (account.token_refresh) |refresh| refresh.last_error != null else false,
+            .token_refresh_next_attempt_at_unix_s = if (account.token_refresh) |refresh| try optionalTimestamp(refresh.next_attempt_at) else null,
             .in_flight = account.in_flight,
         };
         try appendRawAccount(&result, raw);
@@ -383,6 +402,16 @@ fn proxyName(value: []const u8) ParseError!BoundedText(max_proxy_name_bytes) {
         else => return error.InvalidAccountName,
     };
     return BoundedText(max_proxy_name_bytes).init(value) catch return error.InvalidAccountName;
+}
+
+fn refreshErrorKind(value: ?[]const u8) ParseError!BoundedText(max_refresh_error_kind_bytes) {
+    const text = value orelse return .{};
+    if (text.len == 0 or text.len > max_refresh_error_kind_bytes) return error.InvalidStatus;
+    for (text) |byte| switch (byte) {
+        'a'...'z', '_' => {},
+        else => return error.InvalidStatus,
+    };
+    return BoundedText(max_refresh_error_kind_bytes).init(text) catch return error.InvalidStatus;
 }
 
 fn optionalName(value: ?[]const u8) ParseError!BoundedText(max_proxy_name_bytes) {
@@ -484,9 +513,13 @@ pub fn mapStatus(status: Status, layout: *const runtime_paths.Layout, app_accoun
         var mapped: MappedAccount = .{
             .proxy_name = raw.name,
             .label = BoundedText(max_label_bytes).init(label) catch return error.InvalidLabel,
-            .state = raw.state,
+            .state = if (raw.has_token_refresh_last_error) .invalid else raw.state,
             .cooldown_until_unix_s = raw.cooldown_until_unix_s,
             .token_expires_at_unix_s = raw.token_expires_at_unix_s,
+            .token_refresh_last_ok_at_unix_s = raw.token_refresh_last_ok_at_unix_s,
+            .token_refresh_last_error = raw.token_refresh_last_error,
+            .has_token_refresh_last_error = raw.has_token_refresh_last_error,
+            .token_refresh_next_attempt_at_unix_s = raw.token_refresh_next_attempt_at_unix_s,
             .in_flight = raw.in_flight,
             .active = status.has_active and raw.name.eql(status.active.slice()),
             .mapped = match != null,

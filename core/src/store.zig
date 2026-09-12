@@ -79,6 +79,9 @@ pub const ProxyStoredAccount = struct {
     state: ProxyStoredState,
     cooldown_until_unix_s: ?i64 = null,
     token_expires_at_unix_s: ?i64 = null,
+    token_refresh_last_ok_at_unix_s: ?i64 = null,
+    token_refresh_last_error: ?[]const u8 = null,
+    token_refresh_next_attempt_at_unix_s: ?i64 = null,
     in_flight: u32,
     active: bool,
 };
@@ -218,6 +221,15 @@ pub fn validateProxyStatus(document: ProxyStatusDocument) !void {
             if (account.storage_key) |key| runtime_paths.validateAccountSegment(key) catch return error.InvalidProxyStorageKey;
             if (account.cooldown_until_unix_s) |value| if (value < 0) return error.InvalidProxyTimestamp;
             if (account.token_expires_at_unix_s) |value| if (value < 0) return error.InvalidProxyTimestamp;
+            if (account.token_refresh_last_ok_at_unix_s) |value| if (value < 0) return error.InvalidProxyTimestamp;
+            if (account.token_refresh_next_attempt_at_unix_s) |value| if (value < 0) return error.InvalidProxyTimestamp;
+            if (account.token_refresh_last_error) |value| {
+                if (value.len == 0 or value.len > proxy_control.max_refresh_error_kind_bytes) return error.InvalidProxyStatus;
+                for (value) |byte| switch (byte) {
+                    'a'...'z', '_' => {},
+                    else => return error.InvalidProxyStatus,
+                };
+            }
             if (account.active) active_count += 1;
             for (success.accounts[index + 1 ..]) |other| {
                 if (std.mem.eql(u8, account.proxy_name, other.proxy_name)) return error.DuplicateProxyAccount;

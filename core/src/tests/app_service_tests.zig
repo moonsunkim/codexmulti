@@ -40,6 +40,8 @@ const canary_access = "demo-access-placeholder-1111";
 const canary_refresh = "demo-refresh-placeholder-0000";
 const codex_auth_backup_bytes =
     "{\"auth_mode\":\"chatgpt\",\"tokens\":{\"access_token\":\"demo-auth-backup-access\",\"refresh_token\":\"demo-auth-backup-refresh\"}}\n";
+const rotated_codex_auth_backup_bytes =
+    "{\"auth_mode\":\"chatgpt\",\"tokens\":{\"access_token\":\"demo-auth-rotated-access\",\"refresh_token\":\"demo-auth-rotated-refresh-chain\"}}\n";
 
 const frame = protocol.frame;
 const resultFrame = protocol.resultFrame;
@@ -2080,7 +2082,56 @@ test "F9 startup restores a missing Codex auth file from Keychain" {
     }}, restarted.credentials.recordedOperations());
 }
 
-test "F9 startup does not read Keychain when the Codex auth file exists" {
+test "F15 pump detects a changed Codex auth file and resynchronizes its in-memory Keychain backup once" {
+    const io = testing.io;
+    var cwd = std.Io.Dir.cwd();
+    const parent = ".zig-cache/test-f15-auth-resync";
+    const relative_root = parent ++ "/CodexMulti";
+    const auth_path = "accounts/" ++ codex_storage_key ++ "/codex/" ++ runtime_paths.codex_auth_file_name;
+    cwd.deleteTree(io, parent) catch {};
+    defer cwd.deleteTree(io, parent) catch {};
+    try cwd.createDirPath(io, relative_root ++ "/accounts/" ++ codex_storage_key ++ "/codex");
+    const root = try cwd.realPathFileAlloc(io, relative_root, testing.allocator);
+    defer testing.allocator.free(root);
+    const layout = try runtime_paths.Layout.fromAppDataDir(root);
+    var app_dir = try cwd.openDir(io, relative_root, .{});
+    defer app_dir.close(io);
+
+    const harness = try Harness.createWithLayout(layout);
+    defer harness.destroy();
+    try harness.addCodex();
+    harness.attach();
+    var old_backup = try keychain.Credential.init(codex_auth_backup_bytes);
+    defer old_backup.wipe();
+    const account_key = try keychain.AccountKey.init(codex_storage_key);
+    try harness.credentials.store().save(&account_key, .codex_auth_backup, &old_backup);
+    var auth_file = try app_dir.createFile(io, auth_path, .{
+        .permissions = std.Io.File.Permissions.fromMode(0o600),
+    });
+    try auth_file.writeStreamingAll(io, codex_auth_backup_bytes);
+    auth_file.close(io);
+    harness.service.synchronizeCodexAuthBackups();
+    harness.credentials.resetOperations();
+    auth_file = try app_dir.createFile(io, auth_path, .{
+        .permissions = std.Io.File.Permissions.fromMode(0o600),
+    });
+    try auth_file.writeStreamingAll(io, rotated_codex_auth_backup_bytes);
+    auth_file.close(io);
+
+    harness.service.pump(now + 60);
+
+    var synchronized: keychain.Credential = .empty;
+    defer synchronized.wipe();
+    try harness.credentials.store().load(&account_key, .codex_auth_backup, &synchronized);
+    try testing.expect(synchronized.eqlPlaintext(rotated_codex_auth_backup_bytes));
+    harness.credentials.resetOperations();
+
+    harness.service.pump(now + 120);
+
+    try testing.expectEqual(@as(usize, 0), harness.credentials.recordedOperations().len);
+}
+
+test "F15 startup resynchronizes an existing Codex auth file to Keychain" {
     const io = testing.io;
     var cwd = std.Io.Dir.cwd();
     const parent = ".zig-cache/test-f9-auth-present";
@@ -2103,21 +2154,30 @@ test "F9 startup does not read Keychain when the Codex auth file exists" {
     var auth_file = try app_dir.createFile(io, auth_path, .{
         .permissions = std.Io.File.Permissions.fromMode(0o600),
     });
-    try auth_file.writeStreamingAll(io, codex_auth_backup_bytes);
+    try auth_file.writeStreamingAll(io, rotated_codex_auth_backup_bytes);
     auth_file.close(io);
 
     const restarted = try Harness.createWithLayout(layout);
     defer restarted.destroy();
+    const account_key = try keychain.AccountKey.init(codex_storage_key);
+    var stale_backup = try keychain.Credential.init(codex_auth_backup_bytes);
+    defer stale_backup.wipe();
+    try restarted.credentials.store().save(&account_key, .codex_auth_backup, &stale_backup);
     var live = restarted.live();
     live.sink = file_sink.sink();
     restarted.service.attach(live);
-    restarted.credentials.fail_loads_for = .codex_auth_backup;
-    restarted.credentials.fail_next_load = error.Unavailable;
     restarted.credentials.resetOperations();
 
     const report = restarted.service.load(io, app_dir);
     try testing.expectEqual(@as(usize, 1), report.accounts_loaded);
-    try testing.expectEqual(@as(usize, 0), restarted.credentials.recordedOperations().len);
+    try testing.expectEqualSlices(keychain.MemoryStore.Operation, &.{
+        .{ .action = .load, .kind = .codex_auth_backup },
+        .{ .action = .save, .kind = .codex_auth_backup },
+    }, restarted.credentials.recordedOperations());
+    var synchronized: keychain.Credential = .empty;
+    defer synchronized.wipe();
+    try restarted.credentials.store().load(&account_key, .codex_auth_backup, &synchronized);
+    try testing.expect(synchronized.eqlPlaintext(rotated_codex_auth_backup_bytes));
 }
 
 test "F9 removing a Codex account removes its auth backup" {

@@ -222,6 +222,7 @@ pub const Controller = struct {
             .label = "",
             .state = .unknown,
         });
+        var token_refresh_failures: [account_registry.max_accounts]bool = @splat(false);
         var count: usize = 0;
         var in_flight: u32 = 0;
         if (self.state.last_success) |*success| {
@@ -239,6 +240,7 @@ pub const Controller = struct {
                     .active = account.active,
                     .mapped = account.mapped,
                 };
+                token_refresh_failures[count] = account.has_token_refresh_last_error;
                 count += 1;
             }
         }
@@ -258,6 +260,7 @@ pub const Controller = struct {
             .config_path_matches = self.state.config_path_matches,
             .in_flight = in_flight,
             .accounts = accounts[0..count],
+            .token_refresh_failures = token_refresh_failures[0..count],
         });
     }
 
@@ -471,6 +474,9 @@ pub const Controller = struct {
                 .state = storeState(account.state),
                 .cooldown_until_unix_s = account.cooldown_until_unix_s,
                 .token_expires_at_unix_s = account.token_expires_at_unix_s,
+                .token_refresh_last_ok_at_unix_s = account.token_refresh_last_ok_at_unix_s,
+                .token_refresh_last_error = if (account.has_token_refresh_last_error) account.token_refresh_last_error.slice() else null,
+                .token_refresh_next_attempt_at_unix_s = account.token_refresh_next_attempt_at_unix_s,
                 .in_flight = account.in_flight,
                 .active = account.active,
             };
@@ -530,6 +536,13 @@ pub const Controller = struct {
                         .state = clientState(account.state),
                         .cooldown_until_unix_s = account.cooldown_until_unix_s,
                         .token_expires_at_unix_s = account.token_expires_at_unix_s,
+                        .token_refresh_last_ok_at_unix_s = account.token_refresh_last_ok_at_unix_s,
+                        .token_refresh_last_error = if (account.token_refresh_last_error) |value|
+                            (proxy_control.BoundedText(proxy_control.max_refresh_error_kind_bytes).init(value) catch .{})
+                        else
+                            .{},
+                        .has_token_refresh_last_error = account.token_refresh_last_error != null,
+                        .token_refresh_next_attempt_at_unix_s = account.token_refresh_next_attempt_at_unix_s,
                         .in_flight = account.in_flight,
                         .active = account.active,
                     };

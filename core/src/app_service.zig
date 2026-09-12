@@ -188,6 +188,22 @@ const PendingLogin = struct {
     purpose: coordinator.LoginPurpose = .initial,
 };
 
+const AuthBackupStamp = struct {
+    occupied: bool = false,
+    storage_key: proxy_control.BoundedText(account_registry.max_storage_key_bytes) = .{},
+    size: u64 = 0,
+    mtime_ns: i96 = 0,
+    digest: [std.crypto.hash.sha2.Sha256.digest_length]u8 = @splat(0),
+};
+
+const AuthFileSnapshot = struct {
+    bytes: []u8,
+    size: u64,
+    mtime_ns: i96,
+};
+
+const auth_backup_check_interval_s: i64 = 60;
+
 pub const Service = struct {
     allocator: std.mem.Allocator,
     core: *coordinator.Coordinator,
@@ -206,6 +222,8 @@ pub const Service = struct {
     reset_proxy_clear: ResetProxyClearRecord = .{},
     usage_refresh: UsageRefreshFlow = .{},
     cooldown_reconciliations: [account_registry.max_accounts]CooldownReconcileRecord = @splat(.{}),
+    auth_backup_stamps: [account_registry.max_accounts]AuthBackupStamp = @splat(.{}),
+    next_auth_backup_check_at_unix_s: ?i64 = null,
     activity: Activity = .{},
     appearance: ui_model.Appearance = .system,
     codex_usage_window: ui_model.CodexUsageWindow = .auto,
@@ -671,6 +689,7 @@ pub const Service = struct {
 
     fn submitRefreshAll(self: *Service) ui_model.CommandOutcome {
         if (self.live == null) return .service_unavailable;
+        self.synchronizeCodexAuthBackups();
         if (self.usage_refresh.active()) return .rejected_busy;
         const plan = self.core.requestRefreshAllForProvider(.codex);
         if (plan.queued == 0 and plan.already_pending == 0) return .rejected_not_allowed;
@@ -681,6 +700,7 @@ pub const Service = struct {
 
     fn submitRefresh(self: *Service, account_id: []const u8) ui_model.CommandOutcome {
         if (self.live == null) return .service_unavailable;
+        self.synchronizeCodexAuthBackups();
         if (self.usage_refresh.active()) return .rejected_busy;
         const account = self.core.account(account_id) orelse return .rejected_unknown_account;
         if (account.provider != .codex) return .rejected_not_allowed;
@@ -890,6 +910,7 @@ pub const Service = struct {
             };
         }
         self.proxy.recordRemoval(account_id);
+        self.clearAuthBackupStamp(account.storage_key);
         return .accepted_pending;
     }
 
@@ -1129,6 +1150,7 @@ pub const Service = struct {
         self.now_unix_s = now_unix_s;
         if (self.live) |live| if (live.proxy_service) |service_live| self.proxy_service.drain(service_live.io);
         self.drainProxy(now_unix_s);
+        self.maybeSynchronizeCodexAuthBackups(now_unix_s);
         self.resetEndedCooldownRecords();
         self.settleResetProxyClear();
         self.drainWorkers(now_unix_s);
@@ -1167,7 +1189,9 @@ pub const Service = struct {
 
     fn drainProxy(self: *Service, now_unix_s: i64) void {
         const live = self.live orelse return;
+        const success_revision = self.proxy.state.success_revision;
         self.proxy.drain(self.core, proxyDrivers(live), now_unix_s);
+        if (self.proxy.state.success_revision != success_revision) self.synchronizeCodexAuthBackups();
         switch (self.proxy.state.reachability) {
             .reachable => if (self.proxy.state.config_path_matches) {
                 const in_flight = if (self.proxy.state.last_success) |status| status.in_flight else 0;
@@ -1390,19 +1414,63 @@ pub const Service = struct {
             return;
         };
         if (account.provider != .codex) return;
+        self.synchronizeCodexAuthBackup(account, live);
+    }
+
+    pub fn synchronizeCodexAuthBackups(self: *Service) void {
+        const live = self.live orelse return;
+        var index: usize = 0;
+        while (index < self.core.accountCount()) : (index += 1) {
+            const account = self.core.accountAt(index) orelse continue;
+            if (account.provider == .codex) self.synchronizeCodexAuthBackup(account, live);
+        }
+    }
+
+    fn maybeSynchronizeCodexAuthBackups(self: *Service, now_unix_s: i64) void {
+        if (self.next_auth_backup_check_at_unix_s) |next| if (now_unix_s < next) return;
+        self.next_auth_backup_check_at_unix_s = now_unix_s +| auth_backup_check_interval_s;
+        self.synchronizeCodexAuthBackups();
+    }
+
+    fn synchronizeCodexAuthBackup(self: *Service, account: account_registry.Account, live: Live) void {
         const auth_path = self.core.config.layout.codexAuthFile(account.storage_key) catch |err| {
             logAuthFailure("backup path", account.storage_key, err);
             return;
         };
-        const bytes = readPrivateAuthFile(self.allocator, live.io, auth_path.slice()) catch |err| {
+        const stamp = self.authBackupStamp(account.storage_key) orelse return;
+        const stat = std.Io.Dir.cwd().statFile(live.io, auth_path.slice(), .{ .follow_symlinks = false }) catch |err| switch (err) {
+            error.FileNotFound => return,
+            else => {
+                logAuthFailure("backup inspect", account.storage_key, err);
+                return;
+            },
+        };
+        if (stat.kind != .file) {
+            logAuthFailure("backup inspect", account.storage_key, error.NotAFile);
+            return;
+        }
+        if (stat.size > keychain.max_credential_bytes) {
+            logAuthFailure("backup inspect", account.storage_key, error.FileTooBig);
+            return;
+        }
+        if (stamp.occupied and stamp.size == stat.size and stamp.mtime_ns == stat.mtime.nanoseconds) return;
+        const snapshot = readPrivateAuthSnapshot(self.allocator, live.io, auth_path.slice()) catch |err| {
             logAuthFailure("backup read", account.storage_key, err);
             return;
         };
         defer {
-            std.crypto.secureZero(u8, bytes);
-            self.allocator.free(bytes);
+            std.crypto.secureZero(u8, snapshot.bytes);
+            self.allocator.free(snapshot.bytes);
         }
-        var credential = keychain.Credential.init(bytes) catch |err| {
+        if (stamp.occupied and stamp.size == snapshot.size and stamp.mtime_ns == snapshot.mtime_ns) return;
+        var digest: [std.crypto.hash.sha2.Sha256.digest_length]u8 = undefined;
+        std.crypto.hash.sha2.Sha256.hash(snapshot.bytes, &digest, .{});
+        if (stamp.occupied and std.mem.eql(u8, &stamp.digest, &digest)) {
+            stamp.size = snapshot.size;
+            stamp.mtime_ns = snapshot.mtime_ns;
+            return;
+        }
+        var credential = keychain.Credential.init(snapshot.bytes) catch |err| {
             logAuthFailure("backup encode", account.storage_key, err);
             return;
         };
@@ -1411,9 +1479,37 @@ pub const Service = struct {
             logAuthFailure("backup account", account.storage_key, err);
             return;
         };
-        live.credentials.save(&account_key, .codex_auth_backup, &credential) catch |err| {
+        var saved: keychain.Credential = .empty;
+        defer saved.wipe();
+        const matches = if (live.credentials.load(&account_key, .codex_auth_backup, &saved)) |_| blk: {
+            break :blk saved.eql(&credential);
+        } else |_| false;
+        if (!matches) live.credentials.save(&account_key, .codex_auth_backup, &credential) catch |err| {
             logAuthFailure("backup save", account.storage_key, err);
+            return;
         };
+        stamp.* = .{
+            .occupied = true,
+            .storage_key = proxy_control.BoundedText(account_registry.max_storage_key_bytes).init(account.storage_key) catch return,
+            .size = snapshot.size,
+            .mtime_ns = snapshot.mtime_ns,
+            .digest = digest,
+        };
+    }
+
+    fn authBackupStamp(self: *Service, storage_key: []const u8) ?*AuthBackupStamp {
+        var free: ?*AuthBackupStamp = null;
+        for (&self.auth_backup_stamps) |*stamp| {
+            if (stamp.occupied and stamp.storage_key.eql(storage_key)) return stamp;
+            if (!stamp.occupied and free == null) free = stamp;
+        }
+        return free;
+    }
+
+    fn clearAuthBackupStamp(self: *Service, storage_key: []const u8) void {
+        for (&self.auth_backup_stamps) |*stamp| {
+            if (stamp.occupied and stamp.storage_key.eql(storage_key)) stamp.* = .{};
+        }
     }
 
     pub fn restoreCodexAuthBackups(self: *Service) void {
@@ -1449,8 +1545,32 @@ pub const Service = struct {
                 logAuthFailure("restore write", account.storage_key, err);
                 continue;
             };
+            self.rememberRestoredCodexAuth(account.storage_key, auth_path.slice(), &credential, live.io);
             std.log.info("restored Codex auth backup for storage key {s}", .{account.storage_key});
         }
+    }
+
+    fn rememberRestoredCodexAuth(
+        self: *Service,
+        storage_key: []const u8,
+        auth_path: []const u8,
+        credential: *const keychain.Credential,
+        io: std.Io,
+    ) void {
+        const stat = std.Io.Dir.cwd().statFile(io, auth_path, .{ .follow_symlinks = false }) catch return;
+        const stamp = self.authBackupStamp(storage_key) orelse return;
+        var plaintext: [keychain.max_credential_bytes]u8 = undefined;
+        defer std.crypto.secureZero(u8, &plaintext);
+        const bytes = credential.copyPlaintext(&plaintext) catch return;
+        var digest: [std.crypto.hash.sha2.Sha256.digest_length]u8 = undefined;
+        std.crypto.hash.sha2.Sha256.hash(bytes, &digest, .{});
+        stamp.* = .{
+            .occupied = true,
+            .storage_key = proxy_control.BoundedText(account_registry.max_storage_key_bytes).init(storage_key) catch return,
+            .size = stat.size,
+            .mtime_ns = stat.mtime.nanoseconds,
+            .digest = digest,
+        };
     }
 
     pub fn load(self: *Service, io: std.Io, dir: std.Io.Dir) coordinator.LoadReport {
@@ -1472,6 +1592,7 @@ pub const Service = struct {
         if (report.attempts_code) |code| self.recordCode(code);
         self.proxy.load(self.core, self.allocator, io, dir);
         self.restoreCodexAuthBackups();
+        self.synchronizeCodexAuthBackups();
         return report;
     }
 
@@ -1480,11 +1601,11 @@ pub const Service = struct {
     }
 };
 
-fn readPrivateAuthFile(
+fn readPrivateAuthSnapshot(
     allocator: std.mem.Allocator,
     io: std.Io,
     path: []const u8,
-) ![]u8 {
+) !AuthFileSnapshot {
     var file = try std.Io.Dir.cwd().openFile(io, path, .{
         .allow_directory = false,
         .follow_symlinks = false,
@@ -1494,11 +1615,12 @@ fn readPrivateAuthFile(
     if (stat.kind != .file) return error.NotAFile;
     if (stat.size > keychain.max_credential_bytes) return error.FileTooBig;
     var reader = file.reader(io, &.{});
-    return reader.interface.allocRemaining(allocator, .limited(keychain.max_credential_bytes)) catch |err| switch (err) {
-        error.StreamTooLong => error.FileTooBig,
-        error.OutOfMemory => error.OutOfMemory,
-        error.ReadFailed => reader.err.?,
+    const bytes = reader.interface.allocRemaining(allocator, .limited(keychain.max_credential_bytes)) catch |err| switch (err) {
+        error.StreamTooLong => return error.FileTooBig,
+        error.OutOfMemory => return error.OutOfMemory,
+        error.ReadFailed => return reader.err.?,
     };
+    return .{ .bytes = bytes, .size = stat.size, .mtime_ns = stat.mtime.nanoseconds };
 }
 
 fn authFileMissing(io: std.Io, path: []const u8) !bool {

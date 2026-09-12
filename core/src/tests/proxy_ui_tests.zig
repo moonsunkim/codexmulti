@@ -198,6 +198,37 @@ test "reachable mapped Codex routes switching only through the proxy service" {
     try testing.expect(std.mem.indexOf(u8, model.notice.text(), "Failover switch failed") != null);
 }
 
+test "F15 expanded Status shows token expiry and repeated renewal failure uses invalid state" {
+    const model = try support.newModel();
+    defer testing.allocator.destroy(model);
+    var rows = mapped_ready;
+    rows[0].token_expires_at_unix_s = now + 3 * 24 * 3600;
+    var proxy = proxyFact(.reachable);
+    proxy.accounts = &rows;
+    var accounts = [_]RecordingService.Account{.{ .fact = support.codexFact() }};
+    var service: RecordingService = .{
+        .accounts = &accounts,
+        .capabilities = .{ .connected = true, .proxy_control = true },
+        .proxy_fact = proxy,
+    };
+    model.service = service.port();
+    model.expanded = 0;
+    shell.reproject(model);
+
+    try testing.expect(std.mem.startsWith(u8, model.view.inspector.connection_line, "Token valid until "));
+
+    rows[0].state = .invalid;
+    var token_refresh_failures = [_]bool{true};
+    service.proxy_fact.?.accounts = &rows;
+    service.proxy_fact.?.token_refresh_failures = &token_refresh_failures;
+    shell.reproject(model);
+
+    try testing.expectEqualStrings("Refresh failed · sign in again", model.view.inspector.connection_line);
+    try testing.expectEqual(ui_model.ProxyAccountState.invalid, model.view.proxyRowSlice()[0].state);
+    try testing.expect(model.view.proxyRowSlice()[0].state_destructive);
+    try testing.expectEqual(ui_model.UnifiedFailoverState.invalid, model.view.unifiedRowSlice()[0].failover_state);
+}
+
 test "unknown unreachable and incompatible proxy states offer no switch at all" {
     inline for (.{ ui_model.ProxyReachability.unknown, ui_model.ProxyReachability.@"unreachable", ui_model.ProxyReachability.incompatible }) |reachability| {
         const model = try support.newModel();

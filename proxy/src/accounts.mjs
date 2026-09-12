@@ -21,6 +21,35 @@ export const REFRESH_CLIENT_ID = 'app_EMoamEEZ73f0CkXaXp7hrann';
 export const DEFAULT_REFRESH_URL = 'https://auth.openai.com/oauth/token';
 export const DEFAULT_REFRESH_SKEW_SECONDS = 48 * 60 * 60;
 
+const REFRESH_ERROR_KINDS = new Set([
+  'rejected',
+  'timeout',
+  'invalid_response',
+  'response_too_large',
+  'save_failed',
+  'reload_failed',
+  'network',
+]);
+
+export function refreshErrorKind(error) {
+  if (REFRESH_ERROR_KINDS.has(error?.refreshKind)) return error.refreshKind;
+  switch (error?.message) {
+    case 'refresh_rejected': return 'rejected';
+    case 'refresh_timeout': return 'timeout';
+    case 'invalid_refresh_response': return 'invalid_response';
+    case 'refresh_response_too_large': return 'response_too_large';
+    case 'credential_save_failed': return 'save_failed';
+    case 'credential_reload_failed': return 'reload_failed';
+    default: return error instanceof SyntaxError ? 'invalid_response' : 'network';
+  }
+}
+
+function credentialRefreshError(kind) {
+  const error = new Error('credential_refresh_failed');
+  error.refreshKind = kind;
+  return error;
+}
+
 export function expandHome(input, home = os.homedir()) {
   if (input === '~') return home;
   if (input.startsWith('~/')) return path.join(home, input.slice(2));
@@ -293,12 +322,13 @@ export class AccountRegistry {
     });
   }
 
-  async ensureFresh(name) {
+  async ensureFresh(name, options = {}) {
     const account = this.get(name);
+    const skewSeconds = options.skewSeconds ?? this.skewSeconds;
     await this.#reloadIfChanged(account);
     const current = this.credentials(name);
     const nowSeconds = Math.floor(this.now() / 1000);
-    if (current.expiresAt !== null && current.expiresAt > nowSeconds + this.skewSeconds) return current;
+    if (current.expiresAt !== null && current.expiresAt > nowSeconds + skewSeconds) return current;
     return await account.mutex.run(async () => {
       this.onState(name, 'REFRESHING');
       try {
@@ -306,7 +336,7 @@ export class AccountRegistry {
         const diskCredentials = this.credentials(name);
         const afterLockNow = Math.floor(this.now() / 1000);
         if (diskCredentials.expiresAt !== null
-            && diskCredentials.expiresAt > afterLockNow + this.skewSeconds) {
+            && diskCredentials.expiresAt > afterLockNow + skewSeconds) {
           return diskCredentials;
         }
         return await this.#refreshLocked(account);
@@ -386,7 +416,8 @@ export class AccountRegistry {
         this.refreshUrl,
         usedRefreshToken,
       );
-    } catch {
+    } catch (error) {
+      const kind = refreshErrorKind(error);
       try {
         await this.#loadSnapshot(account);
         const diskCredentials = this.credentials(account.name);
@@ -399,7 +430,7 @@ export class AccountRegistry {
       } catch {
 
       }
-      throw new Error('credential_refresh_failed');
+      throw credentialRefreshError(kind);
     }
     const updated = structuredClone(account.auth);
     updated.tokens.access_token = refreshed.access_token;
@@ -412,11 +443,13 @@ export class AccountRegistry {
     updated.last_refresh = new Date(this.now()).toISOString();
     const exp = parseJwtExp(updated.tokens.access_token);
     const nowSeconds = Math.floor(this.now() / 1000);
-    if (exp === null || exp <= nowSeconds) throw new Error('credential_refresh_failed');
+    if (exp === null || exp <= nowSeconds) throw credentialRefreshError('invalid_response');
     try {
       await this.atomicWriter(account.authFile, updated);
     } catch {
-      throw new Error('credential_save_failed');
+      const error = new Error('credential_save_failed');
+      error.refreshKind = 'save_failed';
+      throw error;
     }
     try {
       await this.#loadSnapshot(account);
@@ -426,7 +459,9 @@ export class AccountRegistry {
       }
       return savedCredentials;
     } catch {
-      throw new Error('credential_save_failed');
+      const error = new Error('credential_save_failed');
+      error.refreshKind = 'save_failed';
+      throw error;
     }
   }
 }

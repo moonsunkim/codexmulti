@@ -14,6 +14,7 @@ import {
   Mutex,
   assertSafeAuthPath,
   expandHome,
+  refreshErrorKind,
 } from './accounts.mjs';
 import { AccountState, FailoverManager } from './failover.mjs';
 import {
@@ -43,12 +44,23 @@ export const CONFIG_DEFAULTS = Object.freeze({
   allow_insecure_upstream: false,
 });
 
+export const DEFAULT_RENEW_INTERVAL_MS = 6 * 60 * 60 * 1000;
+export const DEFAULT_RENEW_JITTER_MS = 30 * 60 * 1000;
+export const DEFAULT_RENEW_BACKOFF_MS = 60 * 60 * 1000;
+export const DEFAULT_RENEW_BACKOFF_MAX_MS = 24 * 60 * 60 * 1000;
+
+export function nextTokenRenewalDelayMs(random = Math.random) {
+  const unit = Math.max(0, Math.min(1, Number(random())));
+  return Math.round(DEFAULT_RENEW_INTERVAL_MS + (unit * 2 - 1) * DEFAULT_RENEW_JITTER_MS);
+}
+
 const LOG_FIELDS = new Set([
   'timestamp', 'level', 'event', 'request_id', 'method', 'route', 'status',
   'duration_ms', 'account_name', 'attempt', 'cooldown_until', 'error_code',
   'error_message', 'relayed_bytes', 'upstream_status', 'terminal_seen',
   'client_to_upstream_bytes', 'upstream_to_client_bytes',
   'added', 'removed', 'renamed', 'migrated',
+  'token_expires_at', 'error_kind',
 ]);
 
 export function redactSecret(value) {
@@ -361,6 +373,42 @@ async function readControlJson(request, options = {}) {
   }
 }
 
+function emptyTokenRefreshState() {
+  return {
+    lastOkAt: null,
+    lastError: null,
+    nextAttemptAt: null,
+    consecutiveFailures: 0,
+  };
+}
+
+function initialTokenRefreshStates(accounts) {
+  return new Map(accounts.map(({ name }) => [name, emptyTokenRefreshState()]));
+}
+
+function migrateTokenRefreshStates(current, accounts) {
+  const byAuthFile = new Map(current.config.accounts.map((account) => [
+    account.auth_file,
+    current.tokenRefresh.get(account.name),
+  ]));
+  return new Map(accounts.map((account) => [
+    account.name,
+    structuredClone(byAuthFile.get(account.auth_file) ?? emptyTokenRefreshState()),
+  ]));
+}
+
+function tokenRefreshPayload(state) {
+  return {
+    last_ok_at: state.lastOkAt === null ? null : new Date(state.lastOkAt).toISOString(),
+    last_error: state.lastError,
+    next_attempt_at: state.nextAttemptAt === null ? null : new Date(state.nextAttemptAt).toISOString(),
+  };
+}
+
+function tokenExpiryIso(expiresAt) {
+  return expiresAt === null ? null : new Date(expiresAt * 1000).toISOString();
+}
+
 export async function createProxy(configInput, options = {}) {
   const initialConfig = options.validated
     ? configInput : validateConfig(configInput, { allowPortZero: true, home: options.home });
@@ -371,6 +419,8 @@ export async function createProxy(configInput, options = {}) {
     if (existsSync(initialConfig.log_file)) await chmod(initialConfig.log_file, 0o600);
   }
   const logger = options.logger ?? createLogger(initialConfig.log_file);
+  const clock = options.now ?? (() => Date.now());
+  const random = options.random ?? Math.random;
   const initialFailover = options.failover ?? new FailoverManager(
     initialConfig.accounts,
     { stateFile: initialConfig.state_file, now: options.now, writer: options.stateWriter },
@@ -401,12 +451,145 @@ export async function createProxy(configInput, options = {}) {
     config: initialConfig,
     registry: initialRegistry,
     failover: initialFailover,
-    inFlight: new Map(initialConfig.accounts.map((account) => [account.name, 0])),
+    inFlight: options.initialInFlight ?? new Map(initialConfig.accounts.map((account) => [account.name, 0])),
+    tokenRefresh: initialTokenRefreshStates(initialConfig.accounts),
     activeRequests: 0,
   };
   let reconfiguring = false;
   const reloadMutex = new Mutex();
   const admissionMutex = new Mutex();
+  const renewalMutex = new Mutex();
+  let renewalTimer = null;
+  let renewalStopped = false;
+  let renewalRun = Promise.resolve();
+
+  function emit(event) {
+    try {
+      logger(event);
+    } catch {
+
+    }
+  }
+
+  function renewalBackoffMs(failures) {
+    return Math.min(
+      DEFAULT_RENEW_BACKOFF_MS * (2 ** Math.max(0, failures - 1)),
+      DEFAULT_RENEW_BACKOFF_MAX_MS,
+    );
+  }
+
+  async function recordRenewalFailure(current, name, expiresAt, error) {
+    const state = current.tokenRefresh.get(name);
+    const at = clock();
+    state.consecutiveFailures += 1;
+    state.lastError = refreshErrorKind(error);
+    state.nextAttemptAt = at + renewalBackoffMs(state.consecutiveFailures);
+    await current.failover.markInvalid(name);
+    emit({
+      timestamp: new Date(at).toISOString(),
+      level: 'error',
+      event: 'token_renew_failed',
+      account_name: name,
+      token_expires_at: tokenExpiryIso(expiresAt),
+      error_kind: state.lastError,
+    });
+  }
+
+  async function runTokenRenewalCycle() {
+    return await renewalMutex.run(async () => {
+      const current = generation;
+      const results = [];
+      for (const { name } of current.config.accounts) {
+        if (renewalStopped || generation !== current || reconfiguring) break;
+        if ((current.inFlight.get(name) ?? 0) !== 0) {
+          results.push({ name, result: 'in_flight' });
+          continue;
+        }
+        const refreshState = current.tokenRefresh.get(name);
+        const beforeReload = clock();
+        if (refreshState.lastError !== null && refreshState.nextAttemptAt !== null
+            && refreshState.nextAttemptAt > beforeReload) {
+          results.push({ name, result: 'backoff' });
+          continue;
+        }
+        try {
+          await current.registry.reload(name);
+        } catch (error) {
+          await recordRenewalFailure(current, name, current.registry.tokenExpiresAt(name), error);
+          results.push({ name, result: 'failed' });
+          continue;
+        }
+        const expiresAt = current.registry.tokenExpiresAt(name);
+        const nowSeconds = Math.floor(clock() / 1000);
+        if (expiresAt === null || expiresAt > nowSeconds + DEFAULT_REFRESH_SKEW_SECONDS) {
+          if (refreshState.lastError !== null) {
+            refreshState.lastError = null;
+            refreshState.nextAttemptAt = null;
+            refreshState.consecutiveFailures = 0;
+            await current.failover.clearInvalid(name);
+          }
+          results.push({ name, result: 'not_due' });
+          continue;
+        }
+        const admitted = await admissionMutex.run(async () => {
+          if (renewalStopped || generation !== current || reconfiguring
+              || (current.inFlight.get(name) ?? 0) !== 0) return false;
+          current.failover.setRefreshing(name, true);
+          return true;
+        });
+        if (!admitted) {
+          results.push({ name, result: 'in_flight' });
+          continue;
+        }
+        try {
+          const credentials = await current.registry.ensureFresh(name, {
+            skewSeconds: DEFAULT_REFRESH_SKEW_SECONDS,
+          });
+          const at = clock();
+          refreshState.lastOkAt = at;
+          refreshState.lastError = null;
+          refreshState.nextAttemptAt = null;
+          refreshState.consecutiveFailures = 0;
+          await current.failover.clearInvalid(name);
+          emit({
+            timestamp: new Date(at).toISOString(),
+            level: 'info',
+            event: 'token_renewed',
+            account_name: name,
+            token_expires_at: tokenExpiryIso(credentials.expiresAt),
+          });
+          results.push({ name, result: 'renewed' });
+        } catch (error) {
+          await recordRenewalFailure(current, name, expiresAt, error);
+          results.push({ name, result: 'failed' });
+        } finally {
+          current.failover.setRefreshing(name, false);
+        }
+      }
+      return results;
+    });
+  }
+
+  function nextRenewalWakeDelay() {
+    const now = clock();
+    let delay = nextTokenRenewalDelayMs(random);
+    for (const state of generation.tokenRefresh.values()) {
+      if (state.lastError === null || state.nextAttemptAt === null || state.nextAttemptAt <= now) continue;
+      delay = Math.min(delay, state.nextAttemptAt - now);
+    }
+    return Math.max(1, delay);
+  }
+
+  function scheduleTokenRenewal() {
+    if (renewalStopped || renewalTimer !== null) return;
+    const schedule = options.setTimeout ?? setTimeout;
+    renewalTimer = schedule(() => {
+      renewalTimer = null;
+      renewalRun = runTokenRenewalCycle();
+      void renewalRun.then(scheduleTokenRenewal, scheduleTokenRenewal);
+    }, nextRenewalWakeDelay());
+    renewalTimer?.unref?.();
+  }
 
   function totalInFlight(current = generation) {
     return current.activeRequests;
@@ -417,7 +600,7 @@ export async function createProxy(configInput, options = {}) {
   }
 
   async function statusPayload(current = generation) {
-    const { config, registry, failover, inFlight } = current;
+    const { config, registry, failover, inFlight, tokenRefresh } = current;
     await failover.expireCooldowns();
     const state = failover.snapshot();
     const active = await failover.active();
@@ -437,6 +620,7 @@ export async function createProxy(configInput, options = {}) {
         token_expires_at: registry.tokenExpiresAt(name) === null
           ? null : new Date(registry.tokenExpiresAt(name) * 1000).toISOString(),
         in_flight: inFlight.get(name) ?? 0,
+        token_refresh: tokenRefreshPayload(tokenRefresh.get(name)),
       })),
     };
   }
@@ -521,6 +705,7 @@ export async function createProxy(configInput, options = {}) {
           registry: candidateRegistry,
           failover: candidateFailover,
           inFlight: new Map(candidateConfig.accounts.map((account) => [account.name, 0])),
+          tokenRefresh: migrateTokenRefreshStates(current, candidateConfig.accounts),
           activeRequests: 0,
         };
         try {
@@ -1071,10 +1256,17 @@ export async function createProxy(configInput, options = {}) {
         resolve();
       });
     });
+    scheduleTokenRenewal();
     return server.address();
   }
 
   async function close() {
+    renewalStopped = true;
+    if (renewalTimer !== null) {
+      (options.clearTimeout ?? clearTimeout)(renewalTimer);
+      renewalTimer = null;
+    }
+    await renewalRun.catch(() => {});
     await new Promise((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));
     agents.http.destroy();
     agents.https.destroy();
@@ -1088,6 +1280,7 @@ export async function createProxy(configInput, options = {}) {
     listen,
     close,
     statusPayload,
+    runTokenRenewalCycle,
   };
 }
 

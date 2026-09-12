@@ -186,6 +186,7 @@ pub const ProxyFact = struct {
     config_path_matches: bool = false,
     in_flight: u32 = 0,
     accounts: []const ProxyAccountFact = &.{},
+    token_refresh_failures: []const bool = &.{},
 };
 
 pub const ProxyAccountView = struct {

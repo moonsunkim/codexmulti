@@ -61,6 +61,7 @@ pub const ViewState = struct {
     proxy_in_flight: u32 = 0,
     proxy_account_count: usize = 0,
     proxy_accounts: [max_rows]ProxyAccountFact = @splat(.{ .proxy_name = "", .label = "", .state = .unknown }),
+    proxy_token_refresh_failed: [max_rows]bool = @splat(false),
     proxy_row_count: usize = 0,
     proxy_rows: [max_rows]ProxyAccountView = @splat(.{}),
     proxy_summary_text: []const u8 = "",
@@ -281,6 +282,7 @@ pub const ViewState = struct {
                 .active = account.active,
                 .mapped = account.mapped,
             };
+            self.proxy_token_refresh_failed[index] = index < fact.token_refresh_failures.len and fact.token_refresh_failures[index];
 
             const app_id = account.app_id orelse continue;
             if (fact.reachability != .reachable or !fact.config_path_matches or !account.mapped) continue;
@@ -1358,7 +1360,18 @@ pub const ViewState = struct {
         else
             self.internText(copy.text(.not_reported));
 
+        const proxy_account: ?*const ProxyAccountFact = if (row.proxy_mode)
+            if (self.proxyIndexOfAccount(row.account_id)) |index| &self.proxy_accounts[index] else null
+        else
+            null;
         inspector.connection_line = blk: {
+            if (proxy_account) |account| {
+                const index = self.proxyIndexOfAccount(row.account_id).?;
+                if (self.proxy_token_refresh_failed[index]) break :blk self.internText(copy.text(.token_refresh_failed));
+                if (account.token_expires_at_unix_s) |expires_at| {
+                    break :blk self.fmtText(.token_valid_until, .{format.mediumLocal(&absolute, expires_at, self.time_zone)});
+                }
+            }
             var line: [max_line_bytes]u8 = undefined;
             var writer = std.Io.Writer.fixed(&line);
             writer.writeAll(format.authStateText(row.auth_state)) catch {};

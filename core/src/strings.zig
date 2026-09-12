@@ -143,6 +143,7 @@ pub const StaticKey = enum {
     cooldown_end_not_reported,
     credential_needs_attention,
     refreshing_token,
+    token_refresh_failed,
     proxy_status_unknown,
     failover_proxy_reachable,
     proxy_config_mismatch,
@@ -300,6 +301,7 @@ pub const FormatKey = enum {
     credits_available,
     evidence_deferred,
     evidence_failed,
+    token_valid_until,
 };
 
 pub fn FormatArgs(comptime key: FormatKey) type {
@@ -322,6 +324,7 @@ pub fn FormatArgs(comptime key: FormatKey) type {
         .tray_summary,
         .last_good_reading,
         .evidence_deferred,
+        .token_valid_until,
         => @Tuple(&.{[]const u8}),
         .countdown_days,
         .countdown_hours,
@@ -560,6 +563,7 @@ const English = struct {
     const cooldown_end_not_reported = "cooldown end not reported";
     const credential_needs_attention = "credential needs attention";
     const refreshing_token = "refreshing token…";
+    const token_refresh_failed = "Refresh failed · sign in again";
     const proxy_status_unknown = "Proxy status unknown";
     const failover_proxy_reachable = "Failover proxy reachable";
     const proxy_config_mismatch = "Proxy config does not match this app";
@@ -722,6 +726,7 @@ const EnglishFormat = struct {
     const credits_available = "{d} available";
     const evidence_deferred = "deferred {s}";
     const evidence_failed = "failed {s} · {s}";
+    const token_valid_until = "Token valid until {s}";
 };
 
 const english_static = blk: {

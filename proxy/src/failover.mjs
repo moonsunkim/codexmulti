@@ -266,6 +266,15 @@ export class FailoverManager {
     });
   }
 
+  async clearInvalid(name) {
+    await this.mutex.run(async () => {
+      if (!this.invalid.delete(name)) return;
+      const value = this.state.accounts[name];
+      if (value.reason === 'invalid_credentials') value.reason = null;
+      await this.#saveLocked();
+    });
+  }
+
   async reloadReady(name) {
     await this.mutex.run(async () => {
       this.invalid.delete(name);
