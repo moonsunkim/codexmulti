@@ -46,21 +46,42 @@ login_keychain() {
 }
 
 identity_hashes() {
-    local keychain output
+    local keychain output expected
     keychain="$1"
     output="$($SECURITY_BIN find-identity -v -p codesigning "$keychain" 2>&1 || true)"
-    printf '%s\n' "$output" |
-        sed -nE 's/^[[:space:]]*[0-9]+\) ([0-9A-Fa-f]{40}) "CodexMulti Local Code Signing"[[:space:]]*$/\1/p' |
-        tr '[:lower:]' '[:upper:]'
+    if test -f "$REQUIREMENT_FILE"; then
+        expected="$(pinned_certificate_hash)"
+        printf '%s\n' "$output" |
+            sed -nE 's/^[[:space:]]*[0-9]+\) ([0-9A-Fa-f]{40}) ".*"[[:space:]]*$/\1/p' |
+            tr '[:lower:]' '[:upper:]' |
+            awk -v expected="$expected" '$0 == expected'
+    else
+        printf '%s\n' "$output" |
+            sed -nE "s/^[[:space:]]*[0-9]+\) ([0-9A-Fa-f]{40}) \"$IDENTITY_NAME\"[[:space:]]*$/\1/p" |
+            tr '[:lower:]' '[:upper:]'
+    fi
 }
 
 single_identity_hash() {
-    local keychain hashes count
+    local keychain hashes count expected
     keychain="$1"
     hashes="$(identity_hashes "$keychain")"
     count="$(printf '%s\n' "$hashes" | sed '/^$/d' | wc -l | tr -d '[:space:]')"
-    test "$count" = "1" || die "expected exactly one valid '$IDENTITY_NAME' identity in $keychain; found $count"
+    if test -f "$REQUIREMENT_FILE"; then
+        expected="$(pinned_certificate_hash)"
+        test "$count" = "1" || die "expected exactly one valid identity matching pinned certificate ${expected:0:8} in $keychain; found $count"
+    else
+        test "$count" = "1" || die "expected exactly one valid '$IDENTITY_NAME' identity in $keychain; found $count"
+    fi
     printf '%s\n' "$hashes"
+}
+
+pinned_certificate_hash() {
+    local value count
+    value="$(sed -nE 's/^identifier "[^"]+" and certificate root = H"([0-9A-Fa-f]{40})"$/\1/p' "$REQUIREMENT_FILE" | tr '[:lower:]' '[:upper:]')"
+    count="$(printf '%s\n' "$value" | sed '/^$/d' | wc -l | tr -d '[:space:]')"
+    test "$count" = "1" && printf '%s\n' "$value" | grep -Eq '^[0-9A-F]{40}$' || die "invalid certificate SHA-1 pin in $REQUIREMENT_FILE"
+    printf '%s\n' "$value"
 }
 
 read_pinned_hash() {
@@ -69,6 +90,39 @@ read_pinned_hash() {
     value="$(tr -d '[:space:]' < "$FINGERPRINT_FILE" | tr '[:lower:]' '[:upper:]')"
     printf '%s\n' "$value" | grep -Eq '^[0-9A-F]{40}$' || die "invalid SHA-1 identity pin in $FINGERPRINT_FILE"
     printf '%s\n' "$value"
+}
+
+certificate_pem_for_hash() {
+    local keychain expected output line current cert_hash matching_pem count
+    keychain="$1"
+    expected="$2"
+    output="$($SECURITY_BIN find-certificate -a -p "$keychain" 2>&1)" || die "cannot export public certificates for inspection"
+    current=""
+    matching_pem=""
+    count=0
+    while IFS= read -r line; do
+        case "$line" in
+            '-----BEGIN CERTIFICATE-----') current="$line"$'\n' ;;
+            '-----END CERTIFICATE-----')
+                if test -n "$current"; then
+                    current="${current}${line}"$'\n'
+                    cert_hash="$(printf '%s' "$current" | "$OPENSSL_BIN" x509 -noout -fingerprint -sha1 2>/dev/null | sed -E 's/^.*=//' | tr -d ':' | tr '[:lower:]' '[:upper:]' || true)"
+                    if test "$cert_hash" = "$expected"; then
+                        matching_pem="$current"
+                        count=$((count + 1))
+                    fi
+                fi
+                current=""
+                ;;
+            *)
+                if test -n "$current"; then
+                    current="${current}${line}"$'\n'
+                fi
+                ;;
+        esac
+    done <<< "$output"
+    test "$count" = "1" || die "expected exactly one public certificate matching pinned certificate ${expected:0:8} in $keychain; found $count"
+    printf '%s' "$matching_pem"
 }
 
 verify_certificate_profile() {
@@ -89,7 +143,7 @@ audit_identity() {
     pinned_hash="$(read_pinned_hash)"
     test "$live_hash" = "$pinned_hash" || die "identity pin mismatch: Keychain has $live_hash but local state expects $pinned_hash"
 
-    pem="$($SECURITY_BIN find-certificate -c "$IDENTITY_NAME" -p "$keychain" 2>&1)" || die "cannot export the public certificate for inspection"
+    pem="$(certificate_pem_for_hash "$keychain" "$live_hash")"
     cert_text="$(printf '%s\n' "$pem" | "$OPENSSL_BIN" x509 -noout -text 2>&1)" || die "cannot inspect the identity certificate"
     verify_certificate_profile "$cert_text"
     cert_hash="$(printf '%s\n' "$pem" | "$OPENSSL_BIN" x509 -noout -fingerprint -sha1 | sed -E 's/^.*=//' | tr -d ':' | tr '[:lower:]' '[:upper:]')"
@@ -234,6 +288,10 @@ remove_identity() {
     printf 'Removed only the CodexMulti signing identity %s from %s.\n' "$requested_hash" "$keychain"
     printf 'Existing app-owned Keychain password items were not removed.\n'
 }
+
+if test "${BASH_SOURCE[0]}" != "$0"; then
+    return 0
+fi
 
 require_tool "$OPENSSL_BIN"
 require_tool "$SECURITY_BIN"

@@ -143,6 +143,14 @@ login_keychain() {
     printf '%s\n' "$path"
 }
 
+pinned_certificate_hash() {
+    local value count
+    value="$(sed -nE 's/^identifier "[^"]+" and certificate root = H"([0-9A-Fa-f]{40})"$/\1/p' "$REQUIREMENT_FILE" | tr '[:lower:]' '[:upper:]')"
+    count="$(printf '%s\n' "$value" | sed '/^$/d' | wc -l | tr -d '[:space:]')"
+    test "$count" = "1" && printf '%s\n' "$value" | grep -Eq '^[0-9A-F]{40}$' || die "invalid certificate SHA-1 pin in $REQUIREMENT_FILE"
+    printf '%s\n' "$value"
+}
+
 read_pinned_hash() {
     local value
     test -f "$FINGERPRINT_FILE" || die "missing signing identity pin: $FINGERPRINT_FILE"
@@ -151,27 +159,55 @@ read_pinned_hash() {
     printf '%s\n' "$value"
 }
 
+identity_hashes() {
+    local keychain output expected
+    keychain="$1"
+    output="$($SECURITY_BIN find-identity -v -p codesigning "$keychain" 2>&1 || true)"
+    if test -f "$REQUIREMENT_FILE"; then
+        expected="$(pinned_certificate_hash)"
+        printf '%s\n' "$output" |
+            sed -nE 's/^[[:space:]]*[0-9]+\) ([0-9A-Fa-f]{40}) ".*"[[:space:]]*$/\1/p' |
+            tr '[:lower:]' '[:upper:]' |
+            awk -v expected="$expected" '$0 == expected'
+    else
+        printf '%s\n' "$output" |
+            sed -nE "s/^[[:space:]]*[0-9]+\) ([0-9A-Fa-f]{40}) \"$IDENTITY_NAME\"[[:space:]]*$/\1/p" |
+            tr '[:lower:]' '[:upper:]'
+    fi
+}
+
+single_identity_hash() {
+    local keychain hashes count expected
+    keychain="$1"
+    hashes="$(identity_hashes "$keychain")"
+    count="$(printf '%s\n' "$hashes" | sed '/^$/d' | wc -l | tr -d '[:space:]')"
+    if test -f "$REQUIREMENT_FILE"; then
+        expected="$(pinned_certificate_hash)"
+        test "$count" = "1" || die "expected exactly one valid identity matching pinned certificate ${expected:0:8} in the login Keychain; found $count"
+    else
+        test "$count" = "1" || die "expected exactly one valid '$IDENTITY_NAME' identity in the login Keychain; found $count"
+    fi
+    printf '%s\n' "$hashes"
+}
+
 resolve_identity() {
-    local keychain expected output hashes count search_output search_count
+    local keychain expected live_hash search_output search_count
     if ! "$IDENTITY_AUDIT_BIN" audit >/dev/null; then
         die "signing identity audit failed"
     fi
     keychain="$(login_keychain)"
     expected="$(read_pinned_hash)"
-    output="$($SECURITY_BIN find-identity -v -p codesigning "$keychain" 2>&1 || true)"
-    hashes="$(printf '%s\n' "$output" |
-        sed -nE 's/^[[:space:]]*[0-9]+\) ([0-9A-Fa-f]{40}) "CodexMulti Local Code Signing"[[:space:]]*$/\1/p' |
-        tr '[:lower:]' '[:upper:]')"
-    count="$(printf '%s\n' "$hashes" | sed '/^$/d' | wc -l | tr -d '[:space:]')"
-    test "$count" = "1" || die "expected exactly one valid '$IDENTITY_NAME' identity in the login Keychain; found $count"
-    test "$hashes" = "$expected" || die "the valid identity does not match the machine-local pin"
+    live_hash="$(single_identity_hash "$keychain")"
+    test "$live_hash" = "$expected" || die "the valid identity does not match the machine-local pin"
 
     search_output="$($SECURITY_BIN find-identity -v -p codesigning 2>&1 || true)"
     search_count="$(printf '%s\n' "$search_output" |
-        sed -nE "s/^[[:space:]]*[0-9]+\) ($expected) .*$/\1/p" |
+        sed -nE 's/^[[:space:]]*[0-9]+\) ([0-9A-Fa-f]{40}) .*$/\1/p' |
+        tr '[:lower:]' '[:upper:]' |
+        awk -v expected="$expected" '$0 == expected' |
         wc -l | tr -d '[:space:]')"
     test "$search_count" = "1" || die "the pinned identity must occur exactly once in the default Keychain search list; found $search_count"
-    printf '%s\n' "$expected"
+    printf '%s\n' "$live_hash"
 }
 
 designated_requirement() {
@@ -509,6 +545,10 @@ package_app() {
     fi
     printf 'No app was copied to /Applications or launched.\n'
 }
+
+if test "${BASH_SOURCE[0]}" != "$0"; then
+    return 0
+fi
 
 require_tool "$SECURITY_BIN"
 require_tool "$CODESIGN_BIN"
