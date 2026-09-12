@@ -8,6 +8,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- Added proactive token renewal: the proxy refreshes access tokens that expire within 48 hours ahead of time, backs off on failure, and reports renewal status; an account whose renewal keeps failing says "Refresh failed · sign in again".
+- Added a Keychain backup of each account's credentials that is restored automatically if the account's files go missing, and kept in sync after every refresh.
+- Added WebSocket passthrough in the proxy, which Codex remote control and the CLI's streaming transport need.
+- Added the remaining pool capacity to the toolbar capsule and the menu bar ("pool 47%", "Pool 47% left · 4 of 9 usable").
+- Added a first-run checklist — add an account, install the proxy service, turn on routing — that tracks completion and disappears when done.
+- Added Korean, with a Language setting (System, English, 한국어).
+- Added a menu-bar icon drawn from the app's mark.
 - Added the CodexMulti menu-bar app for using multiple Codex accounts with automatic failover after a confirmed weekly usage limit.
 - Added a bundled, loopback-only proxy and Node.js v26.8.1, so no separate proxy or system Node.js installation is required.
 - Added a branded app icon, README hero, and light and dark product screenshots.
