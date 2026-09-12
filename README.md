@@ -1,5 +1,9 @@
 # CodexMulti
 
+<p align="center">
+  <img src="assets/hero.png" width="720" alt="CodexMulti — one Mac, many Codex accounts, with automatic failover">
+</p>
+
 **When one Codex account hits its limit, keep going with the next.**
 
 CodexMulti puts your Codex accounts in one macOS menu-bar app. See what each account has left,
@@ -9,11 +13,6 @@ choose their order, and let automatic failover handle confirmed usage-limit erro
 
 [![CI](https://github.com/moonsunkim/codexmulti/actions/workflows/ci.yml/badge.svg)](https://github.com/moonsunkim/codexmulti/actions/workflows/ci.yml)
 
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/accounts-dark.png">
-  <source media="(prefers-color-scheme: light)" srcset="assets/screenshots/accounts-light.png">
-  <img alt="CodexMulti account pool with remaining usage, reset times and active, ready, cooling and paused states" src="assets/screenshots/accounts-light.png">
-</picture>
 
 - **See your whole pool.** Remaining usage, reset times and account availability are together in one window. The menu bar keeps the pool total close by; **Accounts…** opens the full list in one click.
 - **Set the order once.** Drag accounts into your preferred order. When an eligible request hits a confirmed usage limit, the proxy tries the next available account.
@@ -66,6 +65,14 @@ accounts are skipped.
 Account additions, reconnections and order changes are applied automatically while the app is open.
 Changes that need a proxy reload wait for active requests to finish. Closing the menu-bar app leaves
 a healthy proxy running; turning Failover off restores direct Codex connections after active requests finish.
+
+Open **Accounts…** from the menu bar to see your full pool.
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/accounts-dark.png">
+  <source media="(prefers-color-scheme: light)" srcset="assets/screenshots/accounts-light.png">
+  <img alt="CodexMulti account pool with remaining usage, reset times and active, ready, cooling and paused states" src="assets/screenshots/accounts-light.png">
+</picture>
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/settings-dark.png">
