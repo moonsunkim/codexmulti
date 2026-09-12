@@ -12,6 +12,36 @@ pub const supported_languages = blk: {
 pub const month_count = English.month_names.len;
 
 pub const StaticKey = enum {
+    add_account_dialog_title,
+    add_account_dialog_explanation,
+    add_account_dialog_progress,
+    add_account_dialog_invalid_label,
+
+    reset_proxy_clearing,
+    reset_proxy_cleared,
+    reset_proxy_unmapped,
+    reset_proxy_unreachable,
+    reset_proxy_busy,
+    reset_proxy_failed,
+    reset_only_codex,
+    reset_no_credit,
+    reset_prior_pending,
+    reset_prior_unsent,
+    reset_needs_auth,
+    reset_disabled,
+    reset_unknown_account,
+    reset_service_missing,
+    reset_settled,
+    reset_settled_unsent,
+    reset_pending,
+    reset_unsent_service,
+    reset_unsent_cli,
+    reset_unsent_offer,
+    reset_unsent_busy,
+    reset_unsent_refused,
+    reset_unsent_unknown,
+    reset_unconfirmed_failure,
+
     appearance_system,
     appearance_light,
     appearance_dark,
@@ -614,6 +644,36 @@ pub const english = catalog(.en);
 pub const korean = catalog(.ko);
 
 const English = struct {
+    const add_account_dialog_title = "Add Codex account";
+    const add_account_dialog_explanation = "Name this account before opening the browser to sign in.";
+    const add_account_dialog_progress = "Add account in progress · Codex";
+    const add_account_dialog_invalid_label = "Enter an account name before continuing.";
+
+    const reset_proxy_clearing = "Failover: clearing cooldown for this account's proxy row…";
+    const reset_proxy_cleared = "Failover: cooldown cleared.";
+    const reset_proxy_unmapped = "Failover: cooldown not cleared — this account is not mapped to a proxy row at the last read. Use Clear cooldown… in Failover if it is.";
+    const reset_proxy_unreachable = "Failover: cooldown not cleared — the proxy was not reachable at the last read. Use Clear cooldown… in Failover after refreshing its status.";
+    const reset_proxy_busy = "Failover: cooldown not cleared — the proxy was busy with another action. Use Clear cooldown… in Failover.";
+    const reset_proxy_failed = "Failover: cooldown not cleared — the proxy refused or did not answer. Use Clear cooldown… in Failover.";
+    const reset_only_codex = "Reset redemption exists only for Codex accounts.";
+    const reset_no_credit = "This account has no reset credit the provider reported as available.";
+    const reset_prior_pending = "An earlier reset attempt for this account has not settled. Reconcile it first.";
+    const reset_prior_unsent = "The last reset attempt was not sent. Retry runs a fresh preflight and resends it with the same key.";
+    const reset_needs_auth = "This account needs reauthentication before a reset can be considered.";
+    const reset_disabled = "This account is disabled.";
+    const reset_unknown_account = "That account is no longer in the local view.";
+    const reset_service_missing = "The reset service is not attached.";
+    const reset_settled = "This request has settled. The account row now shows the provider's reported usage and remaining resets.";
+    const reset_settled_unsent = "This request was not sent after all. The account row offers Retry reset attempt…, which resends it with the same key.";
+    const reset_pending = "The reset request was accepted and is pending. It is not complete until the service reports a settled outcome.";
+    const reset_unsent_service = "Nothing was sent: the reset service is not attached.";
+    const reset_unsent_cli = "Nothing was sent: the provider CLI is not installed in a supported location.";
+    const reset_unsent_offer = "Nothing was sent: a reset needs a fresh Codex preflight read and no current offer exists.";
+    const reset_unsent_busy = "Nothing was sent: this account already has an operation in flight.";
+    const reset_unsent_refused = "Nothing was sent: the service refused this surface or account state.";
+    const reset_unsent_unknown = "Nothing was sent: the service does not know that account.";
+    const reset_unconfirmed_failure = "Nothing was confirmed: the service reported a failure. The credit state is unchanged as far as this app can prove.";
+
     const appearance_system = "System";
     const appearance_light = "Light";
     const appearance_dark = "Dark";
@@ -1071,6 +1131,36 @@ const EnglishFormat = struct {
 };
 
 const Korean = struct {
+    const add_account_dialog_title = "Codex 계정 추가";
+    const add_account_dialog_explanation = "브라우저에서 로그인하기 전에 계정 이름을 입력하세요.";
+    const add_account_dialog_progress = "Codex 계정을 추가하는 중…";
+    const add_account_dialog_invalid_label = "계속하려면 계정 이름을 입력하세요.";
+
+    const reset_proxy_clearing = "계정 전환: 이 계정의 프록시 대기 상태를 해제하는 중…";
+    const reset_proxy_cleared = "계정 전환: 대기 상태가 해제되었습니다.";
+    const reset_proxy_unmapped = "계정 전환: 마지막 확인에서 프록시 계정과 연결되지 않아 대기 상태를 해제하지 못했습니다. 연결된 계정이라면 대기 해제를 사용하세요.";
+    const reset_proxy_unreachable = "계정 전환: 프록시에 연결할 수 없어 대기 상태를 해제하지 못했습니다. 상태를 새로 고친 뒤 대기 해제를 사용하세요.";
+    const reset_proxy_busy = "계정 전환: 프록시가 다른 작업을 처리 중이라 대기 상태를 해제하지 못했습니다. 대기 해제를 사용하세요.";
+    const reset_proxy_failed = "계정 전환: 프록시가 거절하거나 응답하지 않아 대기 상태를 해제하지 못했습니다. 대기 해제를 사용하세요.";
+    const reset_only_codex = "리셋은 Codex 계정에서만 사용할 수 있습니다.";
+    const reset_no_credit = "이 계정에는 제공자가 확인한 사용 가능한 리셋 크레딧이 없습니다.";
+    const reset_prior_pending = "이 계정의 이전 리셋 요청이 아직 완료되지 않았습니다. 먼저 해당 요청의 결과를 확인하세요.";
+    const reset_prior_unsent = "이전 리셋 요청이 전송되지 않았습니다. 다시 시도하면 현재 상태를 확인한 뒤 같은 키로 전송합니다.";
+    const reset_needs_auth = "리셋을 사용하려면 이 계정에 다시 로그인해야 합니다.";
+    const reset_disabled = "이 계정은 사용 중지 상태입니다.";
+    const reset_unknown_account = "이 계정은 현재 목록에 없습니다.";
+    const reset_service_missing = "리셋 서비스에 연결되지 않았습니다.";
+    const reset_settled = "요청이 완료되었습니다. 계정 목록에 제공자가 확인한 사용량과 남은 리셋 수가 표시됩니다.";
+    const reset_settled_unsent = "이 요청은 전송되지 않았습니다. 계정 목록에서 리셋 재시도를 선택하면 같은 키로 다시 전송합니다.";
+    const reset_pending = "리셋 요청이 접수되어 처리 중입니다. 서비스에서 결과를 확인할 때까지 완료된 상태가 아닙니다.";
+    const reset_unsent_service = "전송하지 않았습니다. 리셋 서비스에 연결되지 않았습니다.";
+    const reset_unsent_cli = "전송하지 않았습니다. 지원되는 위치에서 제공자 CLI를 찾을 수 없습니다.";
+    const reset_unsent_offer = "전송하지 않았습니다. Codex에서 최신 상태를 확인해야 하며, 현재 사용할 수 있는 리셋이 없습니다.";
+    const reset_unsent_busy = "전송하지 않았습니다. 이 계정은 이미 다른 작업을 처리 중입니다.";
+    const reset_unsent_refused = "전송하지 않았습니다. 서비스가 현재 요청 또는 계정 상태를 허용하지 않았습니다.";
+    const reset_unsent_unknown = "전송하지 않았습니다. 서비스에서 이 계정을 찾을 수 없습니다.";
+    const reset_unconfirmed_failure = "서비스 오류로 결과를 확인하지 못했습니다. 앱에서 확인한 크레딧 상태에는 변화가 없습니다.";
+
     const appearance_system = "시스템";
     const appearance_light = "라이트";
     const appearance_dark = "다크";

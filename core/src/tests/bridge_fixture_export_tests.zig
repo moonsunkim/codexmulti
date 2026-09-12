@@ -1437,3 +1437,13 @@ test "every named projection fixture proves its distinguishing state" {
         } else return error.UnknownFixtureName;
     }
 }
+
+test "Korean reset and account dialogs serialize localized user-facing text" {
+    const bytes = try makeProjectionLanguage(testing.allocator, "viewstate-reset-blocked-no-credit", .ko);
+    defer testing.allocator.free(bytes);
+    var parsed = try std.json.parseFromSlice(bridge.ProjectionWire, testing.allocator, bytes, .{ .allocate = .alloc_always });
+    defer parsed.deinit();
+    try testing.expectEqualStrings("이 계정에는 제공자가 확인한 사용 가능한 리셋 크레딧이 없습니다.", parsed.value.shell.reset.blocked_text);
+    try testing.expectEqualStrings("Codex 계정 추가", parsed.value.shell.add_account.title);
+    try testing.expectEqualStrings("취소", parsed.value.shell.add_account.cancel_label);
+}

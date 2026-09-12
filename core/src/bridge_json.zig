@@ -579,6 +579,7 @@ pub fn accountToWire(a: *const ui_model.AccountView, capabilities: ui_model.Serv
 
 pub fn shellToWire(m: *const shell.Model) ShellWire {
     const r = &m.reset;
+    const copy = @import("strings.zig").catalog(m.view.resolved_language);
     return ShellWire{
         .settings_tab = m.settings_tab,
         .settings_tab_is_meaningful = false,
@@ -592,8 +593,8 @@ pub fn shellToWire(m: *const shell.Model) ShellWire {
 
         .claude_summary_weekly_label = "",
         .claude_summary_session_label = "",
-        .starting_text = shell.starting_text,
-        .quit_label = shell.quit_label,
+        .starting_text = copy.translateEnglish(shell.starting_text),
+        .quit_label = copy.translateEnglish(shell.quit_label),
         .can_refresh = m.view.capabilities.refresh,
         .can_refresh_all = m.view.row_count != 0 and m.view.capabilities.refresh,
         .can_manage_accounts = m.view.capabilities.accounts,
@@ -603,15 +604,15 @@ pub fn shellToWire(m: *const shell.Model) ShellWire {
         .notice = NoticeWire{ .kind = m.notice.kind, .text = m.notice.text() },
         .add_account = AddAccountWire{
             .open = m.add_account.open,
-            .title = shell.add_account_title,
-            .explanation_text = shell.add_account_explanation_text,
+            .title = copy.translateEnglish(shell.add_account_title),
+            .explanation_text = copy.translateEnglish(shell.add_account_explanation_text),
             .initial_label = m.add_account.initialLabel(),
             .in_flight = m.add_account.in_flight,
             .confirm_enabled = m.add_account.confirmEnabled(),
-            .confirm_label = shell.add_account_confirm_label,
-            .cancel_label = shell.add_account_cancel_label,
-            .progress_text = m.addAccountProgressText(),
-            .error_text = m.add_account.errorText(),
+            .confirm_label = copy.translateEnglish(shell.add_account_confirm_label),
+            .cancel_label = copy.translateEnglish(shell.add_account_cancel_label),
+            .progress_text = copy.translateEnglish(m.addAccountProgressText()),
+            .error_text = copy.translateEnglish(m.add_account.errorText()),
         },
         .reset = ResetWire{
             .open = r.isOpen(),
@@ -626,9 +627,9 @@ pub fn shellToWire(m: *const shell.Model) ShellWire {
             .available_count = r.available_count,
             .usage_text = r.usageEvidence(),
             .reset_text = r.resetEvidence(),
-            .blocked_text = r.blockedText(),
-            .outcome_text = r.outcomeText(),
-            .proxy_clear_text = r.proxyClearText(),
+            .blocked_text = copy.translateEnglish(r.blockedText()),
+            .outcome_text = copy.translateEnglish(r.outcomeText()),
+            .proxy_clear_text = copy.translateEnglish(r.proxyClearText()),
             .is_review = r.stage == .review,
             .is_armed = r.stage == .armed,
             .is_blocked = r.stage == .blocked,

@@ -571,16 +571,16 @@ pub const Model = struct {
         return model.reset.resetEvidence();
     }
     pub fn resetBlockedText(model: *const Model) []const u8 {
-        return model.reset.blockedText();
+        return strings.catalog(model.view.resolved_language).translateEnglish(model.reset.blockedText());
     }
     pub fn resetOutcomeText(model: *const Model) []const u8 {
-        return model.reset.outcomeText();
+        return strings.catalog(model.view.resolved_language).translateEnglish(model.reset.outcomeText());
     }
     pub fn resetShowsProxyClear(model: *const Model) bool {
         return model.reset.showsProxyClear();
     }
     pub fn resetProxyClearText(model: *const Model) []const u8 {
-        return model.reset.proxyClearText();
+        return strings.catalog(model.view.resolved_language).translateEnglish(model.reset.proxyClearText());
     }
     pub fn removeIsOpen(model: *const Model) bool {
         return model.remove.open;

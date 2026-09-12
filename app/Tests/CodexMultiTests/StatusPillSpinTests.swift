@@ -208,14 +208,19 @@ final class StatusPillSpinTests: XCTestCase {
         func glyph() -> [UInt8] {
             let width = Int(hosting.bounds.width) * Self.scale
             let height = Int(hosting.bounds.height) * Self.scale
-            var bytes = [UInt8](repeating: 0, count: width * height * 4)
-            bytes.withUnsafeMutableBytes { buffer in
-                guard let layer = hosting.layer,
-                      let context = CGContext(data: buffer.baseAddress, width: width, height: height, bitsPerComponent: 8, bytesPerRow: width * 4,
-                                              space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue) else { return }
-                context.scaleBy(x: CGFloat(Self.scale), y: CGFloat(Self.scale))
-                layer.render(in: context)
-            }
+            hosting.layoutSubtreeIfNeeded()
+            hosting.displayIfNeeded()
+            // Capture through AppKit, as the app's screenshot path does. A hidden
+            // hosting layer can render no pixels on a virtual macOS display.
+            guard let bitmap = NSBitmapImageRep(
+                bitmapDataPlanes: nil, pixelsWide: width, pixelsHigh: height,
+                bitsPerSample: 8, samplesPerPixel: 4, hasAlpha: true,
+                isPlanar: false, colorSpaceName: .deviceRGB,
+                bytesPerRow: width * 4, bitsPerPixel: 32) else { return [] }
+            bitmap.size = hosting.bounds.size
+            hosting.cacheDisplay(in: hosting.bounds, to: bitmap)
+            guard let data = bitmap.bitmapData else { return [] }
+            let bytes = Array(UnsafeBufferPointer(start: data, count: width * height * 4))
             let alpha = (0..<height).map { y in (0..<width).map { x in bytes[(y * width + x) * 4 + 3] } }
             let inked = (0..<width).map { x in alpha.contains { $0[x] > 64 } }
             guard let last = inked.lastIndex(of: true) else { return [] }
