@@ -141,6 +141,34 @@ final class UpdateEngineTests: XCTestCase, @unchecked Sendable {
         XCTAssertEqual(runtime.healthValue?.workTotal, 1)
     }
 
+    func testInstallationArmCanBeRetriedAfterItsReplyIsLost() async throws {
+        let (store, initial, runtime) = try fixture()
+        var journal = initial
+        journal.phase = .appPrepared
+        try store.save(journal)
+        let first = UpdateEngine(store: store, transactionID: journal.transactionID, operations: runtime.operations)
+        try await first.armInstallation()
+        let persisted = try Disk.read(store.journalURL(journal.transactionID))
+        let resumed = UpdateEngine(store: store, transactionID: journal.transactionID, operations: runtime.operations)
+        try await resumed.armInstallation()
+        XCTAssertEqual(try Disk.read(store.journalURL(journal.transactionID)), persisted)
+        XCTAssertTrue(try store.journal(journal.transactionID).installArmed)
+    }
+
+    func testOffIntentRepairsSettingsAfterACrashBeforeThePreferenceWrite() async throws {
+        let (store, initial, runtime) = try fixture()
+        let settings = store.root.appendingPathComponent("proxy-settings.json")
+        try Disk.atomicWrite(Data("{\"schema_version\":1,\"enabled\":true,\"proxy\":{\"config_path\":\"/preserved/proxy.json\"}}".utf8), at: settings)
+        var journal = initial
+        journal.desiredEnabled = false
+        try store.save(journal)
+        let result = try await finish(store: store, id: journal.transactionID, runtime: runtime)
+        XCTAssertEqual(result.phase, .complete)
+        let object = try JSONSerialization.jsonObject(with: Disk.read(settings)) as! [String: Any]
+        XCTAssertEqual(object["enabled"] as? Bool, false)
+        XCTAssertEqual(object["proxy"] as? [String: String], ["config_path": "/preserved/proxy.json"])
+    }
+
     func testBusyRequestsDeferThenSwapAndSurviveCoordinatorRecreationAtEveryPhase() async throws {
         let (store, journal, runtime) = try fixture()
         runtime.busy("http", 2)

@@ -5,6 +5,13 @@ on:
   push:
     branches:
       - codex/safe-updater
+    paths:
+      - app/**
+      - core/**
+      - updater/**
+      - proxy/**
+      - VERSION
+      - .github/workflows/updater-candidate.yml
 
 permissions:
   contents: read

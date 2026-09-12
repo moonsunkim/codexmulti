@@ -4,6 +4,41 @@ import XCTest
 @testable import UpdaterKit
 
 final class NativeAgentTests: XCTestCase, @unchecked Sendable {
+    func testSignedGUIReadyCanBeRetriedAfterTheCoordinatorAdvances() async throws {
+        guard let oldPath = ProcessInfo.processInfo.environment["CODEXMULTI_UPDATER_TEST_OLD_APP"],
+              let guiPath = ProcessInfo.processInfo.environment["CODEXMULTI_UPDATER_TEST_GUI_APP"] else {
+            throw XCTSkip("Signed agent and GUI client fixtures are required")
+        }
+        let home = FileManager.default.temporaryDirectory.appendingPathComponent("codexmulti-gui-ready-\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(at: home) }
+        let store = try RuntimeStore(root: home)
+        let manifest = try store.stage(app: URL(fileURLWithPath: oldPath))
+        let gui = try Disk.canonicalURL(URL(fileURLWithPath: guiPath))
+        try store.select(ActiveRuntime(runtimeID: manifest.runtimeID, generation: 1))
+        var journal = UpdateJournal(phase: .installingApp, appPath: gui.path,
+            previousAppBuild: manifest.appBuild, targetAppBuild: manifest.appBuild,
+            oldRuntimeID: manifest.runtimeID, targetRuntimeID: manifest.runtimeID,
+            configPath: store.root.appendingPathComponent("unused-proxy.json").path,
+            configRevision: "", desiredEnabled: true, previousGeneration: 1)
+        journal.installArmed = true
+        try store.save(journal)
+        let first = UpdateEngine(store: store, transactionID: journal.transactionID)
+        try await first.markGUIReady(appPath: gui.path)
+        for phase: UpdatePhase in [.waitingIdle, .candidateGated, .activationCommitted, .verifying, .complete] {
+            var advanced = try store.journal(journal.transactionID)
+            advanced.phase = phase
+            try store.save(advanced)
+            let persisted = try Disk.read(store.journalURL(journal.transactionID))
+            let resumed = UpdateEngine(store: store, transactionID: journal.transactionID)
+            try await resumed.markGUIReady(appPath: gui.path)
+            XCTAssertEqual(try Disk.read(store.journalURL(journal.transactionID)), persisted)
+            do {
+                try await resumed.markGUIReady(appPath: oldPath)
+                XCTFail("A different app path must not acknowledge GUI readiness")
+            } catch { XCTAssertEqual(error as? UpdateFailure, .invalidTransaction) }
+        }
+    }
+
     func testSignedAgentRejectsUntrustedPeerAndResumesArmedStateAfterProcessDeath() async throws {
         guard let oldPath = ProcessInfo.processInfo.environment["CODEXMULTI_UPDATER_TEST_OLD_APP"],
               let guiPath = ProcessInfo.processInfo.environment["CODEXMULTI_UPDATER_TEST_GUI_APP"] else {

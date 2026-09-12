@@ -202,7 +202,8 @@ final class UpdateController: NSObject, SPUUserDriver, SPUUpdaterDelegate {
             do {
                 let prepared = try await Task.detached {
                     try ServicePreparation.begin(store: runtimeStore, app: app, configPath: config,
-                        enabled: settings.proxy_enabled, clientsClosed: true)
+                        enabled: settings.proxy_enabled, clientsClosed: true, launch: environment.launch,
+                        serviceLabel: environment.serviceLabel)
                 }.value
                 journal = prepared
                 observedTransactionID = prepared.transactionID
@@ -267,14 +268,26 @@ final class UpdateController: NSObject, SPUUserDriver, SPUUpdaterDelegate {
     }
 
     private func contact(_ request: AgentRequest, store: RuntimeStore) async throws -> UpdateJournal {
-        for attempt in 0..<20 {
+        let deadline = ProcessInfo.processInfo.systemUptime + 20
+        while true {
             do { return try await Task.detached { try AgentConnection.send(request, store: store) }.value }
             catch {
-                if attempt == 19 { throw error }
+                if request.command == "gui-ready", let appPath = request.appPath,
+                   let ready = try? await Task.detached(operation: {
+                       let journal = try store.journal(request.transactionID)
+                       guard journal.guiReady, !journal.installArmed, journal.appPath == appPath else {
+                           throw UpdateFailure.invalidTransaction
+                       }
+                       let manifest = try store.verifyPayload(in: URL(fileURLWithPath: appPath))
+                       guard manifest.appBuild == journal.targetAppBuild, manifest.runtimeID == journal.targetRuntimeID else {
+                           throw UpdateFailure.identityMismatch
+                       }
+                       return journal
+                   }).value { return ready }
+                if ProcessInfo.processInfo.systemUptime >= deadline { throw error }
                 try await Task.sleep(for: .milliseconds(250))
             }
         }
-        throw UpdateFailure.proxyUnreachable
     }
 
     private func refreshJournal() async {

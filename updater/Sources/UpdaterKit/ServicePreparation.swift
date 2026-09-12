@@ -3,7 +3,8 @@ import Foundation
 
 public enum ServicePreparation {
     public static func begin(store: RuntimeStore, app: URL, configPath: String, enabled: Bool,
-                             clientsClosed: Bool = false, launch: LaunchService = LaunchService()) throws -> UpdateJournal {
+                             clientsClosed: Bool = false, launch: LaunchService = LaunchService(),
+                             serviceLabel: String = "dev.codexmulti.app.proxy") throws -> UpdateJournal {
         let lock = try FileLock(store.lockURL)
         defer { withExtendedLifetime(lock) {} }
         guard configPath.hasPrefix("/"), !configPath.contains("\n") else { throw UpdateFailure.invalidPath }
@@ -13,7 +14,8 @@ public enum ServicePreparation {
         let manifest = try store.verifyPayload(in: app)
         var active = try store.active()
         var legacySnapshot: ServiceSnapshot?
-        let label = "dev.codexmulti.app.proxy"
+        let label = serviceLabel
+        _ = try launch.target(label)
         if active == nil {
             guard clientsClosed else { throw UpdateFailure.migrationRequired }
             legacySnapshot = try launch.snapshot(label)
@@ -37,7 +39,7 @@ public enum ServicePreparation {
             previousAppBuild: manifest.appBuild, targetAppBuild: manifest.appBuild,
             oldRuntimeID: active.runtimeID, targetRuntimeID: active.runtimeID,
             configPath: configPath, configRevision: "", desiredEnabled: enabled,
-            previousGeneration: active.generation, kind: "service")
+            previousGeneration: active.generation, serviceLabel: label, kind: "service")
         journal.guiReady = true
         journal.helperSHA256 = try Disk.fileDigest(UpdatePreparation.helperURL(store: store, journal: journal))
         let plist = try launch.plistURL(label)

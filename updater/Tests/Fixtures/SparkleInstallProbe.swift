@@ -26,6 +26,7 @@ struct ProbePlan: Codable {
     let newBuild: String
     let changedRuntime: Bool
     let transport: String?
+    let legacyMigration: Bool?
 }
 
 enum Probe {
@@ -98,6 +99,7 @@ extension URLSessionConfiguration {
                 let runtime = try RuntimeStore(root: Probe.runtime)
                 var checked = false
                 var installed = false
+                var migrated = false
                 var last = ""
                 let deadline = ProcessInfo.processInfo.systemUptime + 180
                 while ProcessInfo.processInfo.systemUptime < deadline {
@@ -109,13 +111,17 @@ extension URLSessionConfiguration {
                                               "error": controller.lastError?.description ?? ""])
                         last = state
                     }
-                    if Probe.build == plan.oldBuild, !checked, controller.canCheck {
+                    if plan.legacyMigration == true, !migrated, controller.needsMigration {
+                        migrated = true; Probe.event("migrate"); controller.migrateClientsClosed()
+                    }
+                    if plan.legacyMigration != true, Probe.build == plan.oldBuild, !checked, controller.canCheck {
                         checked = true; Probe.event("check"); controller.check()
                     }
                     if Probe.build == plan.oldBuild, !installed, controller.canInstall {
                         installed = true; Probe.event("install"); controller.install()
                     }
-                    if Probe.build == plan.newBuild, journal?.phase == .complete {
+                    if (Probe.build == plan.newBuild || plan.legacyMigration == true), journal?.phase == .complete,
+                       controller.journal?.phase == .complete, !controller.isFrozen {
                         let active = try runtime.active()!
                         let result: [String: Any] = ["build": Probe.build, "pid": getpid(), "runtime_id": active.runtimeID,
                             "generation": active.generation, "transaction_id": journal!.transactionID, "phase": journal!.phase.rawValue]
@@ -125,7 +131,8 @@ extension URLSessionConfiguration {
                         NSApp.terminate(nil)
                         return
                     }
-                    if ["failed", "check_failed", "no_compatible", "current"].contains(controller.status), journal?.phase != .complete {
+                    if (["failed", "check_failed", "no_compatible", "current"].contains(controller.status)
+                        || journal?.phase == .recoveryRequired || journal?.phase == .appRecoveryRequired), journal?.phase != .complete {
                         throw UpdateFailure.recoveryRequired
                     }
                     try await Task.sleep(for: .milliseconds(100))
@@ -147,8 +154,11 @@ extension URLSessionConfiguration {
         if CommandLine.arguments.contains("--prepare") {
             try Disk.privateDirectory(Probe.home)
             let store = try RuntimeStore(root: Probe.runtime)
-            let manifest = try store.stage(app: Bundle.main.bundleURL)
-            try store.select(ActiveRuntime(runtimeID: manifest.runtimeID, generation: 1))
+            let manifest = try store.verifyPayload(in: Bundle.main.bundleURL)
+            if plan.legacyMigration != true {
+                _ = try store.stage(app: Bundle.main.bundleURL)
+                try store.select(ActiveRuntime(runtimeID: manifest.runtimeID, generation: 1))
+            }
             let claims = Data("{\"exp\":4102444800,\"https://api.openai.com/auth\":{\"chatgpt_account_id\":\"synthetic-sparkle\",\"chatgpt_plan_type\":\"pro\"}}".utf8)
                 .base64EncodedString().replacingOccurrences(of: "+", with: "-").replacingOccurrences(of: "/", with: "_").replacingOccurrences(of: "=", with: "")
             let auth = store.root.appendingPathComponent("auth.json")
@@ -160,9 +170,20 @@ extension URLSessionConfiguration {
                 "state_file": store.root.appendingPathComponent("state.json").path,
                 "log_file": store.root.appendingPathComponent("logs/proxy.jsonl").path]
             try Disk.atomicWrite(try JSONSerialization.data(withJSONObject: config), at: Probe.config)
+            try Disk.atomicWrite(try JSONSerialization.data(withJSONObject: ["schema_version": 1, "enabled": true,
+                "proxy": ["config_path": Probe.config.path]]),
+                at: store.root.appendingPathComponent("proxy-settings.json"))
             let launch = LaunchService(home: Probe.home)
-            let data = try ManagedArtifacts.plist(store: store, runtimeID: manifest.runtimeID, configPath: Probe.config.path, serviceLabel: plan.label)
-            _ = try launch.bootstrap(label: plan.label, data: data, expectedPlistDigest: nil)
+            if plan.legacyMigration == true {
+                let app = Bundle.main.bundleURL
+                let arguments = [app.appendingPathComponent("Contents/Helpers/node").path,
+                    app.appendingPathComponent("Contents/Resources/proxy/src/server.mjs").path, "--config", Probe.config.path]
+                _ = try launch.bootstrap(label: plan.label, arguments: arguments,
+                    workingDirectory: app.appendingPathComponent("Contents/Resources/proxy"), logRoot: store.root.appendingPathComponent("logs"))
+            } else {
+                let data = try ManagedArtifacts.plist(store: store, runtimeID: manifest.runtimeID, configPath: Probe.config.path, serviceLabel: plan.label)
+                _ = try launch.bootstrap(label: plan.label, data: data, expectedPlistDigest: nil)
+            }
             Probe.event("prepared", ["runtime_id": manifest.runtimeID])
             return
         }

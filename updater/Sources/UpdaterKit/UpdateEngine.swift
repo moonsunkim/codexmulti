@@ -25,11 +25,16 @@ public actor UpdateEngine {
         var journal = try state()
         journal.desiredEnabled = false
         try store.save(journal)
+        try persistOffIntent()
+    }
+
+    private func persistOffIntent() throws {
         let path = store.root.appendingPathComponent("proxy-settings.json")
         if Disk.exists(path) {
             guard var object = try JSONSerialization.jsonObject(with: Disk.read(path)) as? [String: Any] else {
                 throw UpdateFailure.invalidTransaction
             }
+            if object["enabled"] as? Bool == false { return }
             object["enabled"] = false
             try Disk.atomicWrite(try JSONSerialization.data(withJSONObject: object, options: [.sortedKeys]), at: path)
         }
@@ -37,7 +42,9 @@ public actor UpdateEngine {
 
     public func armInstallation() throws {
         var journal = try state()
-        guard journal.phase == .appPrepared, !journal.cancellationRequested else { throw UpdateFailure.invalidTransaction }
+        guard !journal.cancellationRequested else { throw UpdateFailure.invalidTransaction }
+        if journal.phase == .installingApp, journal.installArmed { return }
+        guard journal.phase == .appPrepared, !journal.installArmed else { throw UpdateFailure.invalidTransaction }
         journal.installArmed = true
         journal.phase = .installingApp
         try store.save(journal)
@@ -64,13 +71,20 @@ public actor UpdateEngine {
 
     public func markGUIReady(appPath: String) throws {
         var journal = try state()
-        guard [.appPrepared, .installingApp, .awaitingGUI].contains(journal.phase), appPath == journal.appPath else {
+        guard appPath == journal.appPath else {
             throw UpdateFailure.invalidTransaction
         }
         let app = URL(fileURLWithPath: appPath)
         let manifest = try store.verifyPayload(in: app)
         guard manifest.appBuild == journal.targetAppBuild, manifest.runtimeID == journal.targetRuntimeID else {
             throw UpdateFailure.identityMismatch
+        }
+        if journal.guiReady {
+            guard !journal.installArmed else { throw UpdateFailure.invalidTransaction }
+            return
+        }
+        guard [.appPrepared, .installingApp, .awaitingGUI].contains(journal.phase) else {
+            throw UpdateFailure.invalidTransaction
         }
         _ = try store.stage(app: app)
         journal.guiReady = true
@@ -83,6 +97,7 @@ public actor UpdateEngine {
         var journal = try state()
         if journal.phase.terminal { return journal }
         do {
+            if !journal.desiredEnabled { try persistOffIntent() }
             switch journal.phase {
             case .preparingApp, .appPrepared:
                 if journal.cancellationRequested && !journal.installArmed {

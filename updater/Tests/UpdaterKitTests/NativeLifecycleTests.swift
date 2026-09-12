@@ -168,7 +168,7 @@ final class NativeLifecycleTests: XCTestCase, @unchecked Sendable {
         var offJournal = UpdateJournal(phase: .waitingIdle, appPath: newPath, previousAppBuild: new.appBuild,
             targetAppBuild: new.appBuild, oldRuntimeID: new.runtimeID, targetRuntimeID: new.runtimeID,
             configPath: config.path, configRevision: current.configRevision!, desiredEnabled: false,
-            previousGeneration: 2, serviceLabel: label, kind: "service")
+            previousGeneration: 2, serviceLabel: label, kind: "removal")
         offJournal.guiReady = true
         try store.save(offJournal)
         var offOperations = operations
@@ -189,5 +189,15 @@ final class NativeLifecycleTests: XCTestCase, @unchecked Sendable {
         XCTAssertNil(try launch.snapshot(label))
         XCTAssertFalse(Disk.exists(try launch.plistURL(label)))
         XCTAssertEqual(try store.active()?.generation, 3)
+        try RemovalPreparation.recordReady(store: store, transactionID: offResult.transactionID, launch: launch)
+        try RemovalPreparation.checkReady(store: store, app: URL(fileURLWithPath: newPath), launch: launch)
+        XCTAssertThrowsError(try RemovalPreparation.checkReady(store: store, app: URL(fileURLWithPath: oldPath), launch: launch))
+        do {
+            let writer = try FileLock(store.writerLockURL)
+            XCTAssertThrowsError(try RemovalPreparation.checkReady(store: store, app: URL(fileURLWithPath: newPath), launch: launch))
+            withExtendedLifetime(writer) {}
+        }
+        try store.select(ActiveRuntime(runtimeID: new.runtimeID, generation: 4))
+        XCTAssertThrowsError(try RemovalPreparation.checkReady(store: store, app: URL(fileURLWithPath: newPath), launch: launch))
     }
 }
