@@ -532,6 +532,10 @@ pub const SettingsView = struct {
     appearance_label_dark: []const u8 = "Dark",
     language: Language = .system,
     language_supported: [strings.supported_languages.len]Language = strings.supported_languages,
+    language_label: []const u8 = strings.system.text(.language_label),
+    language_label_system: []const u8 = strings.system.text(.language_system),
+    language_label_english: []const u8 = strings.system.text(.language_english),
+    language_label_korean: []const u8 = strings.system.text(.language_korean),
     codex_section_title: []const u8 = "Codex",
     codex_usage_window: CodexUsageWindow = .auto,
     codex_usage_window_supported: [3]CodexUsageWindow = .{ .auto, .weekly, .session },
@@ -601,8 +605,14 @@ pub const RedeemReset = struct {
     surface: Surface = .details,
 };
 
+pub const SetLanguage = struct {
+    value: Language,
+    system: Language,
+};
+
 pub const Command = union(enum) {
     set_appearance: Appearance,
+    set_language: SetLanguage,
     set_codex_usage_window: CodexUsageWindow,
     set_codex_show_model_limits: bool,
     set_launch_at_login: bool,

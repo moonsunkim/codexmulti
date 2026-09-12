@@ -20,7 +20,91 @@ const max_line_bytes = contracts.max_line_bytes;
 const tray_command_refresh_all = contracts.tray_command_refresh_all;
 const tray_command_open_details = contracts.tray_command_open_details;
 const tray_command_quit = contracts.tray_command_quit;
-const copy = strings.system;
+const default_copy = strings.system;
+
+pub const Localized = struct {
+    copy: strings.Catalog,
+
+    pub fn init(language: strings.Language) Localized {
+        return .{ .copy = strings.catalog(language) };
+    }
+
+    pub fn displayPlanLabel(self: Localized, stored: []const u8) []const u8 {
+        return displayPlanLabelWith(self.copy, stored);
+    }
+
+    pub fn resetPhrase(self: Localized, buffer: []u8, reset_at_unix_s: ?i64, now_unix_s: i64) []const u8 {
+        return resetPhraseWith(self.copy, buffer, reset_at_unix_s, now_unix_s);
+    }
+
+    pub fn remainingPhrase(self: Localized, buffer: []u8, remaining_s: i64) []const u8 {
+        return remainingPhraseWith(self.copy, buffer, remaining_s);
+    }
+
+    pub fn providerName(self: Localized, provider: domain.Provider) []const u8 {
+        return providerNameWith(self.copy, provider);
+    }
+
+    pub fn humanizeWindowLabel(self: Localized, buffer: []u8, label: []const u8) []const u8 {
+        return humanizeWindowLabelWith(self.copy, buffer, label);
+    }
+
+    pub fn freshnessText(self: Localized, freshness: Freshness) []const u8 {
+        return freshnessTextWith(self.copy, freshness);
+    }
+
+    pub fn freshnessPhrase(self: Localized, freshness: Freshness) []const u8 {
+        return freshnessPhraseWith(self.copy, freshness);
+    }
+
+    pub fn attemptReason(self: Localized, code: []const u8) []const u8 {
+        return attemptReasonWith(self.copy, code);
+    }
+
+    pub fn attemptMessage(self: Localized, code: []const u8) []const u8 {
+        return attemptMessageWith(self.copy, code);
+    }
+
+    pub fn authStateText(self: Localized, state: AuthState) []const u8 {
+        return authStateTextWith(self.copy, state);
+    }
+
+    pub fn snapshotStatusText(self: Localized, status: ?domain.SnapshotStatus) []const u8 {
+        return snapshotStatusTextWith(self.copy, status);
+    }
+
+    pub fn noWindowWording(self: Localized, row: AccountView) []const u8 {
+        return noWindowWordingWith(self.copy, row);
+    }
+
+    pub fn serviceText(self: Localized, capabilities: ServiceCapabilities) []const u8 {
+        return serviceTextWith(self.copy, capabilities);
+    }
+
+    pub fn formatLocal(self: Localized, buffer: []u8, unix_s: i64, time_zone: TimeZone) []const u8 {
+        return formatLocalWith(self.copy, buffer, unix_s, time_zone);
+    }
+
+    pub fn agoPhrase(self: Localized, buffer: []u8, now_unix_s: i64, at_unix_s: i64) []const u8 {
+        return agoPhraseWith(self.copy, buffer, now_unix_s, at_unix_s);
+    }
+
+    pub fn shortLocal(self: Localized, buffer: []u8, now_unix_s: i64, at_unix_s: i64, time_zone: TimeZone) []const u8 {
+        return shortLocalWith(self.copy, buffer, now_unix_s, at_unix_s, time_zone);
+    }
+
+    pub fn mediumLocal(self: Localized, buffer: []u8, unix_s: i64, time_zone: TimeZone) []const u8 {
+        return mediumLocalWith(self.copy, buffer, unix_s, time_zone);
+    }
+
+    pub fn countdownPhrase(self: Localized, buffer: []u8, reset_at_unix_s: ?i64, now_unix_s: i64) []const u8 {
+        return countdownPhraseWith(self.copy, buffer, reset_at_unix_s, now_unix_s);
+    }
+
+    pub fn durationPhrase(self: Localized, buffer: []u8, minutes: u32) []const u8 {
+        return durationPhraseWith(self.copy, buffer, minutes);
+    }
+};
 
 pub const CodexPlanClass = enum {
     weekly_only,
@@ -31,8 +115,12 @@ pub const CodexPlanClass = enum {
 };
 
 pub fn displayPlanLabel(stored: []const u8) []const u8 {
-    if (std.mem.eql(u8, stored, "Pro") or std.mem.eql(u8, stored, "x20")) return copy.text(.plan_pro_20x);
-    if (std.mem.eql(u8, stored, "Pro Lite") or std.mem.eql(u8, stored, "x5")) return copy.text(.plan_pro_5x);
+    return displayPlanLabelWith(default_copy, stored);
+}
+
+fn displayPlanLabelWith(localized: strings.Catalog, stored: []const u8) []const u8 {
+    if (std.mem.eql(u8, stored, "Pro") or std.mem.eql(u8, stored, "x20")) return localized.text(.plan_pro_20x);
+    if (std.mem.eql(u8, stored, "Pro Lite") or std.mem.eql(u8, stored, "x5")) return localized.text(.plan_pro_5x);
     return stored;
 }
 
@@ -125,41 +213,57 @@ pub fn selectConfiguredCodexPrimaryWindow(
 }
 
 pub fn resetPhrase(buffer: []u8, reset_at_unix_s: ?i64, now_unix_s: i64) []const u8 {
-    const reset_at = reset_at_unix_s orelse return copy.text(.reset_time_not_reported);
-    if (reset_at - now_unix_s <= 0) return copy.text(.reset_passed_refresh);
+    return resetPhraseWith(default_copy, buffer, reset_at_unix_s, now_unix_s);
+}
+
+fn resetPhraseWith(localized: strings.Catalog, buffer: []u8, reset_at_unix_s: ?i64, now_unix_s: i64) []const u8 {
+    const reset_at = reset_at_unix_s orelse return localized.text(.reset_time_not_reported);
+    if (reset_at - now_unix_s <= 0) return localized.text(.reset_passed_refresh);
     var countdown: [max_line_bytes]u8 = undefined;
-    const phrase = formatCountdown(&countdown, reset_at - now_unix_s);
+    const phrase = formatCountdownWith(localized, &countdown, reset_at - now_unix_s);
     var writer = std.Io.Writer.fixed(buffer);
-    copy.write(&writer, .reset_phrase, .{phrase});
+    localized.write(&writer, .reset_phrase, .{phrase});
     return writer.buffered();
 }
 
 pub fn remainingPhrase(buffer: []u8, remaining_s: i64) []const u8 {
-    if (remaining_s <= 0) return copy.text(.countdown_passed_refresh);
+    return remainingPhraseWith(default_copy, buffer, remaining_s);
+}
+
+fn remainingPhraseWith(localized: strings.Catalog, buffer: []u8, remaining_s: i64) []const u8 {
+    if (remaining_s <= 0) return localized.text(.countdown_passed_refresh);
     var writer = std.Io.Writer.fixed(buffer);
     const days = @divTrunc(remaining_s, std.time.s_per_day);
     const hours = @divTrunc(remaining_s - days * std.time.s_per_day, 3600);
     const minutes = @divTrunc(remaining_s - days * std.time.s_per_day - hours * 3600, 60);
     if (days > 0) {
-        copy.write(&writer, .remaining_days, .{ days, hours });
+        localized.write(&writer, .remaining_days, .{ days, hours });
     } else if (hours > 0) {
-        copy.write(&writer, .remaining_hours, .{ hours, minutes });
+        localized.write(&writer, .remaining_hours, .{ hours, minutes });
     } else if (minutes > 0) {
-        copy.write(&writer, .remaining_minutes, .{minutes});
+        localized.write(&writer, .remaining_minutes, .{minutes});
     } else {
-        copy.write(&writer, .remaining_seconds, .{remaining_s});
+        localized.write(&writer, .remaining_seconds, .{remaining_s});
     }
     return writer.buffered();
 }
 
 pub fn providerName(provider: domain.Provider) []const u8 {
+    return providerNameWith(default_copy, provider);
+}
+
+fn providerNameWith(localized: strings.Catalog, provider: domain.Provider) []const u8 {
     return switch (provider) {
-        .claude => copy.text(.provider_unsupported),
-        .codex => copy.text(.provider_codex),
+        .claude => localized.text(.provider_unsupported),
+        .codex => localized.text(.provider_codex),
     };
 }
 
 pub fn humanizeWindowLabel(buffer: []u8, label: []const u8) []const u8 {
+    return humanizeWindowLabelWith(default_copy, buffer, label);
+}
+
+fn humanizeWindowLabelWith(localized: strings.Catalog, buffer: []u8, label: []const u8) []const u8 {
     const known = [_]struct { source: []const u8, key: strings.StaticKey }{
         .{ .source = "weekly", .key = .window_weekly },
         .{ .source = "session", .key = .window_session },
@@ -169,7 +273,7 @@ pub fn humanizeWindowLabel(buffer: []u8, label: []const u8) []const u8 {
         .{ .source = "codex", .key = .window_codex },
     };
     for (known) |candidate| {
-        if (std.mem.eql(u8, label, candidate.source)) return copy.text(candidate.key);
+        if (std.mem.eql(u8, label, candidate.source)) return localized.text(candidate.key);
         if (!std.ascii.eqlIgnoreCase(label, candidate.source)) continue;
         const take = @min(label.len, buffer.len);
         if (take == 0) return label;
@@ -181,32 +285,44 @@ pub fn humanizeWindowLabel(buffer: []u8, label: []const u8) []const u8 {
 }
 
 pub fn freshnessText(freshness: Freshness) []const u8 {
+    return freshnessTextWith(default_copy, freshness);
+}
+
+fn freshnessTextWith(localized: strings.Catalog, freshness: Freshness) []const u8 {
     return switch (freshness) {
-        .never_refreshed => copy.text(.freshness_never),
-        .as_of => copy.text(.freshness_as_of),
-        .saved_snapshot => copy.text(.freshness_saved_snapshot),
-        .refresh_failed => copy.text(.freshness_refresh_failed),
-        .reauth_required => copy.text(.freshness_reauthentication_required),
-        .usage_unavailable => copy.text(.freshness_usage_unavailable),
-        .refresh_deferred => copy.text(.freshness_refresh_deferred),
-        .reset_passed => copy.text(.freshness_reset_passed),
+        .never_refreshed => localized.text(.freshness_never),
+        .as_of => localized.text(.freshness_as_of),
+        .saved_snapshot => localized.text(.freshness_saved_snapshot),
+        .refresh_failed => localized.text(.freshness_refresh_failed),
+        .reauth_required => localized.text(.freshness_reauthentication_required),
+        .usage_unavailable => localized.text(.freshness_usage_unavailable),
+        .refresh_deferred => localized.text(.freshness_refresh_deferred),
+        .reset_passed => localized.text(.freshness_reset_passed),
     };
 }
 
 pub fn freshnessPhrase(freshness: Freshness) []const u8 {
+    return freshnessPhraseWith(default_copy, freshness);
+}
+
+fn freshnessPhraseWith(localized: strings.Catalog, freshness: Freshness) []const u8 {
     return switch (freshness) {
-        .never_refreshed => copy.text(.freshness_never_lower),
-        .as_of => copy.text(.freshness_as_of_lower),
-        .saved_snapshot => copy.text(.freshness_saved_snapshot_lower),
-        .refresh_failed => copy.text(.freshness_refresh_failed_lower),
-        .reauth_required => copy.text(.freshness_reauthentication_required_lower),
-        .usage_unavailable => copy.text(.freshness_usage_unavailable_lower),
-        .refresh_deferred => copy.text(.freshness_refresh_deferred_lower),
-        .reset_passed => copy.text(.freshness_reset_passed_lower),
+        .never_refreshed => localized.text(.freshness_never_lower),
+        .as_of => localized.text(.freshness_as_of_lower),
+        .saved_snapshot => localized.text(.freshness_saved_snapshot_lower),
+        .refresh_failed => localized.text(.freshness_refresh_failed_lower),
+        .reauth_required => localized.text(.freshness_reauthentication_required_lower),
+        .usage_unavailable => localized.text(.freshness_usage_unavailable_lower),
+        .refresh_deferred => localized.text(.freshness_refresh_deferred_lower),
+        .reset_passed => localized.text(.freshness_reset_passed_lower),
     };
 }
 
 pub fn attemptReason(code: []const u8) []const u8 {
+    return attemptReasonWith(default_copy, code);
+}
+
+fn attemptReasonWith(localized: strings.Catalog, code: []const u8) []const u8 {
     const mappings = [_]struct { code: []const u8, key: strings.StaticKey }{
         .{ .code = "app-server-closed", .key = .attempt_reason_helper_closed },
         .{ .code = "app-server-unavailable", .key = .attempt_reason_helper_unavailable },
@@ -239,12 +355,16 @@ pub fn attemptReason(code: []const u8) []const u8 {
         .{ .code = "reset-outcome-unknown", .key = .attempt_reason_reset_outcome_unknown },
     };
     for (mappings) |mapping| {
-        if (std.mem.eql(u8, code, mapping.code)) return copy.text(mapping.key);
+        if (std.mem.eql(u8, code, mapping.code)) return localized.text(mapping.key);
     }
-    return copy.text(.attempt_reason_refresh_failed);
+    return localized.text(.attempt_reason_refresh_failed);
 }
 
 pub fn attemptMessage(code: []const u8) []const u8 {
+    return attemptMessageWith(default_copy, code);
+}
+
+fn attemptMessageWith(localized: strings.Catalog, code: []const u8) []const u8 {
     const mappings = [_]struct { code: []const u8, key: strings.StaticKey }{
         .{ .code = "app-server-closed", .key = .attempt_message_helper_closed },
         .{ .code = "app-server-unavailable", .key = .attempt_message_helper_unavailable },
@@ -262,48 +382,64 @@ pub fn attemptMessage(code: []const u8) []const u8 {
         .{ .code = "keychain-access-repair-required", .key = .attempt_message_keychain_repair },
     };
     for (mappings) |mapping| {
-        if (std.mem.eql(u8, code, mapping.code)) return copy.text(mapping.key);
+        if (std.mem.eql(u8, code, mapping.code)) return localized.text(mapping.key);
     }
-    return copy.text(.attempt_message_refresh_failed);
+    return localized.text(.attempt_message_refresh_failed);
 }
 
 pub fn authStateText(state: AuthState) []const u8 {
+    return authStateTextWith(default_copy, state);
+}
+
+fn authStateTextWith(localized: strings.Catalog, state: AuthState) []const u8 {
     return switch (state) {
-        .connected => copy.text(.auth_connected),
-        .reauth_required => copy.text(.auth_reauthentication_required),
-        .unavailable => copy.text(.auth_unavailable),
+        .connected => localized.text(.auth_connected),
+        .reauth_required => localized.text(.auth_reauthentication_required),
+        .unavailable => localized.text(.auth_unavailable),
     };
 }
 
 pub fn snapshotStatusText(status: ?domain.SnapshotStatus) []const u8 {
-    const value = status orelse return copy.text(.snapshot_none);
+    return snapshotStatusTextWith(default_copy, status);
+}
+
+fn snapshotStatusTextWith(localized: strings.Catalog, status: ?domain.SnapshotStatus) []const u8 {
+    const value = status orelse return localized.text(.snapshot_none);
     return switch (value) {
-        .fresh => copy.text(.snapshot_fresh),
-        .stale => copy.text(.snapshot_stale),
-        .partial => copy.text(.snapshot_partial),
-        .reauth_required => copy.text(.snapshot_reauthentication_required),
-        .error_state => copy.text(.snapshot_error_state),
-        .unavailable => copy.text(.snapshot_unavailable),
-        .deferred => copy.text(.snapshot_deferred),
+        .fresh => localized.text(.snapshot_fresh),
+        .stale => localized.text(.snapshot_stale),
+        .partial => localized.text(.snapshot_partial),
+        .reauth_required => localized.text(.snapshot_reauthentication_required),
+        .error_state => localized.text(.snapshot_error_state),
+        .unavailable => localized.text(.snapshot_unavailable),
+        .deferred => localized.text(.snapshot_deferred),
     };
 }
 
 fn noWindowWording(row: AccountView) []const u8 {
-    if (!row.has_snapshot) return copy.text(.no_saved_snapshot_yet);
-    return copy.text(.no_usage_window_reported);
+    return noWindowWordingWith(default_copy, row);
+}
+
+fn noWindowWordingWith(localized: strings.Catalog, row: AccountView) []const u8 {
+    if (!row.has_snapshot) return localized.text(.no_saved_snapshot_yet);
+    return localized.text(.no_usage_window_reported);
 }
 
 fn serviceText(capabilities: ServiceCapabilities) []const u8 {
+    return serviceTextWith(default_copy, capabilities);
+}
+
+fn serviceTextWith(localized: strings.Catalog, capabilities: ServiceCapabilities) []const u8 {
     if (!capabilities.connected) {
-        return copy.text(.service_not_connected);
+        return localized.text(.service_not_connected);
     }
     if (!capabilities.refresh and !capabilities.accounts and !capabilities.reset) {
-        return copy.text(.service_local_only);
+        return localized.text(.service_local_only);
     }
-    if (!capabilities.refresh) return copy.text(.service_refresh_not_attached);
-    if (!capabilities.accounts) return copy.text(.service_accounts_not_attached);
-    if (!capabilities.reset) return copy.text(.service_reset_not_attached);
-    return copy.text(.service_all_attached);
+    if (!capabilities.refresh) return localized.text(.service_refresh_not_attached);
+    if (!capabilities.accounts) return localized.text(.service_accounts_not_attached);
+    if (!capabilities.reset) return localized.text(.service_reset_not_attached);
+    return localized.text(.service_all_attached);
 }
 
 pub fn outcomeIsHonestFailure(outcome: CommandOutcome) bool {
@@ -366,11 +502,15 @@ fn localDayIndex(unix_s: i64, gmtoff_s: i64) ?i64 {
 }
 
 pub fn formatLocal(buffer: []u8, unix_s: i64, time_zone: TimeZone) []const u8 {
-    const local = localInstant(unix_s, time_zone) orelse return copy.text(.unrepresentable_local_time);
+    return formatLocalWith(default_copy, buffer, unix_s, time_zone);
+}
+
+fn formatLocalWith(localized: strings.Catalog, buffer: []u8, unix_s: i64, time_zone: TimeZone) []const u8 {
+    const local = localInstant(unix_s, time_zone) orelse return localized.text(.unrepresentable_local_time);
     var writer = std.Io.Writer.fixed(buffer);
-    copy.write(&writer, .absolute_datetime, .{
+    localized.write(&writer, .absolute_datetime, .{
         local.year,
-        copy.monthName(local.month_index),
+        localized.monthName(local.month_index),
         local.day,
         local.hour,
         local.minute,
@@ -380,58 +520,74 @@ pub fn formatLocal(buffer: []u8, unix_s: i64, time_zone: TimeZone) []const u8 {
 }
 
 pub fn formatCountdown(buffer: []u8, remaining_s: i64) []const u8 {
-    if (remaining_s <= 0) return copy.text(.countdown_passed_refresh);
+    return formatCountdownWith(default_copy, buffer, remaining_s);
+}
+
+fn formatCountdownWith(localized: strings.Catalog, buffer: []u8, remaining_s: i64) []const u8 {
+    if (remaining_s <= 0) return localized.text(.countdown_passed_refresh);
     var writer = std.Io.Writer.fixed(buffer);
     const days = @divTrunc(remaining_s, std.time.s_per_day);
     const hours = @divTrunc(remaining_s - days * std.time.s_per_day, 3600);
     const minutes = @divTrunc(remaining_s - days * std.time.s_per_day - hours * 3600, 60);
     if (days > 0) {
-        copy.write(&writer, .countdown_days, .{ days, hours });
+        localized.write(&writer, .countdown_days, .{ days, hours });
     } else if (hours > 0) {
-        copy.write(&writer, .countdown_hours, .{ hours, minutes });
+        localized.write(&writer, .countdown_hours, .{ hours, minutes });
     } else if (minutes > 0) {
-        copy.write(&writer, .countdown_minutes, .{minutes});
+        localized.write(&writer, .countdown_minutes, .{minutes});
     } else {
-        copy.write(&writer, .countdown_seconds, .{remaining_s});
+        localized.write(&writer, .countdown_seconds, .{remaining_s});
     }
     return writer.buffered();
 }
 
 pub fn agoPhrase(buffer: []u8, now_unix_s: i64, at_unix_s: i64) []const u8 {
+    return agoPhraseWith(default_copy, buffer, now_unix_s, at_unix_s);
+}
+
+fn agoPhraseWith(localized: strings.Catalog, buffer: []u8, now_unix_s: i64, at_unix_s: i64) []const u8 {
     const elapsed = now_unix_s - at_unix_s;
-    if (elapsed < 60) return copy.text(.just_now);
+    if (elapsed < 60) return localized.text(.just_now);
     var writer = std.Io.Writer.fixed(buffer);
     if (elapsed < 3600) {
-        copy.write(&writer, .ago_minutes, .{@divTrunc(elapsed, 60)});
+        localized.write(&writer, .ago_minutes, .{@divTrunc(elapsed, 60)});
     } else if (elapsed < std.time.s_per_day) {
-        copy.write(&writer, .ago_hours, .{@divTrunc(elapsed, 3600)});
+        localized.write(&writer, .ago_hours, .{@divTrunc(elapsed, 3600)});
     } else {
-        copy.write(&writer, .ago_days, .{@divTrunc(elapsed, std.time.s_per_day)});
+        localized.write(&writer, .ago_days, .{@divTrunc(elapsed, std.time.s_per_day)});
     }
     return writer.buffered();
 }
 
 pub fn shortLocal(buffer: []u8, now_unix_s: i64, at_unix_s: i64, time_zone: TimeZone) []const u8 {
-    const local = localInstant(at_unix_s, time_zone) orelse return copy.text(.unrepresentable_local_time);
-    const now_local = localInstant(now_unix_s, time_zone) orelse return copy.text(.unrepresentable_local_time);
-    const day_index = localDayIndex(at_unix_s, local.gmtoff_s) orelse return copy.text(.unrepresentable_local_time);
-    const now_day_index = localDayIndex(now_unix_s, now_local.gmtoff_s) orelse return copy.text(.unrepresentable_local_time);
+    return shortLocalWith(default_copy, buffer, now_unix_s, at_unix_s, time_zone);
+}
+
+fn shortLocalWith(localized: strings.Catalog, buffer: []u8, now_unix_s: i64, at_unix_s: i64, time_zone: TimeZone) []const u8 {
+    const local = localInstant(at_unix_s, time_zone) orelse return localized.text(.unrepresentable_local_time);
+    const now_local = localInstant(now_unix_s, time_zone) orelse return localized.text(.unrepresentable_local_time);
+    const day_index = localDayIndex(at_unix_s, local.gmtoff_s) orelse return localized.text(.unrepresentable_local_time);
+    const now_day_index = localDayIndex(now_unix_s, now_local.gmtoff_s) orelse return localized.text(.unrepresentable_local_time);
     var writer = std.Io.Writer.fixed(buffer);
     if (day_index != now_day_index) {
-        copy.write(&writer, .short_date, .{
-            copy.monthName(local.month_index),
+        localized.write(&writer, .short_date, .{
+            localized.monthName(local.month_index),
             local.day,
         });
     }
-    copy.write(&writer, .clock_time, .{ local.hour, local.minute });
+    localized.write(&writer, .clock_time, .{ local.hour, local.minute });
     return writer.buffered();
 }
 
 pub fn mediumLocal(buffer: []u8, unix_s: i64, time_zone: TimeZone) []const u8 {
-    const local = localInstant(unix_s, time_zone) orelse return copy.text(.unrepresentable_local_time);
+    return mediumLocalWith(default_copy, buffer, unix_s, time_zone);
+}
+
+fn mediumLocalWith(localized: strings.Catalog, buffer: []u8, unix_s: i64, time_zone: TimeZone) []const u8 {
+    const local = localInstant(unix_s, time_zone) orelse return localized.text(.unrepresentable_local_time);
     var writer = std.Io.Writer.fixed(buffer);
-    copy.write(&writer, .medium_datetime, .{
-        copy.monthName(local.month_index),
+    localized.write(&writer, .medium_datetime, .{
+        localized.monthName(local.month_index),
         local.day,
         local.hour,
         local.minute,
@@ -441,18 +597,26 @@ pub fn mediumLocal(buffer: []u8, unix_s: i64, time_zone: TimeZone) []const u8 {
 }
 
 pub fn countdownPhrase(buffer: []u8, reset_at_unix_s: ?i64, now_unix_s: i64) []const u8 {
-    const reset_at = reset_at_unix_s orelse return copy.text(.reset_time_not_reported);
-    return formatCountdown(buffer, reset_at - now_unix_s);
+    return countdownPhraseWith(default_copy, buffer, reset_at_unix_s, now_unix_s);
+}
+
+fn countdownPhraseWith(localized: strings.Catalog, buffer: []u8, reset_at_unix_s: ?i64, now_unix_s: i64) []const u8 {
+    const reset_at = reset_at_unix_s orelse return localized.text(.reset_time_not_reported);
+    return formatCountdownWith(localized, buffer, reset_at - now_unix_s);
 }
 
 pub fn durationPhrase(buffer: []u8, minutes: u32) []const u8 {
+    return durationPhraseWith(default_copy, buffer, minutes);
+}
+
+fn durationPhraseWith(localized: strings.Catalog, buffer: []u8, minutes: u32) []const u8 {
     var writer = std.Io.Writer.fixed(buffer);
     if (minutes % (60 * 24) == 0 and minutes >= 60 * 24) {
-        copy.write(&writer, .duration_days, .{minutes / (60 * 24)});
+        localized.write(&writer, .duration_days, .{minutes / (60 * 24)});
     } else if (minutes % 60 == 0 and minutes >= 60) {
-        copy.write(&writer, .duration_hours, .{minutes / 60});
+        localized.write(&writer, .duration_hours, .{minutes / 60});
     } else {
-        copy.write(&writer, .duration_minutes, .{minutes});
+        localized.write(&writer, .duration_minutes, .{minutes});
     }
     return writer.buffered();
 }
@@ -462,6 +626,7 @@ pub fn trayTitle(_: anytype, _: []u8) []const u8 {
 }
 
 pub fn buildTray(view: anytype, out: []TrayItem) usize {
+    const copy = strings.catalog(view.resolved_language);
     var count: usize = 0;
     var next_id: u32 = 1;
     var can_refresh = false;
@@ -551,7 +716,7 @@ pub fn buildTray(view: anytype, out: []TrayItem) usize {
         }
         if (shown < view.row_count) {
             push(body, &count, &next_id, .{
-                .label = truncationLabel(view.row_count - shown),
+                .label = truncationLabel(copy, view.row_count - shown),
                 .command = tray_command_open_details,
                 .enabled = true,
             });
@@ -564,7 +729,7 @@ pub fn buildTray(view: anytype, out: []TrayItem) usize {
     return count;
 }
 
-fn truncationLabel(remaining: usize) []const u8 {
+fn truncationLabel(copy: strings.Catalog, remaining: usize) []const u8 {
     const keys = [_]strings.StaticKey{
         .tray_more_accounts,
         .tray_one_more_account,

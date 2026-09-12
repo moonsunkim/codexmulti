@@ -22,6 +22,16 @@ final class P12SettingsTests: XCTestCase {
         XCTAssertEqual(PreferencesModel.autoRefreshIntent(60), .set_auto_refresh(minutes: 60))
     }
 
+    func testF18LanguageRowRendersEveryCatalogLanguageAndUsesTheSystemPreference() throws {
+        let settings = try projection("settings-appearance-system").view.settings
+        XCTAssertEqual(settings.language_supported, [.system, .en, .ko])
+        XCTAssertEqual(PreferencesModel.Row.language.label(settings: settings), settings.language_label)
+        XCTAssertEqual(PreferencesModel.languageOptions(settings: settings).map(\.label), ["System", "English", "한국어"])
+        XCTAssertEqual(PreferencesModel.languageIntent(.ko, system: .en), .set_language(value: .ko, system: .en))
+        XCTAssertEqual(SystemLanguageResolver.resolve(["ko-KR", "en-US"]), .ko)
+        XCTAssertEqual(SystemLanguageResolver.resolve(["en-US", "ko-KR"]), .en)
+    }
+
     func testWholeProxySwitchUsesProjectedStateAndRefusalDetail() throws {
         let settings = try projection("c9-proxy-switch-refused").view.settings
         XCTAssertTrue(settings.proxy_enabled)

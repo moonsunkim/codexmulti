@@ -130,7 +130,7 @@ final class UnifiedScreenTests: XCTestCase {
     func testSettingsRegroupingPreservesEveryRowAndAssignsExpectedSection() throws {
         let settings = try projection("settings-appearance-system").view.settings
         let previouslyRenderedLabels: Set<String> = [
-            Copy.launchAtLogin, Copy.autoRefresh, Copy.theme,
+            Copy.launchAtLogin, Copy.autoRefresh, Copy.theme, settings.language_label,
             settings.codex_usage_window_label, settings.codex_show_model_limits_label,
             Copy.useFailoverProxy, Copy.advancedProxyControls, Copy.factStatus, Copy.codexRouting,
             Copy.version,
@@ -142,7 +142,7 @@ final class UnifiedScreenTests: XCTestCase {
         XCTAssertEqual(regroupedLabels.count, previouslyRenderedLabels.count,
                        "no settings row may be duplicated across sections")
         XCTAssertEqual(PreferencesModel.sectionLayout, [
-            .init(id: .system, rows: [.launchAtLogin, .autoRefresh, .theme]),
+            .init(id: .system, rows: [.launchAtLogin, .autoRefresh, .theme, .language]),
             .init(id: .codex, rows: [.codexUsageWindow, .codexShowModelLimits]),
             .init(id: .proxy, rows: [
                 .useFailoverProxy, .advancedProxyControls, .proxyServiceStatus, .codexRouting,
@@ -184,7 +184,7 @@ final class UnifiedScreenTests: XCTestCase {
             XCTAssertGreaterThanOrEqual(range.lowerBound, previous)
             previous = range.upperBound
         }
-        for excluded in ["language", "auto_update", "Language", "Automatic updates"] {
+        for excluded in ["auto_update", "Automatic updates"] {
             XCTAssertFalse(settings.contains(excluded), excluded)
         }
         let main = try source("Accounts/SettingsShell.swift")

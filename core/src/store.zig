@@ -9,6 +9,7 @@ pub const max_document_bytes: usize = 1024 * 1024;
 pub const max_proxy_fingerprint_bytes: usize = 128;
 pub const Appearance = enum { system, light, dark };
 pub const CodexUsageWindow = enum { auto, weekly, session };
+pub const Language = @import("strings.zig").Language;
 
 pub const default_proxy_base_url = "http://127.0.0.1:8787";
 
@@ -29,6 +30,7 @@ pub const AttemptDocument = struct {
 pub const AppSettingsDocument = struct {
     schema_version: u16 = current_schema_version,
     appearance: Appearance = .system,
+    language: Language = .system,
     codex_usage_window: CodexUsageWindow = .auto,
     codex_show_model_limits: bool = false,
     launch_at_login: bool = false,

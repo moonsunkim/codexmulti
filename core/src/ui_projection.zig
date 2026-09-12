@@ -3,10 +3,10 @@ const domain = @import("domain.zig");
 const contracts = @import("ui_contracts.zig");
 const ui_format = @import("ui_format.zig");
 const strings = @import("strings.zig");
-const format = ui_format.ProjectionFormat;
-const copy = strings.system;
+const static_format = ui_format.ProjectionFormat;
+const default_copy = strings.system;
 
-pub const node_missing_reason = copy.text(.node_missing_reason);
+pub const node_missing_reason = default_copy.text(.node_missing_reason);
 
 const ServiceCapabilities = contracts.ServiceCapabilities;
 const AccountView = contracts.AccountView;
@@ -30,13 +30,15 @@ const max_line_bytes = contracts.max_line_bytes;
 const names_capacity = contracts.names_capacity;
 const text_capacity = contracts.text_capacity;
 
-pub const app_version_text = copy.text(.app_version);
+pub const app_version_text = default_copy.text(.app_version);
 
 pub const ViewState = struct {
     now_unix_s: i64 = 0,
     time_zone: TimeZone = .system,
     capabilities: ServiceCapabilities = .{},
     appearance: contracts.Appearance = .system,
+    language: contracts.Language = .system,
+    resolved_language: contracts.Language = .en,
     codex_usage_window: contracts.CodexUsageWindow = .auto,
     codex_show_model_limits: bool = false,
     launch_at_login: bool = false,
@@ -68,13 +70,13 @@ pub const ViewState = struct {
     proxy_detail_text: []const u8 = "",
     proxy_tray_text: []const u8 = "",
     proxy_service_state: contracts.ProxyServiceState = .not_installed,
-    proxy_service_detail_text: []const u8 = copy.text(.proxy_service_not_installed),
+    proxy_service_detail_text: []const u8 = default_copy.text(.proxy_service_not_installed),
     proxy_service_can_install: bool = false,
     proxy_service_can_repair: bool = false,
     proxy_service_can_stop: bool = false,
     codex_routing_state: contracts.CodexRoutingState = .off,
     proxy_enabled: bool = false,
-    proxy_enabled_detail_text: []const u8 = copy.text(.proxy_direct_routing),
+    proxy_enabled_detail_text: []const u8 = default_copy.text(.proxy_direct_routing),
     proxy_cli_default_path: []const u8 = "",
     proxy_node_default_path: []const u8 = "",
 
@@ -100,13 +102,13 @@ pub const ViewState = struct {
     codex_group_summary: []const u8 = "",
     onboarding_visible: bool = true,
     onboarding_steps: [3]contracts.OnboardingStepView = .{
-        .{ .kind = .add_account, .title = copy.text(.onboarding_add_account) },
-        .{ .kind = .install_proxy_service, .title = copy.text(.onboarding_install_proxy) },
-        .{ .kind = .enable_codex_routing, .title = copy.text(.onboarding_enable_routing) },
+        .{ .kind = .add_account, .title = default_copy.text(.onboarding_add_account) },
+        .{ .kind = .install_proxy_service, .title = default_copy.text(.onboarding_install_proxy) },
+        .{ .kind = .enable_codex_routing, .title = default_copy.text(.onboarding_enable_routing) },
     },
     onboarding_next_action: ?contracts.OnboardingNextAction = .{
         .kind = .add_account,
-        .label = copy.text(.add_codex),
+        .label = default_copy.text(.add_codex),
     },
 
     toolbar_status_text: []const u8 = "",
@@ -153,6 +155,8 @@ pub const ViewState = struct {
         self.time_zone = time_zone;
         self.capabilities = capabilities;
         self.appearance = .system;
+        self.language = .system;
+        self.resolved_language = .en;
         self.codex_usage_window = .auto;
         self.codex_show_model_limits = false;
         self.launch_at_login = false;
@@ -180,13 +184,13 @@ pub const ViewState = struct {
         self.proxy_detail_text = "";
         self.proxy_tray_text = "";
         self.proxy_service_state = .not_installed;
-        self.proxy_service_detail_text = copy.text(.proxy_service_not_installed);
+        self.proxy_service_detail_text = default_copy.text(.proxy_service_not_installed);
         self.proxy_service_can_install = false;
         self.proxy_service_can_repair = false;
         self.proxy_service_can_stop = false;
         self.codex_routing_state = .off;
         self.proxy_enabled = false;
-        self.proxy_enabled_detail_text = copy.text(.proxy_direct_routing);
+        self.proxy_enabled_detail_text = default_copy.text(.proxy_direct_routing);
         self.proxy_cli_default_path = "";
         self.proxy_node_default_path = "";
         self.row_count = 0;
@@ -216,11 +220,11 @@ pub const ViewState = struct {
         self.service_text = "";
         self.onboarding_visible = true;
         self.onboarding_steps = .{
-            .{ .kind = .add_account, .title = copy.text(.onboarding_add_account) },
-            .{ .kind = .install_proxy_service, .title = copy.text(.onboarding_install_proxy) },
-            .{ .kind = .enable_codex_routing, .title = copy.text(.onboarding_enable_routing) },
+            .{ .kind = .add_account, .title = default_copy.text(.onboarding_add_account) },
+            .{ .kind = .install_proxy_service, .title = default_copy.text(.onboarding_install_proxy) },
+            .{ .kind = .enable_codex_routing, .title = default_copy.text(.onboarding_enable_routing) },
         };
-        self.onboarding_next_action = .{ .kind = .add_account, .label = copy.text(.add_codex) };
+        self.onboarding_next_action = .{ .kind = .add_account, .label = default_copy.text(.add_codex) };
     }
 
     pub fn pushAccount(self: *ViewState, fact: AccountFact) error{ViewFull}!usize {
@@ -334,6 +338,11 @@ pub const ViewState = struct {
         self.appearance = appearance;
     }
 
+    pub fn applyLanguage(self: *ViewState, language: contracts.Language, resolved: contracts.Language) void {
+        self.language = language;
+        self.resolved_language = resolved;
+    }
+
     pub fn applyCodexSettings(
         self: *ViewState,
         usage_window: contracts.CodexUsageWindow,
@@ -375,7 +384,7 @@ pub const ViewState = struct {
         self.renderProxy(options);
 
         for (self.rows[0..self.row_count], 0..) |*row, row_index| {
-            row.primary = format.selectConfiguredCodexPrimaryWindow(
+            row.primary = static_format.selectConfiguredCodexPrimaryWindow(
                 row.plan_label,
                 row.windows[0..row.window_count],
                 self.codex_usage_window,
@@ -411,6 +420,7 @@ pub const ViewState = struct {
     }
 
     fn renderOnboarding(self: *ViewState) void {
+        const copy = self.localized().copy;
         const account_completed = self.codex_count != 0;
         const service_completed = self.proxy_service_state == .running;
         const routing_completed = self.codex_routing_state == .on;
@@ -525,7 +535,12 @@ pub const ViewState = struct {
         return internInto(&self.text, &self.text_len, value);
     }
 
+    fn localized(self: *const ViewState) ui_format.Localized {
+        return .init(self.resolved_language);
+    }
+
     fn fmtText(self: *ViewState, comptime key: strings.FormatKey, args: strings.FormatArgs(key)) []const u8 {
+        const copy = self.localized().copy;
         var scratch: [max_line_bytes]u8 = undefined;
         var writer = std.Io.Writer.fixed(&scratch);
 
@@ -533,7 +548,8 @@ pub const ViewState = struct {
         return self.internText(writer.buffered());
     }
 
-    fn proxyStateText(state: contracts.ProxyAccountState) []const u8 {
+    fn proxyStateText(self: *const ViewState, state: contracts.ProxyAccountState) []const u8 {
+        const copy = self.localized().copy;
         return switch (state) {
             .ready => copy.text(.proxy_ready),
             .cooldown => copy.text(.proxy_cooldown),
@@ -545,6 +561,8 @@ pub const ViewState = struct {
     }
 
     fn renderProxy(self: *ViewState, options: RenderOptions) void {
+        const copy = self.localized().copy;
+        const format = self.localized();
         var scratch: [max_line_bytes]u8 = undefined;
         var relative: [max_line_bytes]u8 = undefined;
         const controllable = self.proxy_reachability == .reachable and self.proxy_config_path_matches;
@@ -562,7 +580,7 @@ pub const ViewState = struct {
             else if (account.active)
                 copy.text(.active)
             else
-                proxyStateText(account.state);
+                self.proxyStateText(account.state);
 
             const detail_text: []const u8 = if (!account.mapped)
                 self.internText(copy.text(.not_mapped_saved_account))
@@ -738,6 +756,7 @@ pub const ViewState = struct {
     }
 
     fn windowCell(self: *ViewState, row: *const AccountView, index: ?usize) WindowCell {
+        const format = self.localized();
         const slot = index orelse return .{};
         const window = row.windows[slot];
         var label_scratch: [max_line_bytes]u8 = undefined;
@@ -756,6 +775,8 @@ pub const ViewState = struct {
     }
 
     fn renderAccountRows(self: *ViewState, options: RenderOptions) void {
+        const copy = self.localized().copy;
+        const format = self.localized();
         var scratch: [max_line_bytes]u8 = undefined;
         const order = [_]domain.Provider{.codex};
         for (order) |provider| {
@@ -770,7 +791,7 @@ pub const ViewState = struct {
                     .provider = provider,
                     .is_codex = provider == .codex,
                     .title = self.displayLabel(row, provider_ordinal),
-                    .plan = ui_format.displayPlanLabel(row.plan_label),
+                    .plan = format.displayPlanLabel(row.plan_label),
                     .has_plan = row.plan_label.len != 0,
                     .expanded = options.selected != null and options.selected.? == index,
                     .menu_open = options.row_menu != null and options.row_menu.? == index,
@@ -925,6 +946,7 @@ pub const ViewState = struct {
     }
 
     fn appendUnifiedRow(self: *ViewState, account: *const AccountRowView) void {
+        const copy = self.localized().copy;
         if (self.unified_row_count >= self.unified_rows.len) return;
         const proxy_position = self.proxyIndexOfAccount(self.rows[account.index].account_id);
         const proxy: ?*const ProxyAccountView = if (proxy_position) |index| &self.proxy_rows[index] else null;
@@ -988,6 +1010,7 @@ pub const ViewState = struct {
     }
 
     fn renderSettings(self: *ViewState) void {
+        const copy = self.localized().copy;
         const auto_refresh_traffic_text = if (self.auto_refresh_minutes == 0)
             self.internText(copy.text(.auto_refresh_off))
         else blk: {
@@ -1001,9 +1024,14 @@ pub const ViewState = struct {
         };
         self.settings = .{
             .appearance = self.appearance,
+            .language = self.language,
+            .language_label = copy.text(.language_label),
+            .language_label_system = copy.text(.language_system),
+            .language_label_english = copy.text(.language_english),
+            .language_label_korean = copy.text(.language_korean),
             .codex_usage_window = self.codex_usage_window,
             .codex_show_model_limits = self.codex_show_model_limits,
-            .app_version_text = app_version_text,
+            .app_version_text = copy.text(.app_version),
             .launch_at_login = self.launch_at_login,
             .launch_at_login_registration_failed = self.launch_at_login_registration_failed,
             .auto_refresh_minutes = self.auto_refresh_minutes,
@@ -1029,6 +1057,8 @@ pub const ViewState = struct {
     }
 
     fn renderHeaderView(self: *ViewState) void {
+        const copy = self.localized().copy;
+        const format = self.localized();
         var absolute: [max_line_bytes]u8 = undefined;
         var relative: [max_line_bytes]u8 = undefined;
         self.header_fresh_text = if (self.newest_success_at_unix_s) |at|
@@ -1147,6 +1177,8 @@ pub const ViewState = struct {
     }
 
     fn renderRow(self: *ViewState, row: *AccountView, row_index: usize) void {
+        const copy = self.localized().copy;
+        const format = self.localized();
         var scratch: [max_line_bytes]u8 = undefined;
 
         row.summary_text = blk: {
@@ -1227,7 +1259,7 @@ pub const ViewState = struct {
             if (!row.proxy_mode) break :blk "";
             if (row.proxy_active) break :blk self.internText(copy.text(.active_in_failover_proxy));
             if (row.proxy_can_switch) break :blk self.internText(copy.text(.use_in_failover_proxy));
-            break :blk self.fmtText(.failover_proxy_state, .{proxyStateText(row.proxy_state)});
+            break :blk self.fmtText(.failover_proxy_state, .{self.proxyStateText(row.proxy_state)});
         };
 
         row.tray_identity_text = row.tray_text;
@@ -1235,6 +1267,8 @@ pub const ViewState = struct {
     }
 
     fn renderHeader(self: *ViewState) void {
+        const copy = self.localized().copy;
+        const format = self.localized();
         var scratch: [max_line_bytes]u8 = undefined;
         self.headline_text = self.internText(copy.text(.codexmulti));
 
@@ -1266,10 +1300,13 @@ pub const ViewState = struct {
     }
 
     fn renderTrayProviderHeaders(self: *ViewState) void {
+        const copy = self.localized().copy;
         self.tray_provider_headers[@intFromEnum(domain.Provider.codex)] = self.internText(copy.text(.codex_accounts_header));
     }
 
     fn displayLabel(self: *ViewState, row: *const AccountView, provider_ordinal: u32) []const u8 {
+        const copy = self.localized().copy;
+        const format = self.localized();
         const count = if (row.provider == .claude) self.claude_count else self.codex_count;
         var default_label_buffer: [max_line_bytes]u8 = undefined;
         var default_label_writer = std.Io.Writer.fixed(&default_label_buffer);
@@ -1282,6 +1319,8 @@ pub const ViewState = struct {
     }
 
     fn renderAttentionText(self: *ViewState, row: *const AccountView) []const u8 {
+        const copy = self.localized().copy;
+        const format = self.localized();
         var scratch: [max_line_bytes]u8 = undefined;
         var line: [max_line_bytes]u8 = undefined;
         var writer = std.Io.Writer.fixed(&line);
@@ -1309,6 +1348,8 @@ pub const ViewState = struct {
     }
 
     fn renderInspector(self: *ViewState, options: RenderOptions) void {
+        const copy = self.localized().copy;
+        const format = self.localized();
         const selected = options.selected orelse return;
         if (selected >= self.row_count) return;
         const row = &self.rows[selected];
@@ -1367,7 +1408,7 @@ pub const ViewState = struct {
                     self.fmtText(.paused_draining, .{row.proxy_in_flight})
                 else
                     self.internText(copy.text(.proxy_paused)),
-                else => self.internText(proxyStateText(row.proxy_state)),
+                else => self.internText(self.proxyStateText(row.proxy_state)),
             };
             inspector.failover_action = if (row.proxy_can_switch)
                 self.internText(copy.text(.use_in_failover_proxy))

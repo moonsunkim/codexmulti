@@ -669,6 +669,19 @@ final class LayoutRenderTests: XCTestCase {
         XCTAssertEqual(recorder.intents, [], "off-screen Settings layout is passive")
     }
 
+    func testF18LanguageSettingsRowRendersOffscreenWithoutSubmitting() throws {
+        let projection = try JSONDecoder().decode(
+            Projection.self, from: Data(contentsOf: Fixtures.exported("settings-appearance-system")))
+        let recorder = LayoutIntentRecorder()
+        let ink = try render(
+            LanguageSettingsRow(settings: projection.view.settings)
+                .environment(\.submit, recorder.sink),
+            width: 720)
+        XCTAssertEqual(ink.size.height, Grid.accountsRow, accuracy: 0.5)
+        XCTAssertNotNil(ink.bounds(x: 0..<ink.size.width))
+        XCTAssertEqual(recorder.intents, [])
+    }
+
     func testCodexSettingsPanelRendersBothCoreProjectedRows() throws {
         let projection = try JSONDecoder().decode(
             Projection.self, from: Data(contentsOf: Fixtures.exported("settings-appearance-system")))

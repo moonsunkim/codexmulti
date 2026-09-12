@@ -87,8 +87,12 @@ final class P6ModelContractTests: XCTestCase {
             XCTAssertEqual(settings.codex_show_model_limits_label, "Per-model limits")
             XCTAssertEqual(settings.codex_show_model_limits_detail_text,
                            "Show reported model limits in account details and headlines.")
-            XCTAssertEqual(settings.language, .system)
-            XCTAssertEqual(settings.language_supported, [.system])
+            XCTAssertEqual(settings.language, .en)
+            XCTAssertEqual(settings.language_supported, [.system, .en, .ko])
+            XCTAssertEqual(settings.language_label, "Language")
+            XCTAssertEqual(settings.language_label_system, "System")
+            XCTAssertEqual(settings.language_label_english, "English")
+            XCTAssertEqual(settings.language_label_korean, "한국어")
             XCTAssertEqual(settings.auto_update_state, .unavailable)
             XCTAssertFalse(settings.auto_update_detail_text.isEmpty)
             XCTAssertEqual(settings.app_version_text, "Version 0.1.0 (build 0.1.0)")
@@ -173,7 +177,7 @@ final class P6ModelContractTests: XCTestCase {
     func testP6EnumsAreStrictAndAppearanceIntentUsesTheEnumWireValue() throws {
         XCTAssertEqual(Appearance.allCases.map(\.rawValue), ["system", "light", "dark"])
         XCTAssertEqual(CodexUsageWindow.allCases.map(\.rawValue), ["auto", "weekly", "session"])
-        XCTAssertEqual(Language.allCases.map(\.rawValue), ["system"])
+        XCTAssertEqual(Language.allCases.map(\.rawValue), ["system", "en", "ko"])
         XCTAssertEqual(AutoUpdateState.allCases.map(\.rawValue), ["unavailable"])
         XCTAssertEqual(UnifiedOrderSource.allCases.map(\.rawValue), ["registry"])
         XCTAssertEqual(UnifiedFailoverState.allCases.map(\.rawValue), [

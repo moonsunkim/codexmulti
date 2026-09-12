@@ -6,6 +6,7 @@ final class IntentEncodingTests: XCTestCase {
 
     static let golden: [(Intent, String)] = [
         (.set_appearance(value: .dark), #"{"intent":"set_appearance","value":"dark"}"#),
+        (.set_language(value: .ko, system: .en), #"{"intent":"set_language","system":"en","value":"ko"}"#),
         (.set_codex_usage_window(value: .weekly), #"{"intent":"set_codex_usage_window","value":"weekly"}"#),
         (.set_codex_show_model_limits(on: true), #"{"intent":"set_codex_show_model_limits","on":true}"#),
         (.set_launch_at_login(on: true), #"{"intent":"set_launch_at_login","on":true}"#),
@@ -78,7 +79,7 @@ final class IntentEncodingTests: XCTestCase {
 
 
     static let contractNames: [String] = [
-        "set_appearance", "set_codex_usage_window", "set_codex_show_model_limits", "set_launch_at_login",
+        "set_appearance", "set_language", "set_codex_usage_window", "set_codex_show_model_limits", "set_launch_at_login",
         "report_launch_at_login_registration_failure", "set_auto_refresh",
         "open_details", "quit_app", "open_account", "tab_accounts", "tab_failover",
         "open_toolbar_menu", "close_toolbar_menu", "toggle_account", "move_account", "open_row_menu", "close_row_menu",
@@ -108,7 +109,7 @@ final class IntentEncodingTests: XCTestCase {
 
     func testGoldenCoversTheContractTableExactlyOnce() {
         let names = Self.golden.map(\.0.name)
-        XCTAssertEqual(names.count, 67)
+        XCTAssertEqual(names.count, 68)
         XCTAssertEqual(names, Self.contractNames)
         XCTAssertEqual(Set(names).count, names.count)
     }
@@ -116,7 +117,7 @@ final class IntentEncodingTests: XCTestCase {
 
     func testPayloadKeysAreTheContractFieldNames() throws {
         let allowed = Set(Intent.CodingKeys.allCases.map(\.stringValue))
-        XCTAssertEqual(allowed, ["intent", "account_id", "target_account_id", "row", "to", "ok", "base_url", "cli_path", "config_path", "node_path", "label", "replace_conflicting", "value", "on", "failed", "minutes"])
+        XCTAssertEqual(allowed, ["intent", "account_id", "target_account_id", "row", "to", "ok", "base_url", "cli_path", "config_path", "node_path", "label", "replace_conflicting", "value", "system", "on", "failed", "minutes"])
         for (intent, _) in Self.golden {
             let object = try XCTUnwrap(JSONSerialization.jsonObject(with: try IntentEncoder.encode(intent)) as? [String: Any])
             XCTAssertTrue(Set(object.keys).isSubset(of: allowed), intent.name)

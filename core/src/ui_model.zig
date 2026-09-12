@@ -66,6 +66,7 @@ pub const tray_command_switch_failover_prefix = contracts.tray_command_switch_fa
 pub const Relabel = contracts.Relabel;
 pub const MoveAccount = contracts.MoveAccount;
 pub const RedeemReset = contracts.RedeemReset;
+pub const SetLanguage = contracts.SetLanguage;
 pub const Command = contracts.Command;
 pub const CommandOutcome = contracts.CommandOutcome;
 pub const ServiceCapabilities = contracts.ServiceCapabilities;
@@ -74,6 +75,7 @@ pub const ServicePort = contracts.ServicePortFor(ViewState);
 
 pub const ViewState = projection.ViewState;
 pub const app_version_text = projection.app_version_text;
+pub const Localized = format.Localized;
 
 pub const selectPrimaryWindow = format.selectPrimaryWindow;
 pub const selectCodexPrimaryWindow = format.selectCodexPrimaryWindow;

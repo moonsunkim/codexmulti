@@ -2,6 +2,7 @@ const std = @import("std");
 const account_registry = @import("account_registry.zig");
 const proxy_control = @import("proxy_control_client.zig");
 const runtime_paths = @import("runtime_paths.zig");
+const strings = @import("strings.zig");
 pub const domain = @import("domain.zig");
 pub const ui_model = @import("ui_model.zig");
 
@@ -43,19 +44,21 @@ pub fn traySummaryLine(row: *const ui_model.AccountView, buffer: []u8) []const u
 }
 
 pub fn inspectorUpdatedAgoText(view: *const ui_model.ViewState, buffer: []u8) []const u8 {
+    const format = ui_model.Localized.init(view.resolved_language);
     if (!view.inspector.present) return "";
     const row = view.rowAt(view.inspector.index) orelse return "";
-    const at = row.last_success_at_unix_s orelse return ui_model.freshnessPhrase(row.freshness);
-    if (row.freshness == .as_of) return ui_model.agoPhrase(buffer, view.now_unix_s, at);
+    const at = row.last_success_at_unix_s orelse return format.freshnessPhrase(row.freshness);
+    if (row.freshness == .as_of) return format.agoPhrase(buffer, view.now_unix_s, at);
     var ago_buffer: [ui_model.max_line_bytes]u8 = undefined;
     return std.fmt.bufPrint(buffer, "{s} · {s}", .{
-        ui_model.agoPhrase(&ago_buffer, view.now_unix_s, at),
-        ui_model.freshnessPhrase(row.freshness),
+        format.agoPhrase(&ago_buffer, view.now_unix_s, at),
+        format.freshnessPhrase(row.freshness),
     }) catch "";
 }
 
 pub const Intent = union(enum) {
     set_appearance: ui_model.Appearance,
+    set_language: ui_model.SetLanguage,
     set_codex_usage_window: ui_model.CodexUsageWindow,
     set_codex_show_model_limits: bool,
     set_launch_at_login: bool,
@@ -699,6 +702,12 @@ pub fn update(model: *Model, intent: Intent, effects: *Effects) void {
             if (!outcome.accepted()) model.notice.setOutcome("Appearance", "app preference", outcome);
             reproject(model);
         },
+        .set_language => |request| {
+            const outcome = model.service.submit(.{ .set_language = request });
+            const language_label = strings.catalog(model.view.resolved_language).text(.language_label);
+            if (!outcome.accepted()) model.notice.setOutcome(language_label, language_label, outcome);
+            reproject(model);
+        },
         .set_codex_usage_window => |window| {
             const outcome = model.service.submit(.{ .set_codex_usage_window = window });
             if (!outcome.accepted()) model.notice.setOutcome("Usage shown", "Codex preference", outcome);
@@ -1132,7 +1141,7 @@ pub fn trimmedLabel(value: []const u8) []const u8 {
 }
 
 comptime {
-    if (@typeInfo(Intent).@"union".fields.len != 67) {
+    if (@typeInfo(Intent).@"union".fields.len != 68) {
         @compileError("Intent must have exactly every cm.bridge/1 table arm");
     }
 }

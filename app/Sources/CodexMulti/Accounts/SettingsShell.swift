@@ -98,6 +98,7 @@ struct SettingsShell: View {
     @StateObject private var systemAppearance = SystemAppearance()
     @State private var selectedTab: ShellTab
     @State private var launchIntentsSent = false
+    @State private var languageResolutionSent = false
     @State private var proxyDrafts = ProxyDrafts()
     @State private var focusOrigin = FocusOrigin()
     private var appearance: Appearance {
@@ -209,6 +210,11 @@ struct SettingsShell: View {
                 launchIntentsSent = true
                 if let row = options.expand { submit(.toggle_account(row: row)) }
             }
+        }
+        .onChange(of: store.projection?.view.settings.language, initial: true) { _, language in
+            guard let language, !languageResolutionSent else { return }
+            languageResolutionSent = true
+            submit(PreferencesModel.languageIntent(language, system: SystemLanguageResolver.current))
         }
     }
 

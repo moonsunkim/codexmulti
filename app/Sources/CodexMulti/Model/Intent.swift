@@ -67,6 +67,7 @@ enum Intent: Sendable, Equatable {
     case enable_codex_routing(replace_conflicting: Bool = false)
     case disable_codex_routing
     case set_appearance(value: Appearance)
+    case set_language(value: Language, system: Language)
     case set_codex_usage_window(value: CodexUsageWindow)
     case set_codex_show_model_limits(on: Bool)
     case set_launch_at_login(on: Bool)
@@ -138,6 +139,7 @@ enum Intent: Sendable, Equatable {
         case .enable_codex_routing: "enable_codex_routing"
         case .disable_codex_routing: "disable_codex_routing"
         case .set_appearance: "set_appearance"
+        case .set_language: "set_language"
         case .set_codex_usage_window: "set_codex_usage_window"
         case .set_codex_show_model_limits: "set_codex_show_model_limits"
         case .set_launch_at_login: "set_launch_at_login"
@@ -151,7 +153,7 @@ extension Intent: Encodable {
 
     enum CodingKeys: String, CodingKey, CaseIterable {
         case intent, account_id, row, to, ok, base_url, cli_path, config_path, node_path, label, replace_conflicting
-        case value, on, failed, minutes, target_account_id
+        case value, system, on, failed, minutes, target_account_id
     }
 
     func encode(to encoder: any Encoder) throws {
@@ -182,6 +184,9 @@ extension Intent: Encodable {
             try container.encode(replace_conflicting, forKey: .replace_conflicting)
         case .set_appearance(let value):
             try container.encode(value, forKey: .value)
+        case .set_language(let value, let system):
+            try container.encode(value, forKey: .value)
+            try container.encode(system, forKey: .system)
         case .set_codex_usage_window(let value):
             try container.encode(value, forKey: .value)
         case .set_proxy_enabled(let on), .set_codex_show_model_limits(let on), .set_launch_at_login(let on):

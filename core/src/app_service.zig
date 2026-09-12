@@ -226,6 +226,8 @@ pub const Service = struct {
     next_auth_backup_check_at_unix_s: ?i64 = null,
     activity: Activity = .{},
     appearance: ui_model.Appearance = .system,
+    language: ui_model.Language = .system,
+    system_language: ui_model.Language = .en,
     codex_usage_window: ui_model.CodexUsageWindow = .auto,
     codex_show_model_limits: bool = false,
     launch_at_login: bool = false,
@@ -455,6 +457,7 @@ pub const Service = struct {
         const now = view.now_unix_s;
         self.now_unix_s = now;
         view.applyAppearance(self.appearance);
+        view.applyLanguage(self.language, self.resolvedLanguage());
         view.applyCodexSettings(self.codex_usage_window, self.codex_show_model_limits);
         view.applyLaunchAtLogin(self.launch_at_login, self.launch_at_login_registration_failed);
         view.applyAutoRefresh(self.auto_refresh_minutes, self.autoRefreshAccountCount());
@@ -510,6 +513,7 @@ pub const Service = struct {
     pub fn submit(self: *Service, command: ui_model.Command) ui_model.CommandOutcome {
         return switch (command) {
             .set_appearance => |appearance| self.submitAppearance(appearance),
+            .set_language => |request| self.submitLanguage(request),
             .set_codex_usage_window => |window| self.submitCodexUsageWindow(window),
             .set_codex_show_model_limits => |on| self.submitCodexShowModelLimits(on),
             .set_launch_at_login => |on| self.submitLaunchAtLogin(on),
@@ -547,6 +551,24 @@ pub const Service = struct {
         if (!self.persistAppSettings(updated)) return if (self.live == null) .service_unavailable else .failed;
         self.appearance = appearance;
         return .accepted_pending;
+    }
+
+    fn submitLanguage(self: *Service, request: ui_model.SetLanguage) ui_model.CommandOutcome {
+        if (request.system == .system) return .rejected_not_allowed;
+        if (request.value == self.language) {
+            self.system_language = request.system;
+            return .accepted_pending;
+        }
+        var updated = self.appSettingsDocument();
+        updated.language = request.value;
+        if (!self.persistAppSettings(updated)) return if (self.live == null) .service_unavailable else .failed;
+        self.language = request.value;
+        self.system_language = request.system;
+        return .accepted_pending;
+    }
+
+    fn resolvedLanguage(self: *const Service) ui_model.Language {
+        return if (self.language == .system) self.system_language else self.language;
     }
 
     fn submitCodexUsageWindow(self: *Service, window: ui_model.CodexUsageWindow) ui_model.CommandOutcome {
@@ -597,6 +619,7 @@ pub const Service = struct {
     fn appSettingsDocument(self: *const Service) store.AppSettingsDocument {
         return .{
             .appearance = self.appearance,
+            .language = self.language,
             .codex_usage_window = self.codex_usage_window,
             .codex_show_model_limits = self.codex_show_model_limits,
             .launch_at_login = self.launch_at_login,
@@ -1579,6 +1602,7 @@ pub const Service = struct {
         if (app_settings) |*loaded| {
             defer loaded.deinit();
             self.appearance = loaded.value.appearance;
+            self.language = loaded.value.language;
             self.codex_usage_window = loaded.value.codex_usage_window;
             self.codex_show_model_limits = loaded.value.codex_show_model_limits;
             self.launch_at_login = loaded.value.launch_at_login;

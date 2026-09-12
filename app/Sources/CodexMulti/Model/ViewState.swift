@@ -225,6 +225,10 @@ struct SettingsView: Decodable, Sendable, Equatable {
 
     let language: Language
     let language_supported: [Language]
+    let language_label: String
+    let language_label_system: String
+    let language_label_english: String
+    let language_label_korean: String
     let auto_update_state: AutoUpdateState
     let auto_update_detail_text: String
     let app_version_text: String
@@ -258,7 +262,9 @@ struct SettingsView: Decodable, Sendable, Equatable {
         case codex_usage_window_label, codex_usage_window_detail_text
         case codex_show_model_limits, codex_show_model_limits_supported
         case codex_show_model_limits_label, codex_show_model_limits_detail_text
-        case language, language_supported, auto_update_state, auto_update_detail_text, app_version_text
+        case language, language_supported, language_label, language_label_system
+        case language_label_english, language_label_korean
+        case auto_update_state, auto_update_detail_text, app_version_text
         case launch_at_login, launch_at_login_registration_failed, auto_refresh_minutes, auto_refresh_traffic_text
         case proxy_service_state, proxy_service_detail_text
         case proxy_service_can_install, proxy_service_can_repair, proxy_service_can_stop

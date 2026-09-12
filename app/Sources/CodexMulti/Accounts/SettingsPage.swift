@@ -1,3 +1,4 @@
+import Foundation
 import SwiftUI
 
 
@@ -77,6 +78,7 @@ enum PreferencesModel {
         case launchAtLogin
         case autoRefresh
         case theme
+        case language
         case codexUsageWindow
         case codexShowModelLimits
         case useFailoverProxy
@@ -90,6 +92,7 @@ enum PreferencesModel {
             case .launchAtLogin: Copy.launchAtLogin
             case .autoRefresh: Copy.autoRefresh
             case .theme: Copy.theme
+            case .language: settings.language_label
             case .codexUsageWindow: settings.codex_usage_window_label
             case .codexShowModelLimits: settings.codex_show_model_limits_label
             case .useFailoverProxy: Copy.useFailoverProxy
@@ -114,8 +117,14 @@ enum PreferencesModel {
         var id: UInt16 { minutes }
     }
 
+    struct LanguageOption: Equatable, Identifiable, Sendable {
+        let language: Language
+        let label: String
+        var id: Language { language }
+    }
+
     static let sectionLayout = [
-        Section(id: .system, rows: [.launchAtLogin, .autoRefresh, .theme]),
+        Section(id: .system, rows: [.launchAtLogin, .autoRefresh, .theme, .language]),
         Section(id: .codex, rows: [.codexUsageWindow, .codexShowModelLimits]),
         Section(id: .proxy, rows: [
             .useFailoverProxy, .advancedProxyControls, .proxyServiceStatus, .codexRouting,
@@ -142,6 +151,9 @@ enum PreferencesModel {
     ]
 
     static func appearanceIntent(_ appearance: Appearance) -> Intent { .set_appearance(value: appearance) }
+    static func languageIntent(_ language: Language, system: Language) -> Intent {
+        .set_language(value: language, system: system)
+    }
     static func codexUsageWindowIntent(_ value: CodexUsageWindow) -> Intent { .set_codex_usage_window(value: value) }
     static func codexShowModelLimitsIntent(_ enabled: Bool) -> Intent { .set_codex_show_model_limits(on: enabled) }
     static func launchAtLoginIntent(_ enabled: Bool) -> Intent { .set_launch_at_login(on: enabled) }
@@ -182,6 +194,28 @@ enum PreferencesModel {
         case .dark: settings.appearance_label_dark
         }
     }
+
+    static func languageOptions(settings: SettingsView) -> [LanguageOption] {
+        settings.language_supported.map { language in
+            let label: String
+            switch language {
+            case .system: label = settings.language_label_system
+            case .en: label = settings.language_label_english
+            case .ko: label = settings.language_label_korean
+            }
+            return LanguageOption(language: language, label: label)
+        }
+    }
+}
+
+enum SystemLanguageResolver {
+    static var current: Language { resolve(Locale.preferredLanguages) }
+
+    static func resolve(_ preferredLanguages: [String]) -> Language {
+        guard let first = preferredLanguages.first else { return .en }
+        let identifier = first.lowercased().replacingOccurrences(of: "_", with: "-")
+        return identifier == "ko" || identifier.hasPrefix("ko-") ? .ko : .en
+    }
 }
 
 
@@ -210,6 +244,8 @@ struct SettingsPage: View {
                     SettingsRow(label: PreferencesModel.Row.theme.label(settings: projection.view.settings)) {
                         AppearanceSegments(settings: projection.view.settings)
                     }
+                    Hairline()
+                    LanguageSettingsRow(settings: projection.view.settings)
                 }
             }
             SettingsSection(title: PreferencesModel.sectionLayout[1].title(settings: projection.view.settings)) {
@@ -452,5 +488,40 @@ struct AppearanceSegments: View {
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(Copy.appearance)
         .accessibilityValue(PreferencesModel.label(current, settings: settings))
+    }
+}
+
+struct LanguageSettingsRow: View {
+    let settings: SettingsView
+    @Environment(\.tone) private var tone
+    @Environment(\.submit) private var submit
+
+    var body: some View {
+        SettingsRow(label: settings.language_label) {
+            HStack(spacing: 0) {
+                ForEach(PreferencesModel.languageOptions(settings: settings)) { option in
+                    Button {
+                        guard option.language != settings.language else { return }
+                        submit(PreferencesModel.languageIntent(option.language, system: SystemLanguageResolver.current))
+                    } label: {
+                        Text(verbatim: option.label)
+                            .font(option.language == settings.language ? Face.bandStrong : Face.band)
+                            .foregroundStyle(option.language == settings.language ? tone.text : tone.text2)
+                            .frame(width: Grid.appearanceSegmentWidth, height: Grid.settingsSegmentHeight)
+                            .background {
+                                if option.language == settings.language { Capsule().fill(tone.segment) }
+                            }
+                            .contentShape(Capsule())
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            .padding(Grid.settingsSegmentPadding)
+            .background(Capsule().fill(tone.pill))
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(settings.language_label)
+            .accessibilityValue(PreferencesModel.languageOptions(settings: settings)
+                .first(where: { $0.language == settings.language })?.label ?? settings.language_label_system)
+        }
     }
 }

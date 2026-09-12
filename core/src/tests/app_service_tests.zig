@@ -705,6 +705,53 @@ test "P6 appearance preference survives an app-owned document round trip" {
     try testing.expectEqual(ui_model.Appearance.dark, view.settings.appearance);
 }
 
+test "F18 language preference persists while system Korean reprojects without changing the selection" {
+    var temp = testing.tmpDir(.{});
+    defer temp.cleanup();
+
+    const first = try Harness.create();
+    defer first.destroy();
+    var file_sink: coordinator.FileDocumentSink = .{ .io = testing.io, .dir = temp.dir };
+    var first_live = first.live();
+    first_live.sink = file_sink.sink();
+    first.service.attach(first_live);
+    first.service.now_unix_s = now;
+
+    try testing.expectEqual(
+        ui_model.CommandOutcome.accepted_pending,
+        first.service.submit(.{ .set_language = .{ .value = .ko, .system = .en } }),
+    );
+    var saved_korean = try store.loadAppSettings(
+        testing.allocator,
+        testing.io,
+        temp.dir,
+        runtime_paths.app_settings_file_name,
+    );
+    defer saved_korean.deinit();
+    try testing.expectEqual(store.Language.ko, saved_korean.value.language);
+
+    try testing.expectEqual(
+        ui_model.CommandOutcome.accepted_pending,
+        first.service.submit(.{ .set_language = .{ .value = .system, .system = .ko } }),
+    );
+    var saved_system = try store.loadAppSettings(
+        testing.allocator,
+        testing.io,
+        temp.dir,
+        runtime_paths.app_settings_file_name,
+    );
+    defer saved_system.deinit();
+    try testing.expectEqual(store.Language.system, saved_system.value.language);
+
+    var view: ui_model.ViewState = .{};
+    view.begin(now, first.service.capabilities(), .kst);
+    first.service.project(&view);
+    view.finish(.{});
+    try testing.expectEqual(ui_model.Language.system, view.settings.language);
+    try testing.expectEqualStrings("등록된 계정 없음", view.summary_text);
+    try testing.expectEqualStrings("언어", view.settings.language_label);
+}
+
 test "Codex display settings survive an app-owned document round trip and project supported values" {
     var temp = testing.tmpDir(.{});
     defer temp.cleanup();

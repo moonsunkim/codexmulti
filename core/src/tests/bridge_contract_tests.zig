@@ -637,6 +637,7 @@ fn sentinelBit(code: usize, plane: usize) bool {
 const IntentCase = struct { name: []const u8, json: []const u8 };
 const all_intents = [_]IntentCase{
     .{ .name = "set_appearance", .json = "{\"intent\":\"set_appearance\",\"value\":\"dark\"}" },
+    .{ .name = "set_language", .json = "{\"intent\":\"set_language\",\"value\":\"ko\",\"system\":\"en\"}" },
     .{ .name = "set_codex_usage_window", .json = "{\"intent\":\"set_codex_usage_window\",\"value\":\"weekly\"}" },
     .{ .name = "set_codex_show_model_limits", .json = "{\"intent\":\"set_codex_show_model_limits\",\"on\":true}" },
     .{ .name = "set_launch_at_login", .json = "{\"intent\":\"set_launch_at_login\",\"on\":true}" },

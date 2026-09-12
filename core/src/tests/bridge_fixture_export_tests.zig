@@ -91,6 +91,7 @@ const FixtureService = struct {
     codex_routing_state: ui_model.CodexRoutingState = .off,
     proxy_enabled_detail_text: ?[]const u8 = null,
     appearance: ui_model.Appearance = .system,
+    language: ui_model.Language = .en,
     codex_usage_window: ui_model.CodexUsageWindow = .auto,
     codex_show_model_limits: bool = false,
     launch_at_login: bool = false,
@@ -120,6 +121,7 @@ const FixtureService = struct {
     fn project(context: *anyopaque, view: *ui_model.ViewState) void {
         const self: *FixtureService = @ptrCast(@alignCast(context));
         view.applyAppearance(self.appearance);
+        view.applyLanguage(self.language, if (self.language == .system) .en else self.language);
         view.applyCodexSettings(self.codex_usage_window, self.codex_show_model_limits);
         view.applyLaunchAtLogin(self.launch_at_login, self.launch_at_login_registration_failed);
         var auto_accounts: u16 = 0;
@@ -175,6 +177,7 @@ const FixtureService = struct {
         const self: *FixtureService = @ptrCast(@alignCast(context));
         switch (command) {
             .set_appearance => |appearance| self.appearance = appearance,
+            .set_language => |request| self.language = request.value,
             .set_codex_usage_window => |window| self.codex_usage_window = window,
             .set_codex_show_model_limits => |on| self.codex_show_model_limits = on,
             else => {},
@@ -320,6 +323,8 @@ fn makeProjection(allocator: std.mem.Allocator, name: []const u8) ![]u8 {
     if (std.mem.eql(u8, name, "viewstate-unattached")) {
         model.now_unix_s = now;
         shell.reproject(&model);
+        model.view.applyLanguage(.en, .en);
+        model.view.finish(.{});
         runtime = .{};
     } else if (std.mem.eql(u8, name, "viewstate-empty-attached")) {
         attach(&model, &service);
@@ -492,6 +497,8 @@ fn makeProjection(allocator: std.mem.Allocator, name: []const u8) ![]u8 {
     } else if (std.mem.eql(u8, name, "viewstate-runtime-error-keychain")) {
         model.now_unix_s = now;
         shell.reproject(&model);
+        model.view.applyLanguage(.en, .en);
+        model.view.finish(.{});
         runtime = .{ .@"error" = .keychain_unavailable };
     } else if (std.mem.startsWith(u8, name, "viewstate-proxy-service-")) {
         service.proxy_service_present = true;
@@ -681,6 +688,7 @@ fn enumsJson(allocator: std.mem.Allocator) ![]u8 {
 
 const valid_intent_documents = [_][]const u8{
     "{\"intent\":\"set_appearance\",\"value\":\"dark\"}",
+    "{\"intent\":\"set_language\",\"value\":\"ko\",\"system\":\"en\"}",
     "{\"intent\":\"set_codex_usage_window\",\"value\":\"weekly\"}",
     "{\"intent\":\"set_codex_show_model_limits\",\"on\":true}",
     "{\"intent\":\"set_launch_at_login\",\"on\":true}",
@@ -843,6 +851,20 @@ test "P6 R2 settings projection set_appearance intent and persistence are presen
         else => return error.MissingSetAppearanceIntent,
     };
     defer intent.deinit();
+}
+
+test "F18 selecting Korean immediately reprojects the visible catalog copy" {
+    var service: FixtureService = .{};
+    var model: shell.Model = undefined;
+    attach(&model, &service);
+    try testing.expectEqual(ui_model.Language.en, model.view.settings.language);
+    try testing.expectEqualStrings("No accounts registered yet", model.view.summary_text);
+
+    var effects: shell.Effects = .{};
+    shell.update(&model, .{ .set_language = .{ .value = .ko, .system = .en } }, &effects);
+    try testing.expectEqual(ui_model.Language.ko, model.view.settings.language);
+    try testing.expectEqualStrings("등록된 계정 없음", model.view.summary_text);
+    try testing.expectEqualStrings("언어", model.view.settings.language_label);
 }
 
 test "Codex settings projection owns labels supported values and typed intents" {
@@ -1084,6 +1106,7 @@ test "every committed projection typed-decodes and preserves its wire semantics"
         const semantic = try std.json.Stringify.valueAlloc(testing.allocator, parsed.value, .{ .emit_null_optional_fields = true });
         defer testing.allocator.free(semantic);
 
+        try testing.expectEqual(ui_model.Language.en, parsed.value.view.settings.language);
         try testing.expectEqualStrings(bytes, semantic);
     }
 }
@@ -1363,7 +1386,8 @@ test "every named projection fixture proves its distinguishing state" {
             else
                 .system;
             try testing.expectEqual(expected, wire.view.settings.appearance);
-            try testing.expectEqual([1]ui_model.Language{.system}, wire.view.settings.language_supported);
+            try testing.expectEqual(ui_model.Language.en, wire.view.settings.language);
+            try testing.expectEqual([3]ui_model.Language{ .system, .en, .ko }, wire.view.settings.language_supported);
             try testing.expectEqual(ui_model.AutoUpdateState.unavailable, wire.view.settings.auto_update_state);
             try testing.expect(std.mem.indexOf(u8, wire.view.settings.auto_update_detail_text, "no update channel is configured") != null);
             try testing.expectEqualStrings("Version 0.1.0 (build 0.1.0)", wire.view.settings.app_version_text);
