@@ -43,8 +43,7 @@ attributes, and opens the app in the background:
 curl -fsSL https://raw.githubusercontent.com/moonsunkim/codexmulti/main/install.sh | bash
 ```
 
-After the separate `moonsunkim/homebrew-tap` repository is published, Homebrew installation is one
-line:
+With Homebrew:
 
 ```sh
 brew install --cask moonsunkim/tap/codexmulti
