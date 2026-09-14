@@ -19,6 +19,15 @@ CodexMulti 将你的 Codex 账户集中在一个 macOS 菜单栏应用中。查�
 - **一个开关即可启用。** 自动切换所需的本地代理和 Node 运行时均已内置。应用打开时，新添加或重新登录的账户会自动加入。
 - **凭据留在本机。** 每个账户都有独立的 Codex 目录和钥匙串备份。无需注册 CodexMulti 账户，也无需连接托管服务。
 
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/menu-bar-dark.png">
+    <source media="(prefers-color-scheme: light)" srcset="assets/screenshots/menu-bar-light.png">
+    <img src="assets/screenshots/menu-bar-light.png" width="440" alt="使用示例账户的 CodexMulti 菜单：总剩余额度、各账户用量、重置时间和当前账户">
+  </picture>
+</p>
+<p align="center"><sub>从菜单栏即可查看总剩余额度、各账户用量和重置时间。图中使用示例账户。</sub></p>
+
 ## 什么是自动切换，为什么要使用它？
 
 一个 Codex 账户达到用量限额时，即使其他账户仍有额度，编程任务也可能中断。没有自动切换时，你需要自行选择其他账户并重试请求。

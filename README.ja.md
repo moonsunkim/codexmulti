@@ -20,6 +20,15 @@ CodexMultiは、複数のCodexアカウントをまとめて管理するmacOSメ
 - **スイッチ1つで開始。** ローカルプロキシとNodeランタイムを同梱しています。アプリを開いている間は、アカウントの追加や再接続も自動で反映します。
 - **認証情報はMac内に保存。** アカウントごとに独立したCodexディレクトリとキーチェーンのバックアップを使います。CodexMultiへの会員登録や外部サーバーへの接続設定は不要です。
 
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/menu-bar-dark.png">
+    <source media="(prefers-color-scheme: light)" srcset="assets/screenshots/menu-bar-light.png">
+    <img src="assets/screenshots/menu-bar-light.png" width="440" alt="架空のアカウントを使ったCodexMultiメニュー：全体の残量、各アカウントの利用量とリセット時刻、使用中のアカウント">
+  </picture>
+</p>
+<p align="center"><sub>メニューバーから、全体の残量と各アカウントの利用量・リセット時刻をすぐに確認できます。架空のアカウントを表示しています。</sub></p>
+
 ## Failoverは何を解決する機能ですか？
 
 コーディング中に1つのアカウントが利用上限に達すると、別のアカウントに利用枠が残っていても作業が止まることがあります。

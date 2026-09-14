@@ -19,6 +19,15 @@ CodexMulti reúne tus cuentas de Codex en una aplicación para la barra de menú
 - **Activa un solo interruptor.** La configuración incluye el proxy local y su entorno Node. Las cuentas añadidas o reconectadas se incorporan automáticamente mientras la aplicación está abierta.
 - **Guarda las credenciales en tu Mac.** Cada cuenta tiene su propio directorio de Codex y una copia en el Llavero. No hace falta crear una cuenta de CodexMulti ni conectarse a un servicio alojado.
 
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/menu-bar-dark.png">
+    <source media="(prefers-color-scheme: light)" srcset="assets/screenshots/menu-bar-light.png">
+    <img src="assets/screenshots/menu-bar-light.png" width="440" alt="Menú de CodexMulti con capacidad total, uso, tiempos de reinicio y cuenta activa; cuentas de ejemplo">
+  </picture>
+</p>
+<p align="center"><sub>Consulta la capacidad total, el uso de cada cuenta y los tiempos de reinicio desde la barra de menús. Se muestran cuentas de ejemplo.</sub></p>
+
 ## ¿Qué es el cambio automático y para qué sirve?
 
 Una tarea de programación puede detenerse cuando una cuenta de Codex llega a su límite, aunque otra todavía tenga capacidad. Sin el cambio automático, tendrías que elegir otra cuenta y volver a enviar la solicitud.
