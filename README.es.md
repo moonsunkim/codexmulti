@@ -86,12 +86,10 @@ Las filas muestran el porcentaje **usado** del periodo indicado: **100% signific
 
 El uso es una instantánea de la última consulta. Actualiza una cuenta desde su menú **…** o usa **Actualizar todas las cuentas**. La actualización programada está **desactivada** por defecto; Ajustes ofrece intervalos de **15 min, 30 min o 1 hora**. Al actualizar también se consulta el estado del proxy local. **Cambiar nombre…** cambia el nombre mostrado en CodexMulti, no el correo de la cuenta de OpenAI.
 
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/accounts-dark.png">
-  <source media="(prefers-color-scheme: light)" srcset="assets/screenshots/accounts-light.png">
-  <img alt="Conjunto de cuentas con porcentajes usados, horas de restablecimiento y estados activa, lista, en espera y en pausa" src="assets/screenshots/accounts-light.png">
-</picture>
-<p align="center"><sub><a href="assets/screenshots/accounts-light.png">Claro</a> · <a href="assets/screenshots/accounts-dark.png">Oscuro</a></sub></p>
+<p align="center">
+  <img alt="Presentación de CodexMulti en modo claro y oscuro basada en capturas de cuentas de ejemplo" src="assets/screenshots/accounts-showcase.png" width="100%">
+</p>
+<p align="center"><sub>Capturas originales: <a href="assets/screenshots/accounts-light.png">Claro</a> · <a href="assets/screenshots/accounts-dark.png">Oscuro</a></sub></p>
 
 <picture>
   <source media="(prefers-color-scheme: light)" srcset="assets/screenshots/settings-light.png">

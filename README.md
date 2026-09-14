@@ -108,12 +108,10 @@ Account rows show **used** capacity for the displayed period: **100% means that 
 
 Usage is a saved snapshot. Refresh one account from its **…** menu, or use **Refresh All Accounts**. Scheduled refresh is **Off** by default; Settings offers **15 min, 30 min or 1 hour**. Refresh also updates the local proxy status. **Rename…** changes the name displayed in CodexMulti, not the account’s OpenAI email.
 
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/accounts-dark.png">
-  <source media="(prefers-color-scheme: light)" srcset="assets/screenshots/accounts-light.png">
-  <img alt="CodexMulti account pool with used percentages, reset times and active, ready, cooling and paused states" src="assets/screenshots/accounts-light.png">
-</picture>
-<p align="center"><sub><a href="assets/screenshots/accounts-light.png">Light</a> · <a href="assets/screenshots/accounts-dark.png">Dark</a></sub></p>
+<p align="center">
+  <img alt="CodexMulti light and dark appearance showcase based on demo account screenshots" src="assets/screenshots/accounts-showcase.png" width="100%">
+</p>
+<p align="center"><sub>Original screenshots: <a href="assets/screenshots/accounts-light.png">Light</a> · <a href="assets/screenshots/accounts-dark.png">Dark</a></sub></p>
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/settings-dark.png">

@@ -86,12 +86,10 @@ shasum -a 256 -c CodexMulti-<version>.zip.sha256
 
 用量是上次查询的快照。可从账户的“…”菜单单独刷新，或选择“刷新所有账户”。自动刷新默认**关闭**，可在设置中选择 **15 分钟、30 分钟或 1 小时**。刷新也会更新本地代理状态。“重命名…”只更改 CodexMulti 中的显示名称，不更改 OpenAI 账户邮箱。
 
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/accounts-dark.png">
-  <source media="(prefers-color-scheme: light)" srcset="assets/screenshots/accounts-light.png">
-  <img alt="账户池：已用比例、重置时间，以及使用中、就绪、冷却和暂停状态" src="assets/screenshots/accounts-light.png">
-</picture>
-<p align="center"><sub><a href="assets/screenshots/accounts-light.png">浅色</a> · <a href="assets/screenshots/accounts-dark.png">深色</a></sub></p>
+<p align="center">
+  <img alt="基于示例账户截图，同时展示浅色和深色主题的CodexMulti展示图" src="assets/screenshots/accounts-showcase.png" width="100%">
+</p>
+<p align="center"><sub>原始截图: <a href="assets/screenshots/accounts-light.png">浅色</a> · <a href="assets/screenshots/accounts-dark.png">深色</a></sub></p>
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/settings-dark.png">

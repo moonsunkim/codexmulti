@@ -25,4 +25,9 @@ requires a fixture, skips live services and the updater, and does not create a s
 a window. The preference screenshot shows the controls above About; update behavior is documented
 in the repository README. The menu images are native menu previews with synthetic accounts.
 
+The README uses [`accounts-showcase.png`](../assets/screenshots/accounts-showcase.png) to show
+both themes together regardless of the reader's page theme. It is a ChatGPT-generated presentation
+based on the synthetic account captures. The original light and dark screenshots remain linked
+below it. The screenshot script refreshes those native captures; it does not regenerate the showcase.
+
 Start at the [repository README](../README.md).

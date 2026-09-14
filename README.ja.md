@@ -100,12 +100,10 @@ Failoverをオフにすると、処理中のリクエストが完了した後で
 
 利用量は最後に取得した値です。アカウントの**…**メニューから個別に更新するか、**すべてのアカウントを更新**を使います。自動更新は初期状態で**オフ**です。設定で**15分・30分・1時間**を選べます。更新時にはローカルプロキシの状態も確認します。**名前を変更…**はCodexMulti内の表示名を変え、OpenAIのメールアドレスは変更しません。
 
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/accounts-dark.png">
-  <source media="(prefers-color-scheme: light)" srcset="assets/screenshots/accounts-light.png">
-  <img alt="使用済みの割合、リセット時刻、各アカウントの状態を表示するCodexMultiの一覧" src="assets/screenshots/accounts-light.png">
-</picture>
-<p align="center"><sub><a href="assets/screenshots/accounts-light.png">ライト</a> · <a href="assets/screenshots/accounts-dark.png">ダーク</a></sub></p>
+<p align="center">
+  <img alt="架空のアカウント画面をもとにライトとダークの両テーマを示すCodexMultiショーケース" src="assets/screenshots/accounts-showcase.png" width="100%">
+</p>
+<p align="center"><sub>元のスクリーンショット: <a href="assets/screenshots/accounts-light.png">ライト</a> · <a href="assets/screenshots/accounts-dark.png">ダーク</a></sub></p>
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/settings-dark.png">

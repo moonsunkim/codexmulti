@@ -101,12 +101,10 @@ shasum -a 256 -c CodexMulti-<version>.zip.sha256
 
 사용량은 마지막 조회 결과입니다. 계정의 **…** 메뉴에서 개별 갱신하거나 **모든 계정 새로 고침**을 사용하세요. 자동 갱신은 기본적으로 **꺼짐**이며, 설정에서 **15분·30분·1시간** 간격을 선택할 수 있습니다. 새로 고침은 로컬 프록시 상태도 갱신합니다. **이름 변경…**은 CodexMulti의 표시 이름을 바꾸며 OpenAI 계정 이메일은 바꾸지 않습니다.
 
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/accounts-dark.png">
-  <source media="(prefers-color-scheme: light)" srcset="assets/screenshots/accounts-light.png">
-  <img alt="계정별 사용한 비율, 재설정 시각과 자동 전환 상태를 보여 주는 CodexMulti 계정 목록" src="assets/screenshots/accounts-light.png">
-</picture>
-<p align="center"><sub><a href="assets/screenshots/accounts-light.png">라이트</a> · <a href="assets/screenshots/accounts-dark.png">다크</a></sub></p>
+<p align="center">
+  <img alt="예시용 계정 화면을 바탕으로 라이트와 다크 테마를 함께 보여 주는 CodexMulti 쇼케이스" src="assets/screenshots/accounts-showcase.png" width="100%">
+</p>
+<p align="center"><sub>원본 스크린샷: <a href="assets/screenshots/accounts-light.png">라이트</a> · <a href="assets/screenshots/accounts-dark.png">다크</a></sub></p>
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/settings-dark.png">
