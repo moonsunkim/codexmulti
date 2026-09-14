@@ -1,6 +1,6 @@
 cask "codexmulti" do
-  version "0.2.10"
-  sha256 "74321a39b4b0973a947fa5b2dd15e7b6aec1b712fb3c58259bd5f1fc6cecf5d1"
+  version "0.2.11"
+  sha256 "c67c48f8043952895fffe60fac861188cd92cd570f2deef21b61ab347e734fb0"
 
   url "https://github.com/moonsunkim/codexmulti/releases/download/v#{version}/CodexMulti-#{version}.zip"
   name "CodexMulti"
