@@ -28,6 +28,7 @@ CodexMultiは、複数のCodexアカウントをまとめて管理するmacOSメ
     <img src="assets/screenshots/menu-bar-light.png" width="440" alt="架空のアカウントを使ったCodexMultiメニュー：平均残量、各アカウントの利用量とリセット時刻、使用中のアカウント">
   </picture>
 </p>
+<p align="center"><sub><a href="assets/screenshots/menu-bar-light.png">ライト</a> · <a href="assets/screenshots/menu-bar-dark.png">ダーク</a></sub></p>
 <p align="center"><sub>メニューバーから、平均残量と各アカウントの利用量・リセット時刻をすぐに確認できます。架空のアカウントを表示しています。</sub></p>
 
 ## Failoverは何を解決する機能ですか？
@@ -104,12 +105,14 @@ Failoverをオフにすると、処理中のリクエストが完了した後で
   <source media="(prefers-color-scheme: light)" srcset="assets/screenshots/accounts-light.png">
   <img alt="使用済みの割合、リセット時刻、各アカウントの状態を表示するCodexMultiの一覧" src="assets/screenshots/accounts-light.png">
 </picture>
+<p align="center"><sub><a href="assets/screenshots/accounts-light.png">ライト</a> · <a href="assets/screenshots/accounts-dark.png">ダーク</a></sub></p>
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/settings-dark.png">
   <source media="(prefers-color-scheme: light)" srcset="assets/screenshots/settings-light.png">
   <img alt="Failoverスイッチと言語選択メニューを備えた設定画面" src="assets/screenshots/settings-light.png">
 </picture>
+<p align="center"><sub><a href="assets/screenshots/settings-light.png">ライト</a> · <a href="assets/screenshots/settings-dark.png">ダーク</a></sub></p>
 
 利用量の更新間隔、表示する利用期間、テーマを選べます。
 言語は**システム、English、한국어、日本語、简体中文、Español**に対応しています。中国語は簡体字（`zh-Hans`）、スペイン語は共通の翻訳（`es`）に対応しています。繁体字は未対応です。上のスクリーンショットは英語表示です。翻訳の追加・修正は [i18n ガイド](docs/i18n.md)を参照してください。
@@ -126,6 +129,7 @@ Failoverをオフにすると、処理中のリクエストが完了した後で
   <source media="(prefers-color-scheme: light)" srcset="assets/screenshots/accounts-expanded-light.png">
   <img alt="利用期間、トークンの状態、更新時刻、リセットクレジットを示すアカウント詳細" src="assets/screenshots/accounts-expanded-light.png">
 </picture>
+<p align="center"><sub><a href="assets/screenshots/accounts-expanded-light.png">ライト</a> · <a href="assets/screenshots/accounts-expanded-dark.png">ダーク</a></sub></p>
 
 スクリーンショットにはすべて架空のアカウントを使っています。
 

@@ -27,6 +27,7 @@ CodexMulti reúne tus cuentas de Codex en una aplicación para la barra de menú
     <img src="assets/screenshots/menu-bar-light.png" width="440" alt="Menú de CodexMulti con porcentaje restante promedio, uso, tiempos de reinicio y cuenta activa; cuentas de ejemplo">
   </picture>
 </p>
+<p align="center"><sub><a href="assets/screenshots/menu-bar-light.png">Claro</a> · <a href="assets/screenshots/menu-bar-dark.png">Oscuro</a></sub></p>
 <p align="center"><sub>Consulta el porcentaje restante promedio, el uso de cada cuenta y los tiempos de reinicio desde la barra de menús. Se muestran cuentas de ejemplo.</sub></p>
 
 ## ¿Qué es el cambio automático y para qué sirve?
@@ -90,12 +91,14 @@ El uso es una instantánea de la última consulta. Actualiza una cuenta desde su
   <source media="(prefers-color-scheme: light)" srcset="assets/screenshots/accounts-light.png">
   <img alt="Conjunto de cuentas con porcentajes usados, horas de restablecimiento y estados activa, lista, en espera y en pausa" src="assets/screenshots/accounts-light.png">
 </picture>
+<p align="center"><sub><a href="assets/screenshots/accounts-light.png">Claro</a> · <a href="assets/screenshots/accounts-dark.png">Oscuro</a></sub></p>
 
 <picture>
   <source media="(prefers-color-scheme: light)" srcset="assets/screenshots/settings-light.png">
   <source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/settings-dark.png">
   <img alt="Ajustes con un interruptor de cambio automático y un selector de idioma" src="assets/screenshots/settings-light.png">
 </picture>
+<p align="center"><sub><a href="assets/screenshots/settings-light.png">Claro</a> · <a href="assets/screenshots/settings-dark.png">Oscuro</a></sub></p>
 
 Elige el intervalo de actualización del uso, el periodo de uso preferido y el tema. El menú de idioma ofrece **Sistema, English, 한국어, 日本語, 简体中文 y Español**.
 El chino disponible es el simplificado (`zh-Hans`); el español usa una traducción común (`es`). La opción Sistema reconoce las variantes regionales del chino simplificado y del español. Todavía no hay traducción al chino tradicional. Las capturas muestran la interfaz en inglés.
@@ -112,6 +115,7 @@ Si el proveedor informa de un crédito disponible, el menú de la cuenta puede o
   <source media="(prefers-color-scheme: light)" srcset="assets/screenshots/accounts-expanded-light.png">
   <img alt="Detalles de una cuenta con uso, estado del token, hora de actualización y restablecimientos disponibles" src="assets/screenshots/accounts-expanded-light.png">
 </picture>
+<p align="center"><sub><a href="assets/screenshots/accounts-expanded-light.png">Claro</a> · <a href="assets/screenshots/accounts-expanded-dark.png">Oscuro</a></sub></p>
 
 Todas las capturas usan cuentas ficticias.
 

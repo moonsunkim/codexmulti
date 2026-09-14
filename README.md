@@ -29,6 +29,7 @@ choose their order, and let automatic failover handle confirmed usage-limit erro
     <img src="assets/screenshots/menu-bar-light.png" width="440" alt="CodexMulti menu with pooled capacity, account usage, reset times and the active account, using demo accounts">
   </picture>
 </p>
+<p align="center"><sub><a href="assets/screenshots/menu-bar-light.png">Light</a> · <a href="assets/screenshots/menu-bar-dark.png">Dark</a></sub></p>
 <p align="center"><sub>Your pool, account usage and reset times — one click from the menu bar. Demo accounts shown.</sub></p>
 
 ## What is Failover, and why use it?
@@ -112,12 +113,14 @@ Usage is a saved snapshot. Refresh one account from its **…** menu, or use **R
   <source media="(prefers-color-scheme: light)" srcset="assets/screenshots/accounts-light.png">
   <img alt="CodexMulti account pool with used percentages, reset times and active, ready, cooling and paused states" src="assets/screenshots/accounts-light.png">
 </picture>
+<p align="center"><sub><a href="assets/screenshots/accounts-light.png">Light</a> · <a href="assets/screenshots/accounts-dark.png">Dark</a></sub></p>
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/settings-dark.png">
   <source media="(prefers-color-scheme: light)" srcset="assets/screenshots/settings-light.png">
   <img alt="Refresh, appearance, language, usage-window and Failover settings in CodexMulti" src="assets/screenshots/settings-light.png">
 </picture>
+<p align="center"><sub><a href="assets/screenshots/settings-light.png">Light</a> · <a href="assets/screenshots/settings-dark.png">Dark</a></sub></p>
 
 Choose your usage refresh interval, preferred usage window and theme. The language menu supports
 **System, English, 한국어, 日本語, 简体中文 and Español**.
@@ -138,6 +141,7 @@ When the provider reports an available credit, the account menu can offer **Use 
   <source media="(prefers-color-scheme: light)" srcset="assets/screenshots/accounts-expanded-light.png">
   <img alt="Expanded account details showing usage, token status, refresh time and available reset credits" src="assets/screenshots/accounts-expanded-light.png">
 </picture>
+<p align="center"><sub><a href="assets/screenshots/accounts-expanded-light.png">Light</a> · <a href="assets/screenshots/accounts-expanded-dark.png">Dark</a></sub></p>
 
 All screenshots use synthetic accounts.
 

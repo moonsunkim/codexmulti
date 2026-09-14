@@ -27,6 +27,7 @@ CodexMulti 将你的 Codex 账户集中在一个 macOS 菜单栏应用中。查�
     <img src="assets/screenshots/menu-bar-light.png" width="440" alt="使用示例账户的 CodexMulti 菜单：平均剩余比例、各账户用量、重置时间和当前账户">
   </picture>
 </p>
+<p align="center"><sub><a href="assets/screenshots/menu-bar-light.png">浅色</a> · <a href="assets/screenshots/menu-bar-dark.png">深色</a></sub></p>
 <p align="center"><sub>从菜单栏即可查看平均剩余比例、各账户用量和重置时间。图中使用示例账户。</sub></p>
 
 ## 什么是自动切换，为什么要使用它？
@@ -90,12 +91,14 @@ shasum -a 256 -c CodexMulti-<version>.zip.sha256
   <source media="(prefers-color-scheme: light)" srcset="assets/screenshots/accounts-light.png">
   <img alt="账户池：已用比例、重置时间，以及使用中、就绪、冷却和暂停状态" src="assets/screenshots/accounts-light.png">
 </picture>
+<p align="center"><sub><a href="assets/screenshots/accounts-light.png">浅色</a> · <a href="assets/screenshots/accounts-dark.png">深色</a></sub></p>
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/settings-dark.png">
   <source media="(prefers-color-scheme: light)" srcset="assets/screenshots/settings-light.png">
   <img alt="包含自动切换开关和语言选择器的设置界面" src="assets/screenshots/settings-light.png">
 </picture>
+<p align="center"><sub><a href="assets/screenshots/settings-light.png">浅色</a> · <a href="assets/screenshots/settings-dark.png">深色</a></sub></p>
 
 你可以选择用量刷新间隔、优先显示的用量周期和主题。语言菜单支持**跟随系统、English、한국어、日本語、简体中文和 Español**。
 中文目前支持简体（`zh-Hans`）；西班牙语使用通用版本（`es`）。选择“跟随系统”时会识别简体中文和西班牙语的地区设置。繁体中文尚未提供翻译。以上截图为英文界面。
@@ -112,6 +115,7 @@ shasum -a 256 -c CodexMulti-<version>.zip.sha256
   <source media="(prefers-color-scheme: light)" srcset="assets/screenshots/accounts-expanded-light.png">
   <img alt="账户详情：用量、令牌状态、刷新时间和可用重置次数" src="assets/screenshots/accounts-expanded-light.png">
 </picture>
+<p align="center"><sub><a href="assets/screenshots/accounts-expanded-light.png">浅色</a> · <a href="assets/screenshots/accounts-expanded-dark.png">深色</a></sub></p>
 
 所有截图均使用虚构账户。
 

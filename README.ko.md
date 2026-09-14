@@ -28,6 +28,7 @@ CodexMulti는 여러 Codex 계정을 한곳에서 관리하는 macOS 메뉴 막�
     <img src="assets/screenshots/menu-bar-light.png" width="440" alt="예시용 계정으로 표시한 CodexMulti 메뉴: 평균 잔여율, 계정별 사용량과 재설정 시간, 활성 계정">
   </picture>
 </p>
+<p align="center"><sub><a href="assets/screenshots/menu-bar-light.png">라이트</a> · <a href="assets/screenshots/menu-bar-dark.png">다크</a></sub></p>
 <p align="center"><sub>메뉴 막대에서 풀의 평균 잔여율과 계정별 사용량·재설정 시간을 바로 확인합니다. 예시용 계정입니다.</sub></p>
 
 ## Failover는 어떤 문제를 해결하나요?
@@ -105,12 +106,14 @@ shasum -a 256 -c CodexMulti-<version>.zip.sha256
   <source media="(prefers-color-scheme: light)" srcset="assets/screenshots/accounts-light.png">
   <img alt="계정별 사용한 비율, 재설정 시각과 자동 전환 상태를 보여 주는 CodexMulti 계정 목록" src="assets/screenshots/accounts-light.png">
 </picture>
+<p align="center"><sub><a href="assets/screenshots/accounts-light.png">라이트</a> · <a href="assets/screenshots/accounts-dark.png">다크</a></sub></p>
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/settings-dark.png">
   <source media="(prefers-color-scheme: light)" srcset="assets/screenshots/settings-light.png">
   <img alt="자동 계정 전환 스위치와 언어 선택 메뉴가 있는 설정 화면" src="assets/screenshots/settings-light.png">
 </picture>
+<p align="center"><sub><a href="assets/screenshots/settings-light.png">라이트</a> · <a href="assets/screenshots/settings-dark.png">다크</a></sub></p>
 
 사용량 갱신 간격, 표시할 사용량 기간, 테마를 선택할 수 있습니다.
 언어는 **시스템, English, 한국어, 日本語, 简体中文, Español**를 지원합니다. 중국어는 간체(`zh-Hans`), 스페인어는 공통 번역(`es`)을 사용합니다. 번체는 아직 지원하지 않습니다. 위 스크린샷은 영어 화면입니다. 번역 추가·수정 방법은 [i18n 안내](docs/i18n.md)를 참고하세요.
@@ -127,6 +130,7 @@ shasum -a 256 -c CodexMulti-<version>.zip.sha256
   <source media="(prefers-color-scheme: light)" srcset="assets/screenshots/accounts-expanded-light.png">
   <img alt="사용량 기간, 토큰 상태, 갱신 시각과 리셋 크레딧을 보여 주는 계정 상세 화면" src="assets/screenshots/accounts-expanded-light.png">
 </picture>
+<p align="center"><sub><a href="assets/screenshots/accounts-expanded-light.png">라이트</a> · <a href="assets/screenshots/accounts-expanded-dark.png">다크</a></sub></p>
 
 모든 스크린샷은 예시용 계정을 사용합니다.
 
