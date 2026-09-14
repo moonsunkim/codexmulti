@@ -430,6 +430,8 @@ pub const Static = struct {
     pub const language_english = "English";
     pub const language_korean = "한국어";
     pub const language_japanese = "日本語";
+    pub const language_chinese_simplified = "简体中文";
+    pub const language_spanish = "Español";
     pub const month_names = [_][]const u8{ "1月", "2月", "3月", "4月", "5月", "6月", "7月", "8月", "9月", "10月", "11月", "12月" };
 };
 

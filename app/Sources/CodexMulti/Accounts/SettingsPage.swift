@@ -212,6 +212,8 @@ enum PreferencesModel {
             case .en: label = settings.language_label_english
             case .ko: label = settings.language_label_korean
             case .ja: label = settings.language_label_japanese ?? Copy.text("language_japanese", fallback: "日本語")
+            case .zhHans: label = settings.language_label_chinese_simplified ?? Copy.text("language_chinese_simplified", fallback: "简体中文")
+            case .es: label = settings.language_label_spanish ?? Copy.text("language_spanish", fallback: "Español")
             }
             return LanguageOption(language: language, label: label)
         }
@@ -226,6 +228,13 @@ enum SystemLanguageResolver {
         let identifier = first.lowercased().replacingOccurrences(of: "_", with: "-")
         if identifier == "ko" || identifier.hasPrefix("ko-") { return .ko }
         if identifier == "ja" || identifier.hasPrefix("ja-") { return .ja }
+        if identifier == "es" || identifier.hasPrefix("es-") { return .es }
+        let parts = identifier.split(separator: "-")
+        if parts.first == "zh" {
+            if parts.contains("hant") { return .en }
+            if parts.contains("hans") { return .zhHans }
+            if parts.count == 1 || parts.contains("cn") || parts.contains("sg") { return .zhHans }
+        }
         return .en
     }
 }

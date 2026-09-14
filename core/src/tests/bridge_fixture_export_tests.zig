@@ -812,11 +812,21 @@ fn exportAll(allocator: std.mem.Allocator, io: std.Io) !void {
 
 pub fn main(init: std.process.Init) !void {
     const args = try init.minimal.args.toSlice(init.arena.allocator());
-    if (args.len == 4 and (std.mem.eql(u8, args[1], "--korean") or std.mem.eql(u8, args[1], "--japanese"))) {
-        const bytes = try makeProjectionLanguage(init.gpa, args[2], if (std.mem.eql(u8, args[1], "--japanese")) .ja else .ko);
-        defer init.gpa.free(bytes);
-        try std.Io.Dir.cwd().writeFile(init.io, .{ .sub_path = args[3], .data = bytes });
-        return;
+    const localized_options = .{
+        .{ "--korean", ui_model.Language.ko },
+        .{ "--japanese", ui_model.Language.ja },
+        .{ "--chinese", ui_model.Language.@"zh-Hans" },
+        .{ "--spanish", ui_model.Language.es },
+    };
+    if (args.len == 4) {
+        inline for (localized_options) |option| {
+            if (std.mem.eql(u8, args[1], option[0])) {
+                const bytes = try makeProjectionLanguage(init.gpa, args[2], option[1]);
+                defer init.gpa.free(bytes);
+                try std.Io.Dir.cwd().writeFile(init.io, .{ .sub_path = args[3], .data = bytes });
+                return;
+            }
+        }
     }
     try exportAll(init.gpa, init.io);
 }
@@ -1403,7 +1413,7 @@ test "every named projection fixture proves its distinguishing state" {
                 .system;
             try testing.expectEqual(expected, wire.view.settings.appearance);
             try testing.expectEqual(ui_model.Language.en, wire.view.settings.language);
-            try testing.expectEqual([4]ui_model.Language{ .system, .en, .ko, .ja }, wire.view.settings.language_supported);
+            try testing.expectEqual([6]ui_model.Language{ .system, .en, .ko, .ja, .@"zh-Hans", .es }, wire.view.settings.language_supported);
             try testing.expectEqual(ui_model.AutoUpdateState.unavailable, wire.view.settings.auto_update_state);
             try testing.expect(std.mem.indexOf(u8, wire.view.settings.auto_update_detail_text, "no update channel is configured") != null);
             try testing.expectEqualStrings("Version 0.1.0 (build 0.1.0)", wire.view.settings.app_version_text);
@@ -1445,4 +1455,32 @@ test "Korean reset and account dialogs serialize localized user-facing text" {
     try testing.expectEqualStrings("이 계정에는 제공자가 확인한 사용 가능한 리셋 크레딧이 없습니다.", parsed.value.shell.reset.blocked_text);
     try testing.expectEqualStrings("Codex 계정 추가", parsed.value.shell.add_account.title);
     try testing.expectEqualStrings("취소", parsed.value.shell.add_account.cancel_label);
+}
+
+test "Chinese and Spanish selections parse and immediately project localized settings and dialogs" {
+    const cases = .{
+        .{ ui_model.Language.@"zh-Hans", "zh-Hans", "语言", "尚未添加账户", "添加 Codex 账户" },
+        .{ ui_model.Language.es, "es", "Idioma", "Aún no hay cuentas registradas", "Añadir cuenta de Codex" },
+    };
+    inline for (cases) |case| {
+        const json = "{\"intent\":\"set_language\",\"value\":\"" ++ case[1] ++ "\",\"system\":\"" ++ case[1] ++ "\"}";
+        var intent = switch (bridge.parseIntent(testing.allocator, json)) {
+            .accepted => |value| value,
+            else => return error.LanguageIntentRejected,
+        };
+        defer intent.deinit();
+        var service: FixtureService = .{};
+        var model: shell.Model = undefined;
+        attach(&model, &service);
+        var effects: shell.Effects = .{};
+        shell.update(&model, intent.intent, &effects);
+        try testing.expectEqual(case[0], model.view.settings.language);
+        try testing.expectEqualStrings(case[2], model.view.settings.language_label);
+        try testing.expectEqualStrings(case[3], model.view.summary_text);
+        const bytes = try makeProjectionLanguage(testing.allocator, "viewstate-add-account-empty", case[0]);
+        defer testing.allocator.free(bytes);
+        var parsed = try std.json.parseFromSlice(std.json.Value, testing.allocator, bytes, .{});
+        defer parsed.deinit();
+        try testing.expectEqualStrings(case[4], parsed.value.object.get("shell").?.object.get("add_account").?.object.get("title").?.string);
+    }
 }

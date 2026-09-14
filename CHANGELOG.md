@@ -6,6 +6,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.2.12]
+
+### Added
+
+- Add Simplified Chinese (`zh-Hans`) and Spanish (`es`) throughout the app, including settings, account details, menus, dialogs, update messages and date formats.
+- Recognize Simplified Chinese and regional Spanish system preferences, and preserve explicit language selections across app restarts.
+- Add Chinese and Spanish READMEs, link all five language editions, and document how to maintain UI translations.
+
+### Fixed
+
+- Translate recognized provider usage-window labels regardless of capitalization in the new languages.
+- Keep Spanish settings controls and reset actions readable with compact labels.
+
 ## [0.2.11]
 
 ### Fixed

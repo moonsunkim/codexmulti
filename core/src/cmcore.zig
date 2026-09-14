@@ -322,6 +322,8 @@ pub export fn cm_copy_text(language: u8, key: ?[*]const u8, key_len: usize, out:
     const copy = @import("strings.zig").catalog(switch (language) {
         1 => .ko,
         2 => .ja,
+        3 => .@"zh-Hans",
+        4 => .es,
         else => .en,
     });
     const value = copy.lookup(input[0..key_len]) orelse return 0;

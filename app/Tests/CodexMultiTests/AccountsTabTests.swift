@@ -255,6 +255,22 @@ final class AccountsTabTests: XCTestCase {
         XCTAssertEqual(Copy.tabSettings, "Settings")
     }
 
+    func testChineseAndSpanishCopyChangesImmediatelyAndReturnsToEnglish() {
+        defer { Copy.setLanguage(.en) }
+        Copy.setLanguage(.zhHans)
+        XCTAssertEqual(Copy.tabSettings, "设置")
+        XCTAssertEqual(Copy.theme, "主题")
+        XCTAssertEqual(Copy.useFailoverProxy, "使用自动切换")
+        XCTAssertEqual(Copy.text("shell_reset_acknowledge", fallback: "missing"), "我理解此操作无法撤销")
+        Copy.setLanguage(.es)
+        XCTAssertEqual(Copy.tabSettings, "Ajustes")
+        XCTAssertEqual(Copy.theme, "Tema")
+        XCTAssertEqual(Copy.useFailoverProxy, "Usar cambio automático")
+        XCTAssertEqual(Copy.text("shell_reset_acknowledge", fallback: "missing"), "Entiendo que esto no se puede deshacer")
+        Copy.setLanguage(.en)
+        XCTAssertEqual(Copy.tabSettings, "Settings")
+    }
+
     func testShellCopyNamesOnlyCodex() throws {
         XCTAssertEqual(Copy.removePlainMuted, "Its saved usage snapshot is also removed. This does not delete the account at OpenAI.")
         let sources = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()

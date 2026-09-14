@@ -24,14 +24,26 @@ final class P12SettingsTests: XCTestCase {
 
     func testF18LanguageRowRendersEveryCatalogLanguageAndUsesTheSystemPreference() throws {
         let settings = try projection("settings-appearance-system").view.settings
-        XCTAssertEqual(settings.language_supported, [.system, .en, .ko, .ja])
+        XCTAssertEqual(settings.language_supported, [.system, .en, .ko, .ja, .zhHans, .es])
         XCTAssertEqual(PreferencesModel.Row.language.label(settings: settings), settings.language_label)
-        XCTAssertEqual(PreferencesModel.languageOptions(settings: settings).map(\.label), ["System", "English", "한국어", "日本語"])
+        XCTAssertEqual(PreferencesModel.languageOptions(settings: settings).map(\.label), ["System", "English", "한국어", "日本語", "简体中文", "Español"])
         XCTAssertEqual(PreferencesModel.languageIntent(.ko, system: .en), .set_language(value: .ko, system: .en))
         XCTAssertEqual(SystemLanguageResolver.resolve(["ko-KR", "en-US"]), .ko)
         XCTAssertEqual(SystemLanguageResolver.resolve(["en-US", "ko-KR"]), .en)
         XCTAssertEqual(SystemLanguageResolver.resolve(["ja-JP", "en-US"]), .ja)
         XCTAssertEqual(SystemLanguageResolver.resolve(["ja_JP"]), .ja)
+        for identifier in ["es", "es-ES", "es-MX", "es_419", "ES-ar"] {
+            XCTAssertEqual(SystemLanguageResolver.resolve([identifier]), .es)
+        }
+        for identifier in ["zh", "zh-Hans", "zh-Hans-CN", "zh_Hans_SG", "zh-CN", "zh-SG", "zh-Hans-HK"] {
+            XCTAssertEqual(SystemLanguageResolver.resolve([identifier]), .zhHans)
+        }
+        for identifier in ["zh-Hant", "zh-TW", "zh-HK", "zh-MO", "zh-Hant-CN", "fr-FR"] {
+            XCTAssertEqual(SystemLanguageResolver.resolve([identifier]), .en)
+        }
+        XCTAssertEqual(SystemLanguageResolver.resolve([]), .en)
+        XCTAssertEqual(SystemLanguageResolver.resolve(["en-US", "es-MX"]), .en)
+        XCTAssertEqual(PreferencesModel.languageIntent(.zhHans, system: .es), .set_language(value: .zhHans, system: .es))
     }
 
     func testWholeProxySwitchUsesProjectedStateAndRefusalDetail() throws {

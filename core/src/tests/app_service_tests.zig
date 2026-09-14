@@ -3132,3 +3132,41 @@ test "declarations stay analyzable" {
     _ = transport;
     _ = login_runtime;
 }
+
+test "Chinese and Spanish selections survive restart and system selection persists separately" {
+    const cases = .{
+        .{ ui_model.Language.@"zh-Hans", "语言" },
+        .{ ui_model.Language.es, "Idioma" },
+    };
+    inline for (cases) |case| {
+        var temp = testing.tmpDir(.{});
+        defer temp.cleanup();
+        const first = try Harness.create();
+        defer first.destroy();
+        var file_sink: coordinator.FileDocumentSink = .{ .io = testing.io, .dir = temp.dir };
+        var live = first.live();
+        live.sink = file_sink.sink();
+        first.service.attach(live);
+        first.service.now_unix_s = now;
+        try testing.expectEqual(ui_model.CommandOutcome.accepted_pending, first.service.submit(.{ .set_language = .{ .value = case[0], .system = .en } }));
+        const restarted = try Harness.create();
+        defer restarted.destroy();
+        restarted.attach();
+        _ = restarted.service.load(testing.io, temp.dir);
+        var view: ui_model.ViewState = .{};
+        view.begin(now, restarted.service.capabilities(), .kst);
+        restarted.service.project(&view);
+        view.finish(.{});
+        try testing.expectEqual(case[0], view.settings.language);
+        try testing.expectEqualStrings(case[1], view.settings.language_label);
+        try testing.expectEqual(ui_model.CommandOutcome.accepted_pending, first.service.submit(.{ .set_language = .{ .value = .system, .system = case[0] } }));
+        var saved = try store.loadAppSettings(testing.allocator, testing.io, temp.dir, runtime_paths.app_settings_file_name);
+        defer saved.deinit();
+        try testing.expectEqual(store.Language.system, saved.value.language);
+        view.begin(now, first.service.capabilities(), .kst);
+        first.service.project(&view);
+        view.finish(.{});
+        try testing.expectEqual(ui_model.Language.system, view.settings.language);
+        try testing.expectEqualStrings(case[1], view.settings.language_label);
+    }
+}

@@ -1,6 +1,6 @@
 # CodexMulti
 
-[English](README.md) · **한국어** · [日本語](README.ja.md)
+[English](README.md) · **한국어** · [日本語](README.ja.md) · [简体中文](README.zh-CN.md) · [Español](README.es.md)
 
 <p align="center">
   <img src="assets/hero.png" width="100%" alt="CodexMulti — 한 대의 Mac에서 여러 Codex 계정을 자동으로 전환">
@@ -97,7 +97,7 @@ shasum -a 256 -c CodexMulti-<version>.zip.sha256
 </picture>
 
 사용량 갱신 간격, 표시할 사용량 기간, 테마를 선택할 수 있습니다.
-언어는 **시스템, English, 한국어, 日本語**를 지원합니다. 위 스크린샷은 영어 화면입니다.
+언어는 **시스템, English, 한국어, 日本語, 简体中文, Español**를 지원합니다. 중국어는 간체(`zh-Hans`), 스페인어는 공통 번역(`es`)을 사용합니다. 번체는 아직 지원하지 않습니다. 위 스크린샷은 영어 화면입니다. 번역 추가·수정 방법은 [i18n 안내](docs/i18n.md)를 참고하세요.
 
 <details>
 <summary>계정 상세 보기</summary>

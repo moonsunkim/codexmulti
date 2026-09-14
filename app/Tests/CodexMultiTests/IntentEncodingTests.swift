@@ -97,6 +97,17 @@ final class IntentEncodingTests: XCTestCase {
         "enable_codex_routing", "disable_codex_routing",
     ]
 
+    func testNewLanguageTagsEncodeForExplicitAndSystemSelection() throws {
+        let cases: [(Intent, String)] = [
+            (.set_language(value: .zhHans, system: .es), #"{"intent":"set_language","system":"es","value":"zh-Hans"}"#),
+            (.set_language(value: .es, system: .zhHans), #"{"intent":"set_language","system":"zh-Hans","value":"es"}"#),
+            (.set_language(value: .system, system: .es), #"{"intent":"set_language","system":"es","value":"system"}"#),
+        ]
+        for (intent, expected) in cases {
+            XCTAssertEqual(String(decoding: try IntentEncoder.encode(intent), as: UTF8.self), expected)
+        }
+    }
+
     func testEveryIntentEncodesToItsGolden() throws {
         for (intent, expected) in Self.golden {
             let encoded = String(decoding: try IntentEncoder.encode(intent), as: UTF8.self)

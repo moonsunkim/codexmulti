@@ -22,13 +22,17 @@ final class EnumMirrorTests: XCTestCase {
         XCTAssertEqual(Set(mirrored.keys).subtracting(exported.keys), [], "Swift enums with no exported counterpart")
     }
 
-    func testRegistryNamesAreUniqueAndCasesAreSnakeCase() {
+    func testRegistryNamesAreUniqueAndCasesUseWireSpellings() {
         let names = ProjectionEnums.registry.map(\.zigName)
         XCTAssertEqual(names.count, Set(names).count)
         for entry in ProjectionEnums.registry {
             XCTAssertEqual(entry.cases.count, Set(entry.cases).count, entry.zigName)
             for tag in entry.cases {
-                XCTAssertTrue(tag.allSatisfy { $0.isLowercase || $0 == "_" }, "\(entry.zigName).\(tag) is not a Zig tag spelling")
+                if entry.zigName == "Language" {
+                    XCTAssertNotNil(tag.range(of: "^(system|[a-z]{2}(-[A-Z][a-z]{3})?)$", options: .regularExpression))
+                } else {
+                    XCTAssertTrue(tag.allSatisfy { $0.isLowercase || $0 == "_" }, "\(entry.zigName).\(tag) is not a Zig tag spelling")
+                }
             }
         }
     }

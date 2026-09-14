@@ -276,7 +276,7 @@ fn humanizeWindowLabelWith(localized: strings.Catalog, buffer: []u8, label: []co
     for (known) |candidate| {
         if (std.mem.eql(u8, label, candidate.source)) return localized.text(candidate.key);
         if (!std.ascii.eqlIgnoreCase(label, candidate.source)) continue;
-        if (localized.language == .ko or localized.language == .ja) return localized.text(candidate.key);
+        if (localized.language != .en and localized.language != .system) return localized.text(candidate.key);
         const take = @min(label.len, buffer.len);
         if (take == 0) return label;
         @memcpy(buffer[0..take], label[0..take]);
@@ -811,4 +811,14 @@ test "the same instant formats in supplied KST and UTC time zones" {
 
     var kst_buffer: [max_line_bytes]u8 = undefined;
     try testing.expectEqualStrings("2026-Jul-25 12:00 KST", formatLocal(&kst_buffer, unix_s, .kst));
+}
+
+test "Chinese and Spanish recognize capitalized provider window labels" {
+    var buffer: [128]u8 = undefined;
+    const chinese = Localized.init(.@"zh-Hans");
+    const spanish = Localized.init(.es);
+    try std.testing.expectEqualStrings("每周", chinese.humanizeWindowLabel(&buffer, "Weekly"));
+    try std.testing.expectEqualStrings("Semanal", spanish.humanizeWindowLabel(&buffer, "WEEKLY"));
+    try std.testing.expectEqualStrings("Sesión", spanish.humanizeWindowLabel(&buffer, "Session"));
+    try std.testing.expectEqualStrings("custom-model", chinese.humanizeWindowLabel(&buffer, "custom-model"));
 }

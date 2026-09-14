@@ -1,6 +1,6 @@
 # CodexMulti
 
-[English](README.md) · [한국어](README.ko.md) · **日本語**
+[English](README.md) · [한국어](README.ko.md) · **日本語** · [简体中文](README.zh-CN.md) · [Español](README.es.md)
 
 <p align="center">
   <img src="assets/hero.png" width="100%" alt="CodexMulti — 1台のMacで複数のCodexアカウントを自動切り替え">
@@ -96,7 +96,7 @@ Failoverをオフにすると、処理中のリクエストが完了した後で
 </picture>
 
 利用量の更新間隔、表示する利用期間、テーマを選べます。
-言語は**システム、English、한국어、日本語**に対応しています。上のスクリーンショットは英語表示です。
+言語は**システム、English、한국어、日本語、简体中文、Español**に対応しています。中国語は簡体字（`zh-Hans`）、スペイン語は共通の翻訳（`es`）に対応しています。繁体字は未対応です。上のスクリーンショットは英語表示です。翻訳の追加・修正は [i18n ガイド](docs/i18n.md)を参照してください。
 
 <details>
 <summary>アカウントの詳細を見る</summary>

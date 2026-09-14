@@ -1,10 +1,14 @@
 const std = @import("std");
 
-pub const Language = enum { system, en, ko, ja };
+pub const Language = enum { system, en, ko, ja, @"zh-Hans", es };
 const Japanese = @import("strings_ja.zig").Static;
 const JapaneseFormat = @import("strings_ja.zig").Format;
+const Chinese = @import("strings_zh_hans.zig").Static;
+const ChineseFormat = @import("strings_zh_hans.zig").Format;
+const Spanish = @import("strings_es.zig").Static;
+const SpanishFormat = @import("strings_es.zig").Format;
 
-const catalog_languages = [_]Language{ .en, .ko, .ja };
+const catalog_languages = [_]Language{ .en, .ko, .ja, .@"zh-Hans", .es };
 pub const supported_languages = blk: {
     var values: [catalog_languages.len + 1]Language = undefined;
     values[0] = .system;
@@ -449,6 +453,8 @@ pub const StaticKey = enum {
     language_english,
     language_korean,
     language_japanese,
+    language_chinese_simplified,
+    language_spanish,
 };
 
 pub const FormatKey = enum {
@@ -652,6 +658,8 @@ pub const Catalog = struct {
             .system, .en => english_static[@intFromEnum(key)],
             .ko => korean_static[@intFromEnum(key)],
             .ja => japanese_static[@intFromEnum(key)],
+            .@"zh-Hans" => chinese_static[@intFromEnum(key)],
+            .es => spanish_static[@intFromEnum(key)],
         };
     }
 
@@ -660,6 +668,8 @@ pub const Catalog = struct {
             .system, .en => writer.print(@field(EnglishFormat, @tagName(key)), args) catch {},
             .ko => writer.print(@field(KoreanFormat, @tagName(key)), args) catch {},
             .ja => writer.print(@field(JapaneseFormat, @tagName(key)), args) catch {},
+            .@"zh-Hans" => writer.print(@field(ChineseFormat, @tagName(key)), args) catch {},
+            .es => writer.print(@field(SpanishFormat, @tagName(key)), args) catch {},
         }
     }
 
@@ -668,6 +678,8 @@ pub const Catalog = struct {
             .system, .en => English.month_names[index],
             .ko => Korean.month_names[index],
             .ja => Japanese.month_names[index],
+            .@"zh-Hans" => Chinese.month_names[index],
+            .es => Spanish.month_names[index],
         };
     }
 };
@@ -687,6 +699,8 @@ pub const system = catalog(.system);
 pub const english = catalog(.en);
 pub const korean = catalog(.ko);
 pub const japanese = catalog(.ja);
+pub const chinese = catalog(.@"zh-Hans");
+pub const spanish = catalog(.es);
 
 const English = struct {
     const add_account_dialog_title = "Add Codex account";
@@ -1124,6 +1138,8 @@ const English = struct {
     const language_english = "English";
     const language_korean = "한국어";
     const language_japanese = "日本語";
+    const language_chinese_simplified = "简体中文";
+    const language_spanish = "Español";
 
     const month_names = [_][]const u8{
         "Jan", "Feb", "Mar", "Apr", "May", "Jun",
@@ -1650,6 +1666,8 @@ const Korean = struct {
     const language_english = "English";
     const language_korean = "한국어";
     const language_japanese = "日本語";
+    const language_chinese_simplified = "简体中文";
+    const language_spanish = "Español";
 
     const month_names = [_][]const u8{
         "Jan", "Feb", "Mar", "Apr", "May", "Jun",
@@ -1767,21 +1785,43 @@ const japanese_static = blk: {
     break :blk values;
 };
 
+const chinese_static = blk: {
+    const fields = std.meta.fields(StaticKey);
+    var values: [fields.len][]const u8 = undefined;
+    for (fields, 0..) |field, index| {
+        values[index] = @field(Chinese, field.name);
+    }
+    break :blk values;
+};
+
+const spanish_static = blk: {
+    const fields = std.meta.fields(StaticKey);
+    var values: [fields.len][]const u8 = undefined;
+    for (fields, 0..) |field, index| {
+        values[index] = @field(Spanish, field.name);
+    }
+    break :blk values;
+};
+
 comptime {
     for (std.meta.fields(StaticKey)) |field| {
         if (!@hasDecl(English, field.name)) @compileError("missing English static string: " ++ field.name);
         if (!@hasDecl(Korean, field.name)) @compileError("missing Korean static string: " ++ field.name);
         if (!@hasDecl(Japanese, field.name)) @compileError("missing Japanese static string: " ++ field.name);
+        if (!@hasDecl(Chinese, field.name)) @compileError("missing Chinese static string: " ++ field.name);
+        if (!@hasDecl(Spanish, field.name)) @compileError("missing Spanish static string: " ++ field.name);
     }
     for (std.meta.fields(FormatKey)) |field| {
         if (!@hasDecl(EnglishFormat, field.name)) @compileError("missing English format string: " ++ field.name);
         if (!@hasDecl(KoreanFormat, field.name)) @compileError("missing Korean format string: " ++ field.name);
         if (!@hasDecl(JapaneseFormat, field.name)) @compileError("missing Japanese format string: " ++ field.name);
+        if (!@hasDecl(ChineseFormat, field.name)) @compileError("missing Chinese format string: " ++ field.name);
+        if (!@hasDecl(SpanishFormat, field.name)) @compileError("missing Spanish format string: " ++ field.name);
     }
 }
 
 test "F18 Korean catalog covers every key and preserves date and time formats" {
-    try std.testing.expectEqual([4]Language{ .system, .en, .ko, .ja }, supported_languages);
+    try std.testing.expectEqual([6]Language{ .system, .en, .ko, .ja, .@"zh-Hans", .es }, supported_languages);
     try std.testing.expectEqualStrings("Never refreshed", system.text(.freshness_never));
     try std.testing.expectEqualStrings("새로 고친 적 없음", catalog(.ko).text(.freshness_never));
     var buffer: [64]u8 = undefined;
@@ -1810,4 +1850,49 @@ test "Japanese catalog renders settings durations and dates without English fall
     writer = std.Io.Writer.fixed(&buffer);
     japanese.write(&writer, .absolute_datetime, .{ 2026, japanese.monthName(8), 12, 15, 30, "JST" });
     try std.testing.expectEqualStrings("2026年9月12日 15:30 JST", writer.buffered());
+}
+
+test "Every catalog renders every static and formatted key as nonempty UTF-8" {
+    @setEvalBranchQuota(20_000);
+    for (catalog_languages) |language| {
+        const copy = catalog(language);
+        for (0..static_key_names.len) |index| {
+            const value = copy.text(@enumFromInt(index));
+            try std.testing.expect(value.len != 0);
+            try std.testing.expect(std.unicode.utf8ValidateSlice(value));
+        }
+        inline for (std.meta.fields(FormatKey)) |field| {
+            const key: FormatKey = @enumFromInt(field.value);
+            var args: FormatArgs(key) = undefined;
+            inline for (std.meta.fields(@TypeOf(args))) |arg| {
+                @field(args, arg.name) = if (arg.type == []const u8) "sample" else 1;
+            }
+            var buffer: [2048]u8 = undefined;
+            var writer = std.Io.Writer.fixed(&buffer);
+            copy.write(&writer, key, args);
+            try std.testing.expect(writer.buffered().len != 0);
+            try std.testing.expect(std.unicode.utf8ValidateSlice(writer.buffered()));
+        }
+    }
+}
+
+test "Chinese and Spanish format local dates and preserve arguments" {
+    try std.testing.expectEqualStrings("语言", chinese.text(.language_label));
+    try std.testing.expectEqualStrings("Idioma", spanish.text(.language_label));
+    var buffer: [128]u8 = undefined;
+    var writer = std.Io.Writer.fixed(&buffer);
+    chinese.write(&writer, .absolute_datetime, .{ 2026, chinese.monthName(8), 14, 15, 30, "CST" });
+    try std.testing.expectEqualStrings("2026年9月14日 15:30 CST", writer.buffered());
+    writer = std.Io.Writer.fixed(&buffer);
+    spanish.write(&writer, .absolute_datetime, .{ 2026, spanish.monthName(8), 14, 15, 30, "CEST" });
+    try std.testing.expectEqualStrings("14 sep 2026 15:30 CEST", writer.buffered());
+    writer = std.Io.Writer.fixed(&buffer);
+    spanish.write(&writer, .medium_datetime, .{ spanish.monthName(0), 2, 8, 5, "CET" });
+    try std.testing.expectEqualStrings("02 ene 08:05 CET", writer.buffered());
+    writer = std.Io.Writer.fixed(&buffer);
+    chinese.write(&writer, .countdown_hours, .{ 2, 15 });
+    try std.testing.expectEqualStrings("2小时15分钟后", writer.buffered());
+    writer = std.Io.Writer.fixed(&buffer);
+    spanish.write(&writer, .countdown_hours, .{ 2, 15 });
+    try std.testing.expectEqualStrings("en 2 h 15 min", writer.buffered());
 }

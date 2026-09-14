@@ -1,6 +1,6 @@
 # CodexMulti
 
-**English** · [한국어](README.ko.md) · [日本語](README.ja.md)
+**English** · [한국어](README.ko.md) · [日本語](README.ja.md) · [简体中文](README.zh-CN.md) · [Español](README.es.md)
 
 <p align="center">
   <img src="assets/hero.png" width="100%" alt="CodexMulti — one Mac, many Codex accounts, with automatic failover">
@@ -104,7 +104,10 @@ Requests already in flight continue on their current account.
 </picture>
 
 Choose your usage refresh interval, preferred usage window and theme. The language menu supports
-**System, English, 한국어 and 日本語**.
+**System, English, 한국어, 日本語, 简体中文 and Español**.
+Simplified Chinese uses `zh-Hans`; Spanish uses the shared `es` catalog. System mode recognizes
+Simplified Chinese and regional Spanish preferences; Traditional Chinese is not translated yet.
+See [i18n maintenance](docs/i18n.md) to add or update translations.
 
 <details>
 <summary>Take a closer look at an account</summary>

@@ -32,7 +32,9 @@ src/shell_model.zig
 src/snapshot_book.zig
 src/store.zig
 src/strings.zig
+src/strings_es.zig
 src/strings_ja.zig
+src/strings_zh_hans.zig
 src/ui_contracts.zig
 src/ui_format.zig
 src/ui_model.zig
