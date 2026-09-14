@@ -1271,6 +1271,7 @@ pub const Service = struct {
         self.proxy.drain(self.core, proxyDrivers(live), now_unix_s);
         if (self.proxy.state.success_revision != success_revision) self.synchronizeCodexAuthBackups();
         if (self.proxy.last_completion.serial == completion_serial) return;
+        if (self.currentProxyServiceLive(live)) |service_live| self.proxy_service.refreshRouting(service_live);
         if (self.proxy.last_completion.kind == .sync_config) {
             self.last_proxy_sync_failure_at = if (self.proxy.last_completion.ok) null else now_unix_s;
         }

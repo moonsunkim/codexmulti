@@ -8,6 +8,7 @@ const keychain = @import("../keychain.zig");
 const login_runtime = @import("../login_runtime.zig");
 const proxy_control = @import("../proxy_control_client.zig");
 const proxy_import = @import("../proxy_import_runner.zig");
+const proxy_service_manager = @import("../proxy_service_manager.zig");
 const keychain_test_support = @import("keychain_test_support.zig");
 const runtime_paths = @import("../runtime_paths.zig");
 const store = @import("../store.zig");
@@ -1231,6 +1232,86 @@ test "C9 single-account refresh reads usage before its loopback proxy status" {
     try harness.drainAll();
     try testing.expectEqualStrings("/_proxy/status", harness.proxy_exchange.lastPath());
     try testing.expect(harness.core.snapshotFor(codex_account_id) != null);
+}
+
+test "refresh rereads external routing changes without extra proxy requests or setting writes" {
+    const Routing = struct {
+        bytes: []const u8 = "# direct connection\n",
+        reads: usize = 0,
+        writes: usize = 0,
+        const editor = proxy_service_manager.codex_routing;
+        const vtable: editor.Editor.VTable = .{ .inspect = inspect, .enable = enable, .disable = disable };
+        fn inspect(context: *anyopaque, _: []const u8) editor.Inspection {
+            const self: *@This() = @ptrCast(@alignCast(context));
+            self.reads += 1;
+            return .{ .state = editor.classifyBytes(self.bytes).state, .fingerprint = editor.fingerprint(self.bytes), .readable = true, .exists = true };
+        }
+        fn enable(context: *anyopaque, _: []const u8, _: bool, _: ?editor.Fingerprint) editor.Mutation {
+            const self: *@This() = @ptrCast(@alignCast(context));
+            self.writes += 1;
+            return .{ .status = .refused, .state = .conflicting };
+        }
+        fn disable(context: *anyopaque, path: []const u8) editor.Mutation {
+            return enable(context, path, false, null);
+        }
+    };
+    const harness = try Harness.create();
+    defer harness.destroy();
+    try harness.addCodex();
+    harness.parent_env = &proxy_env;
+    harness.attach();
+    try saveProxySettings(harness);
+    var routing: Routing = .{};
+    var live = harness.live();
+    live.proxy_service = .{
+        .io = testing.io,
+        .allocator = testing.allocator,
+        .paths = try .init(home_dir, home_dir ++ "/CodexMulti.app", app_root, proxy_config_path, 501),
+        .identity = try .init("0123456789abcdef0123456789abcdef01234567", "a" ** 64, "v26.8.1", "b" ** 64, "c" ** 64),
+        .routing = .{ .context = &routing, .vtable = &Routing.vtable },
+    };
+    harness.service.attach(live);
+    harness.service.proxy_service.initialized = true;
+    harness.service.proxy_service.discovery = .{
+        .state = .running,
+        .new_presence = .loaded,
+        .new_arguments_match = true,
+        .health = .{ .state = .healthy },
+        .artifacts = .{ .plist_exists = true, .receipt_exists = true, .plist_matches = true, .receipt_matches = true, .bundle_matches = true },
+        .routing = .{ .state = .off, .readable = true, .exists = true },
+    };
+    const replies = [_]FakeProxyExchange.Reply{
+        .{ .status = 200, .body = proxy_ready_status_v2 },
+        .{ .status = 200, .body = proxy_ready_status_v2 },
+        .{ .status = 200, .body = proxy_ready_status_v2 },
+    };
+    harness.proxy_exchange.replies = &replies;
+    const cases = [_]struct { bytes: []const u8, state: ui_model.CodexRoutingState }{
+        .{ .bytes = proxy_service_manager.codex_routing.canonical_pair, .state = .on },
+        .{ .bytes = "# direct connection\n", .state = .off },
+        .{ .bytes = "chatgpt_base_url = \"https://example.invalid/\"\n", .state = .conflicting },
+    };
+    for (cases, 0..) |case, index| {
+        routing.bytes = case.bytes;
+        // A normal toolbar refresh must reread the same settings as an explicit
+        // proxy status refresh, even after a file change outside the app.
+        if (index == 0) harness.codex_launcher.stream = .{ .chunks = &.{.{ .bytes = script_read }} };
+        try testing.expectEqual(ui_model.CommandOutcome.accepted_pending, harness.service.submit(if (index == 0) .refresh_all else .proxy_refresh_status));
+        try harness.drainAllAt(now);
+        const view = try projectView(harness.service);
+        defer testing.allocator.destroy(view);
+        try testing.expectEqual(case.state, view.codex_routing_state);
+        if (case.state == .on) try testing.expect(std.mem.indexOf(u8, view.toolbar_status_text, "Proxy off") == null);
+        try testing.expectEqual(index + 1, routing.reads);
+        try testing.expectEqual(index + 1, harness.proxy_exchange.calls);
+        try testing.expectEqual(@as(usize, 0), routing.writes);
+    }
+    const reads = routing.reads;
+    const calls = harness.proxy_exchange.calls;
+    for ([_]i64{ 2, 3, 60, 900 }) |offset| harness.service.pump(now + offset);
+    try testing.expectEqual(reads, routing.reads);
+    try testing.expectEqual(calls, harness.proxy_exchange.calls);
+    try testing.expectEqual(@as(usize, 0), routing.writes);
 }
 
 test "C9 refresh fixes a saved-account mismatch and re-reads status" {

@@ -613,6 +613,13 @@ pub const Controller = struct {
         self.initialized = true;
     }
 
+    pub fn refreshRouting(self: *Controller, live: Live) void {
+        // Service jobs already rediscover routing on completion. Avoid observing
+        // an intermediate config while a requested switch is still being applied.
+        if (!self.initialized or self.busy()) return;
+        self.discovery.routing = live.routing.inspect(live.paths.routing_config_path.slice());
+    }
+
     pub fn observeProxyHealth(self: *Controller, health: Health) void {
         if (!self.initialized or self.discovery.new_presence != .loaded) return;
         self.discovery.health = health;

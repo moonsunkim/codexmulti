@@ -432,6 +432,11 @@ test "whole-proxy switch queues off while busy and completes after draining" {
     harness.refresh();
     harness.trace.len = 0;
     try testing.expectEqual(ui_model.CommandOutcome.accepted_pending, harness.controller.submit(.set_enabled_off, false, true, harness.live()));
+    // A status refresh can observe routing still on while Off waits for active
+    // requests. It must preserve the queued user request and avoid restarting.
+    harness.controller.refreshRouting(harness.live());
+    try testing.expectEqual(ui_model.CodexRoutingState.on, harness.controller.discovery.routing.state);
+    try testing.expectEqual(@as(?bool, false), harness.controller.target_enabled);
     harness.controller.reconcile(100, true, harness.live());
     try testing.expectEqual(@as(usize, 0), harness.trace.count(.routing_disable));
     try testing.expectEqual(@as(usize, 0), harness.trace.count(.bootout_new));

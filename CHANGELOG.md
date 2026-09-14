@@ -6,6 +6,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.2.10]
+
+### Fixed
+
+- Refresh the local Codex routing configuration when a proxy status request completes, so changes made outside the app no longer leave the toolbar showing "Proxy off" after refresh.
+- Preserve pending On/Off requests while refreshing status, without adding background polling or rewriting connection settings.
+
 ## [0.2.9]
 
 ### Fixed
