@@ -228,7 +228,7 @@ struct UnifiedRowHeader: View {
                 Color.clear
                     .frame(width: Grid.badgeGap)
                 HStack(alignment: .firstTextBaseline, spacing: Grid.planGap) {
-                    Text(verbatim: row.email_local + (row.has_domain ? row.email_domain : ""))
+                    Text(verbatim: row.identity_label)
                         .font(Face.body)
                         .foregroundStyle(tone.text)
                         .lineLimit(1)

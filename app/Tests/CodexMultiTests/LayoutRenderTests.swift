@@ -316,6 +316,7 @@ final class LayoutRenderTests: XCTestCase {
         let nameStart = Grid.inset + StateBadgeLayout.columnWidth + Grid.badgeGap
         let identityEnd = unifiedIdentityColumnEnd(width: width)
         let overrides: [String: Any] = [
+            "identity_label": "7777",
             "email_local": "7777", "email_domain": "", "has_domain": false,
             "plan": "1177", "usage_caption": "", "usage_percent_text": "",
         ]
@@ -359,12 +360,13 @@ final class LayoutRenderTests: XCTestCase {
         let narrowWidth: CGFloat = 900
         let longEmail = String(repeating: "7", count: 100)
         let base: [String: Any] = [
+            "identity_label": longEmail,
             "email_local": longEmail, "email_domain": "", "has_domain": false,
             "plan": "1177", "has_plan": true,
             "usage_caption": "7777", "usage_percent_text": "77%",
         ]
         let long = try unifiedRow(base)
-        let short = try unifiedRow(base.merging(["email_local": "7777"]) { $1 })
+        let short = try unifiedRow(base.merging(["identity_label": "7777", "email_local": "7777"]) { $1 })
         let wide = try render(UnifiedRowHeader(row: long.row, shell: long.shell), width: wideWidth)
         let narrow = try render(UnifiedRowHeader(row: long.row, shell: long.shell), width: narrowWidth)
         let narrowShort = try render(
@@ -430,6 +432,7 @@ final class LayoutRenderTests: XCTestCase {
             rows[0]["failover_detail_text"] = ""
             rows[0]["failover_in_flight"] = 0
             rows[0]["failover_in_flight_text"] = ""
+            rows[0]["identity_label"] = "7777@1177.71"
             rows[0]["email_local"] = "7777"
             rows[0]["email_domain"] = "@1177.71"
             rows[0]["has_domain"] = true
@@ -466,6 +469,7 @@ final class LayoutRenderTests: XCTestCase {
         var root = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
         var view = try XCTUnwrap(root["view"] as? [String: Any])
         var rows = try XCTUnwrap(view["unified_rows"] as? [[String: Any]])
+        rows[0]["identity_label"] = "77777777"
         rows[0]["email_local"] = "7777"
         rows[0]["email_domain"] = "7777"
         rows[0]["has_domain"] = true

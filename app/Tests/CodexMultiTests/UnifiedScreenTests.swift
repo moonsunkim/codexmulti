@@ -104,6 +104,35 @@ final class UnifiedScreenTests: XCTestCase {
         }
     }
 
+    func testRenamingChangesTheVisibleHeaderWithAndWithoutProviderEmail() throws {
+        let data = try Data(contentsOf: Fixtures.exported("unified-registry-order"))
+        let object = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        let view = try XCTUnwrap(object["view"] as? [String: Any])
+        let original = try XCTUnwrap((view["unified_rows"] as? [[String: Any]])?.first)
+        let shell = try projection("unified-registry-order").shell
+
+        for hasEmail in [true, false] {
+            func pixels(label: String) throws -> Data {
+                var row = original
+                row["identity_label"] = label
+                row["email_local"] = hasEmail ? "provider" : ""
+                row["email_domain"] = hasEmail ? "@example.com" : ""
+                row["has_domain"] = hasEmail
+                let decoded = try JSONDecoder().decode(UnifiedRowView.self, from: Fixtures.data(from: row))
+                let renderer = ImageRenderer(content: UnifiedRowHeader(row: decoded, shell: shell)
+                    .frame(width: 900).environment(\.tone, .light).background(Color.white))
+                renderer.scale = 2
+                let image = try XCTUnwrap(renderer.cgImage)
+                return try XCTUnwrap(image.dataProvider?.data) as Data
+            }
+
+            let before = try pixels(label: "Personal account")
+            XCTAssertEqual(before, try pixels(label: "Personal account"))
+            XCTAssertNotEqual(before, try pixels(label: "Renamed account"),
+                              "A saved name change must change the visible row, including before an email is available")
+        }
+    }
+
     func testExpandedPanelUsesInspectorAsItsSingleFactAuthority() throws {
         let p = try projection("unified-proxy-order")
         let facts = AccountsModel.facts(p.view.inspector, usage: p.view.usage_rows)

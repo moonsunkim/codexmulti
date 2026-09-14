@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.2.11]
+
+### Fixed
+
+- Show the saved account name in the unified account list, so renaming an account immediately changes its visible row instead of continuing to show the provider email. Accounts without a provider email also show their saved name.
+
 ## [0.2.10]
 
 ### Fixed
