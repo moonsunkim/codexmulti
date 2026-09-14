@@ -8,13 +8,14 @@
 
 **Cuando una cuenta de Codex llegue a su límite, sigue con la siguiente.**
 
-CodexMulti reúne tus cuentas de Codex en una aplicación para la barra de menús de macOS. Consulta la capacidad restante de cada cuenta, elige su orden y deja que el cambio automático gestione los errores confirmados de límite de uso.
+CodexMulti reúne tus cuentas de Codex en una aplicación para la barra de menús de macOS. Consulta el uso y las horas de restablecimiento de cada cuenta, elige su orden y deja que el cambio automático gestione los errores confirmados de límite de uso.
 
 [Descargar](https://github.com/moonsunkim/codexmulti/releases/latest) · [Novedades](CHANGELOG.md) · [Seguridad](SECURITY.md) · [Contribuir](CONTRIBUTING.md)
 
+[![Latest release](https://img.shields.io/github/v/release/moonsunkim/codexmulti)](https://github.com/moonsunkim/codexmulti/releases/latest)
 [![CI](https://github.com/moonsunkim/codexmulti/actions/workflows/ci.yml/badge.svg)](https://github.com/moonsunkim/codexmulti/actions/workflows/ci.yml)
 
-- **Consulta todas tus cuentas.** El uso restante, las horas de restablecimiento y la disponibilidad aparecen en una sola ventana. La barra de menús muestra el total del conjunto; **Cuentas…** abre la lista completa con un clic.
+- **Consulta todas tus cuentas.** El uso, las horas de restablecimiento y los estados del cambio automático aparecen en una sola ventana. La barra de menús muestra un resumen del conjunto; **Cuentas…** abre la lista completa con un clic.
 - **Configura el orden una vez.** Arrastra las cuentas para indicar el orden que prefieres. Cuando una solicitud apta encuentra un límite de uso confirmado, el proxy prueba la siguiente cuenta disponible.
 - **Activa un solo interruptor.** La configuración incluye el proxy local y su entorno Node. Las cuentas añadidas o reconectadas se incorporan automáticamente mientras la aplicación está abierta.
 - **Guarda las credenciales en tu Mac.** Cada cuenta tiene su propio directorio de Codex y una copia en el Llavero. No hace falta crear una cuenta de CodexMulti ni conectarse a un servicio alojado.
@@ -23,10 +24,10 @@ CodexMulti reúne tus cuentas de Codex en una aplicación para la barra de menú
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/menu-bar-dark.png">
     <source media="(prefers-color-scheme: light)" srcset="assets/screenshots/menu-bar-light.png">
-    <img src="assets/screenshots/menu-bar-light.png" width="440" alt="Menú de CodexMulti con capacidad total, uso, tiempos de reinicio y cuenta activa; cuentas de ejemplo">
+    <img src="assets/screenshots/menu-bar-light.png" width="440" alt="Menú de CodexMulti con porcentaje restante promedio, uso, tiempos de reinicio y cuenta activa; cuentas de ejemplo">
   </picture>
 </p>
-<p align="center"><sub>Consulta la capacidad total, el uso de cada cuenta y los tiempos de reinicio desde la barra de menús. Se muestran cuentas de ejemplo.</sub></p>
+<p align="center"><sub>Consulta el porcentaje restante promedio, el uso de cada cuenta y los tiempos de reinicio desde la barra de menús. Se muestran cuentas de ejemplo.</sub></p>
 
 ## ¿Qué es el cambio automático y para qué sirve?
 
@@ -40,7 +41,7 @@ Cada cuenta conserva su suscripción y sus límites; el cambio automático facil
 
 ## Instalación
 
-Necesitas **un Mac con Apple Silicon y macOS 26 o posterior**, Codex CLI con inicio de sesión de ChatGPT y al menos dos cuentas para aprovechar el cambio automático.
+Necesitas **un Mac con Apple Silicon y macOS 26 o posterior**, **Codex CLI 0.146.0 o posterior** con inicio de sesión de ChatGPT y al menos dos cuentas para aprovechar el cambio automático.
 
 ```sh
 brew install --cask moonsunkim/tap/codexmulti
@@ -67,6 +68,8 @@ Mueve la aplicación verificada `CodexMulti.app` a `/Applications` y ábrela.
 
 </details>
 
+Si ya está instalada, usa **Ajustes → Actualización de software → Buscar actualizaciones**. Si aparece **Configurar actualizaciones seguras**, cierra los clientes de Codex y completa esa configuración inicial. Tú inicias la búsqueda y la instalación. Consulta [Actualizaciones desde la aplicación](#actualizaciones-desde-la-aplicación).
+
 ## Dos pasos para empezar
 
 1. **Añade tus cuentas.** Pulsa **+**, asigna un nombre y completa el inicio de sesión oficial en el navegador. Repite el proceso con las cuentas que quieras incluir.
@@ -78,10 +81,14 @@ Las cuentas añadidas, las reconexiones y los cambios de orden se aplican autom�
 
 Abre **Cuentas…** desde la barra de menús para ver el conjunto completo. En el menú **…** de una cuenta, **Usar en cambio automático…** la selecciona para las nuevas solicitudes. **Pausar en cambio automático** deja de enviarle solicitudes nuevas; **Reanudar en cambio automático** vuelve a incluirla. Las solicitudes en curso continúan con su cuenta actual.
 
+Las filas muestran el porcentaje **usado** del periodo indicado: **100% significa que ese límite está agotado**. El conjunto muestra el promedio de capacidad semanal restante de las cuentas incluidas con uso semanal conocido. Se excluyen las cuentas en pausa y no válidas; las que están en espera por su límite siguen contando en este promedio. No es una suma de tokens ni el número de cuentas listas para recibir solicitudes ahora.
+
+El uso es una instantánea de la última consulta. Actualiza una cuenta desde su menú **…** o usa **Actualizar todas las cuentas**. La actualización programada está **desactivada** por defecto; Ajustes ofrece intervalos de **15 min, 30 min o 1 hora**. Al actualizar también se consulta el estado del proxy local. **Cambiar nombre…** cambia el nombre mostrado en CodexMulti, no el correo de la cuenta de OpenAI.
+
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/accounts-dark.png">
   <source media="(prefers-color-scheme: light)" srcset="assets/screenshots/accounts-light.png">
-  <img alt="Conjunto de cuentas con uso restante, horas de restablecimiento y estados activa, lista, en espera y en pausa" src="assets/screenshots/accounts-light.png">
+  <img alt="Conjunto de cuentas con porcentajes usados, horas de restablecimiento y estados activa, lista, en espera y en pausa" src="assets/screenshots/accounts-light.png">
 </picture>
 
 <picture>
@@ -98,6 +105,8 @@ El chino disponible es el simplificado (`zh-Hans`); el español usa una traducci
 
 Expande una cuenta para ver sus periodos de uso, autenticación, estado del cambio automático, última actualización y restablecimientos disponibles indicados por el proveedor.
 
+Si el proveedor informa de un crédito disponible, el menú de la cuenta puede ofrecer **Restablecer…**. Se comprueba el estado actual y se requieren dos confirmaciones antes de gastar un crédito existente. **Borrar espera…** solo elimina la espera cuando el límite ya se restableció por otra vía; no consume un crédito.
+
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/accounts-expanded-dark.png">
   <source media="(prefers-color-scheme: light)" srcset="assets/screenshots/accounts-expanded-light.png">
@@ -113,6 +122,7 @@ Todas las capturas usan cuentas ficticias.
 Solo tras una respuesta confirmada de límite de uso: un HTTP `429` con tipo de error `usage_limit_reached` antes de empezar la transmisión, la misma respuesta durante el establecimiento de un WebSocket o un error `usage_limit_reached` dentro de un WebSocket de Responses antes de que llegue cualquier evento de respuesta al cliente. Cada cuenta apta se prueba como máximo una vez por solicitud.
 
 El cambio manual se aplica a la siguiente solicitud incluso si Codex reutiliza un WebSocket existente. Las respuestas ya iniciadas terminan con su cuenta original. El contexto de la conversación se conserva al cambiar de cuenta; las transmisiones independientes pueden continuar sin interrupción.
+Si el contexto completo ya no está en la caché, el cliente debe volver a enviarlo; el proxy no omite el historial de forma silenciosa.
 
 Los fallos de red, los errores `5xx`, las transmisiones interrumpidas, las incompatibilidades de plan, `usage_not_included` y los `429` no reconocidos detienen la solicitud. Una respuesta que ya ha empezado no se reproduce en otra cuenta. Si no queda ninguna cuenta apta, la solicitud falla en lugar de reintentarse indefinidamente.
 
@@ -146,6 +156,7 @@ Pruebas:
 (cd core && zig build test && zig build test-bridge)
 (cd app && CODEXMULTI_TEST_HEADLESS=1 swift test)   # no uses swift test sin esta variable: abre ventanas
 (cd proxy && npm test)
+(cd updater && CODEXMULTI_TEST_HEADLESS=1 swift test)
 ```
 
 CI comprueba el núcleo Zig, el proxy Node, la interfaz SwiftUI y los scripts de distribución en macOS. El trabajo de SwiftUI usa el SDK de macOS 26.
@@ -171,7 +182,7 @@ Abre **Actualización de software** en Ajustes. La primera configuración pide c
 
 Los cambios en las cuentas se pausan durante una actualización. Ajustes muestra la actualización pendiente y permite cancelarla antes de confirmar la detención, o elegir **Desactivar al finalizar las solicitudes**. El agente de actualización sigue ejecutándose aunque se cierre la aplicación de la barra de menús. Si el entorno nuevo no arranca, restaura el entorno compatible anterior. Un proceso activo pero inaccesible requiere recuperación y no se detiene por la fuerza. **Mostrar aplicación anterior** abre la aplicación firmada conservada cuando la instalación necesita recuperación manual.
 
-La búsqueda de actualizaciones está habilitada en versiones publicadas con una fuente HTTPS y una clave pública de Sparkle fijada. Las compilaciones locales sin firma indican que la configuración de distribución no está disponible. Consulta el [diseño y las restricciones de actualización](docs/update-design.md) y la [configuración de publicación](docs/updater-release.md).
+La búsqueda de actualizaciones está habilitada en versiones publicadas con una fuente HTTPS y una clave pública de Sparkle fijada. Las compilaciones locales sin fuente de actualizaciones indican que la configuración de distribución no está disponible. Consulta el [diseño y las restricciones de actualización](docs/update-design.md) y la [configuración de publicación](docs/updater-release.md).
 
 <details>
 <summary>Recuperación, desinstalación y reparación manual del enrutamiento</summary>
@@ -197,6 +208,8 @@ Si la aplicación o el agente no se pueden ejecutar, abre `~/.codex/config.toml`
 chatgpt_base_url = "http://127.0.0.1:8787/backend-api/"
 openai_base_url = "http://127.0.0.1:8787/backend-api/codex"
 ```
+
+La siguiente comprobación solo se aplica a los agentes antiguos que arrancan Node directamente. Los entornos gestionados usan `codexmulti-runtime-launcher`; utiliza el agente nativo o los controles de recuperación anteriores. No detengas por la fuerza un entorno con solicitudes activas.
 
 Después, consulta `launchctl print "gui/$(id -u)/dev.codexmulti.app.proxy"`. Solo si sus argumentos apuntan a `Contents/Helpers/node`, `Contents/Resources/proxy/src/server.mjs`, `--config` y la configuración del proxy de tu aplicación CodexMulti, detenlo con `launchctl bootout "gui/$(id -u)/dev.codexmulti.app.proxy"` y elimina `~/Library/LaunchAgents/dev.codexmulti.app.proxy.plist`. Reinicia los clientes de Codex para que vuelvan a leer la configuración de conexión directa. No reemplaces toda la configuración compartida con una copia antigua.
 

@@ -31,19 +31,19 @@ a coordinated `cm.bridge/1` schema change is intended.
 
 ## Documentation
 
-- [Architecture]the design notes: surfaces, service boundaries,
-  providers, storage, concurrency, reset safety, and passive I/O.
-- [Naming and continuity]the design notes: names that are presentation-only and
-  identifiers that must remain byte-for-byte stable.
-- [Operations]the design notes: safe local build and fixture procedures.
-- [Testing]the design notes: the SDK-free aggregate and bridge gate topology.
+- [Repository overview](../README.md): product behavior, setup, build and tests.
+- [UI translations](../docs/i18n.md): shared catalogs and fixture regeneration.
+- [Update design](../docs/update-design.md): runtime ownership and recovery constraints.
+- [Security](../SECURITY.md): local trust and credential handling.
 
 ## Safety contract
 
-- Provider and login I/O starts only after an explicit user command.
-- Projection and pump operations do not originate provider work.
-- Proxy status/switch/pause/reload/sync occur only after their explicit UI
-  actions; current-run v2 mappings own Codex switching without local fallback.
+- Login and reset redemption require explicit user actions. Usage refresh runs on request
+  or at the configured auto-refresh interval; the default interval is Off.
+- Projection is read-only. The service pump advances authorized work, scheduled usage refresh
+  and enabled Failover recovery/configuration reconciliation.
+- Proxy controls follow UI actions and enabled Failover maintenance. There is no independent
+  periodic proxy-status poll; current-run v2 mappings own switching without local auth fallback.
 - Concurrency remains globally two operations and one per account; workers are
   canceled-and-joined before borrowed state is released.
 - Durable app documents contain no credential material.

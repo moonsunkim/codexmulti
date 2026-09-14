@@ -9,13 +9,14 @@
 **한 계정의 사용 한도에 도달해도, 다음 계정으로 작업을 이어가세요.**
 
 CodexMulti는 여러 Codex 계정을 한곳에서 관리하는 macOS 메뉴 막대 앱입니다.
-계정별 남은 사용량을 확인하고 전환 순서를 정해 두면, 사용 한도 오류가 발생했을 때 다음 계정으로 자동 전환합니다.
+계정별 사용량과 재설정 시간을 확인하고 전환 순서를 정해 두면, 사용 한도 오류가 발생했을 때 다음 계정으로 자동 전환합니다.
 
 [다운로드](https://github.com/moonsunkim/codexmulti/releases/latest) · [변경 내역](CHANGELOG.md) · [보안](SECURITY.md) · [기여 안내](CONTRIBUTING.md)
 
+[![Latest release](https://img.shields.io/github/v/release/moonsunkim/codexmulti)](https://github.com/moonsunkim/codexmulti/releases/latest)
 [![CI](https://github.com/moonsunkim/codexmulti/actions/workflows/ci.yml/badge.svg)](https://github.com/moonsunkim/codexmulti/actions/workflows/ci.yml)
 
-- **모든 계정을 한눈에.** 남은 사용량, 한도 재설정 시각, 사용 가능한 계정을 한 화면에서 확인합니다. 메뉴 막대에서 전체 남은 용량을 보고, **계정…**을 눌러 목록을 바로 열 수 있습니다.
+- **모든 계정을 한눈에.** 계정별 사용량, 한도 재설정 시각, 자동 전환 상태를 한 화면에서 확인합니다. 메뉴 막대에서 평균 잔여율을 보고, **계정…**을 눌러 목록을 바로 열 수 있습니다.
 - **순서는 한 번만 설정.** 계정을 드래그해 원하는 순서로 정렬하세요. 사용 한도 오류가 확인되면 다음 사용 가능한 계정으로 요청을 재시도합니다.
 - **스위치 하나로 시작.** 필요한 로컬 프록시와 Node 런타임이 앱에 포함되어 있습니다. 앱이 열려 있으면 계정 추가와 재연결도 자동으로 반영됩니다.
 - **인증 정보는 내 Mac에.** 계정마다 별도의 Codex 디렉터리와 키체인 백업을 사용합니다. CodexMulti 회원가입이나 별도 서버 연결은 필요하지 않습니다.
@@ -24,10 +25,10 @@ CodexMulti는 여러 Codex 계정을 한곳에서 관리하는 macOS 메뉴 막�
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/menu-bar-dark.png">
     <source media="(prefers-color-scheme: light)" srcset="assets/screenshots/menu-bar-light.png">
-    <img src="assets/screenshots/menu-bar-light.png" width="440" alt="예시용 계정으로 표시한 CodexMulti 메뉴: 전체 잔여 용량, 계정별 사용량과 재설정 시간, 활성 계정">
+    <img src="assets/screenshots/menu-bar-light.png" width="440" alt="예시용 계정으로 표시한 CodexMulti 메뉴: 평균 잔여율, 계정별 사용량과 재설정 시간, 활성 계정">
   </picture>
 </p>
-<p align="center"><sub>메뉴 막대에서 전체 잔여 용량과 계정별 사용량·재설정 시간을 바로 확인합니다. 예시용 계정입니다.</sub></p>
+<p align="center"><sub>메뉴 막대에서 풀의 평균 잔여율과 계정별 사용량·재설정 시간을 바로 확인합니다. 예시용 계정입니다.</sub></p>
 
 ## Failover는 어떤 문제를 해결하나요?
 
@@ -46,7 +47,7 @@ B도 한도에 도달했다면 다음 사용 가능한 계정을 시도합니다
 
 ## 설치
 
-**macOS 26 이상을 실행하는 Apple Silicon Mac**과 ChatGPT 로그인을 사용하는 Codex CLI가 필요합니다.
+**macOS 26 이상을 실행하는 Apple Silicon Mac**과 ChatGPT 로그인을 사용하는 **Codex CLI 0.146.0 이상**이 필요합니다.
 자동 계정 전환을 활용하려면 계정이 두 개 이상 있어야 합니다.
 
 ```sh
@@ -77,6 +78,8 @@ shasum -a 256 -c CodexMulti-<version>.zip.sha256
 
 </details>
 
+이미 설치했다면 **설정 → 소프트웨어 업데이트 → 업데이트 확인**을 사용하세요. **안전한 업데이트 설정**이 표시되면 Codex 클라이언트를 종료하고 처음 한 번 설정을 마쳐야 합니다. 업데이트 확인과 설치는 사용자가 시작합니다. 자세한 내용은 [앱 내 업데이트](#앱-내-업데이트)를 참고하세요.
+
 ## 두 단계로 시작하기
 
 1. **계정 추가.** **+**를 누르고 계정 이름을 입력한 뒤 공식 브라우저 로그인 절차를 완료하세요. 사용할 계정마다 반복합니다.
@@ -93,10 +96,14 @@ shasum -a 256 -c CodexMulti-<version>.zip.sha256
 새 요청에 사용할 계정을 직접 바꿀 수 있습니다. **자동 전환 대상에서 제외**는 그 계정에 새 요청을 보내지 않게 하며,
 **자동 전환 대상에 포함**으로 다시 사용할 수 있습니다. 이미 처리 중인 요청은 계속 진행됩니다.
 
+계정 행의 비율은 표시된 기간에 **사용한 양**입니다. **100%는 해당 한도를 모두 사용했다는 뜻**입니다. **풀**은 주간 사용량이 보고된 포함 계정들의 평균 잔여율입니다. 제외되거나 인증이 무효인 계정은 빼지만, 한도 재설정을 기다리는 계정은 포함합니다. 토큰 총합이나 지금 바로 요청을 받을 수 있는 계정 수를 뜻하지 않습니다.
+
+사용량은 마지막 조회 결과입니다. 계정의 **…** 메뉴에서 개별 갱신하거나 **모든 계정 새로 고침**을 사용하세요. 자동 갱신은 기본적으로 **꺼짐**이며, 설정에서 **15분·30분·1시간** 간격을 선택할 수 있습니다. 새로 고침은 로컬 프록시 상태도 갱신합니다. **이름 변경…**은 CodexMulti의 표시 이름을 바꾸며 OpenAI 계정 이메일은 바꾸지 않습니다.
+
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/accounts-dark.png">
   <source media="(prefers-color-scheme: light)" srcset="assets/screenshots/accounts-light.png">
-  <img alt="계정별 남은 사용량, 재설정 시각과 사용 상태를 보여 주는 CodexMulti 계정 목록" src="assets/screenshots/accounts-light.png">
+  <img alt="계정별 사용한 비율, 재설정 시각과 자동 전환 상태를 보여 주는 CodexMulti 계정 목록" src="assets/screenshots/accounts-light.png">
 </picture>
 
 <picture>
@@ -113,6 +120,8 @@ shasum -a 256 -c CodexMulti-<version>.zip.sha256
 
 계정을 펼치면 사용량 기간별 정보, 인증 및 자동 전환 상태, 마지막 갱신 시각과 보고된 리셋 크레딧을 확인할 수 있습니다.
 
+제공자가 사용 가능한 크레딧을 보고하면 계정 메뉴에서 **리셋 1개 사용…**을 선택할 수 있습니다. 최신 상태를 확인하고 두 단계의 확인을 거친 뒤 기존 크레딧 1개를 사용합니다. **대기 해제…**는 외부에서 이미 한도를 초기화한 계정의 대기만 해제하는 별도 동작이며, 크레딧을 사용하지 않습니다.
+
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/accounts-expanded-dark.png">
   <source media="(prefers-color-scheme: light)" srcset="assets/screenshots/accounts-expanded-light.png">
@@ -125,8 +134,9 @@ shasum -a 256 -c CodexMulti-<version>.zip.sha256
 
 ## 계정은 언제 전환되나요?
 
-응답 스트림이 시작되기 전 HTTP `429`의 오류 유형이 `usage_limit_reached`인 경우,
-또는 WebSocket 연결 협상 중 같은 응답을 받은 경우에만 전환합니다. 하나의 요청에서 각 후보 계정은 최대 한 번씩 시도합니다.
+응답 스트림 시작 전 HTTP `429`의 오류 유형이 `usage_limit_reached`인 경우, WebSocket 연결 협상 중 같은 응답을 받은 경우, 또는 이미 연결된 Responses WebSocket에서 응답 이벤트가 전달되기 전에 `usage_limit_reached`가 발생한 경우에 전환합니다. 한 요청에서 각 후보 계정은 최대 한 번씩 시도합니다.
+
+수동 전환은 기존 WebSocket을 재사용하더라도 다음 요청부터 적용됩니다. 시작된 응답은 원래 계정에서 마치고, 계정이 바뀐 후 이어지는 요청에는 대화 문맥을 전달합니다. 독립된 대화 스트림은 각각 계속 처리할 수 있습니다. 완전한 이력이 캐시에 남아 있지 않으면 클라이언트가 전체 문맥을 다시 보내야 하며, 프록시는 대화 내용을 임의로 생략하지 않습니다.
 
 네트워크 오류, `5xx`, 중단된 스트림, 구독 불일치, `usage_not_included`, 인식하지 못하는 `429` 응답은 요청을 중단합니다.
 이미 시작한 응답은 다른 계정에서 재실행하지 않습니다. 사용할 수 있는 계정이 더 없으면 무한 재시도하지 않고 오류를 반환합니다.
@@ -169,6 +179,7 @@ shasum -a 256 -c CodexMulti-<version>.zip.sha256
 (cd core && zig build test && zig build test-bridge)
 (cd app && CODEXMULTI_TEST_HEADLESS=1 swift test)
 (cd proxy && npm test)
+(cd updater && CODEXMULTI_TEST_HEADLESS=1 swift test)
 ```
 
 Swift 테스트는 반드시 `CODEXMULTI_TEST_HEADLESS=1`을 지정하세요. 일반 `swift test`는 창을 엽니다.
@@ -184,10 +195,20 @@ CI는 macOS에서 Zig 코어, Node 프록시, SwiftUI 셸과 배포 스크립트
 | [SwiftUI 앱](app/) | 창, 메뉴, 접근성, macOS 연동 |
 | [Zig 코어](core/) | 계정, 백그라운드 작업, 안전한 연결 설정 변경, 모든 UI 문구 |
 | [Node 프록시](proxy/) | 로컬 요청 전달과 사용 가능한 계정 간 자동 전환 |
+| [네이티브 업데이터](updater/) | 서명된 실행 환경 준비, 새 요청 유입 제어, 장애 복구 |
 
 앱은 타입이 지정된 동작 요청을 코어에 전달하고, 코어가 반환한 상태를 표시합니다.
 프록시는 사용자별 LaunchAgent로 독립 실행되므로 메뉴 막대 앱을 종료해도 요청 처리를 계속할 수 있습니다.
 프록시와 고정 버전 Node 런타임은 모두 앱에 포함되어 있습니다.
+안전한 업데이트 설정 이후에는 `~/Library/Application Support/CodexMulti/runtimes/`에 검증된 별도 실행 환경을 두고 프록시를 실행합니다.
+
+### 앱 내 업데이트
+
+**설정 → 소프트웨어 업데이트 → 업데이트 확인**에서 새 버전을 확인하고 설치합니다. 처음 한 번은 Codex 클라이언트를 종료한 뒤 **안전한 업데이트 설정**을 완료해야 합니다. 이후에는 앱을 교체하는 동안 기존 프록시를 유지합니다. 프록시 실행 파일이 바뀌면 HTTP 요청, WebSocket 연결, 인증 갱신이 끝날 때까지 기다립니다. UI만 바뀐 업데이트는 기존 프록시 프로세스를 유지합니다. 실행 환경을 전환하는 짧은 동안 새 연결이 실패할 수 있지만, 진행 중인 요청을 강제로 끊거나 다시 보내지는 않습니다.
+
+업데이트 중에는 계정 변경을 잠시 막습니다. 설정에서 진행 상태를 확인하고, 중지 확정 전 취소하거나 요청이 끝난 뒤 자동 전환을 끄도록 예약할 수 있습니다. 메뉴 막대 앱을 닫아도 업데이트 에이전트는 계속 동작합니다. 새 실행 환경이 시작하지 못하면 이전의 호환되는 환경으로 복구합니다. 살아 있지만 연결할 수 없는 프로세스는 강제로 종료하지 않고 복구가 필요한 상태로 표시합니다. 앱 설치 복구가 필요하면 **이전 앱 보기**로 보존된 서명 앱을 열 수 있습니다.
+
+업데이트는 HTTPS 피드와 고정된 Sparkle 공개 키가 설정된 배포 빌드에서 사용할 수 있습니다. 업데이트 피드가 없는 로컬 빌드에서는 사용할 수 없습니다. [업데이트 설계](docs/update-design.md)와 [배포 설정](docs/updater-release.md)을 참고하세요.
 
 <details>
 <summary>복구, 제거, 연결 설정 수동 복원</summary>
@@ -195,19 +216,18 @@ CI는 macOS에서 Zig 코어, Node 프록시, SwiftUI 셸과 배포 스크립트
 자동 계정 전환이 켜져 있으면 앱이 복구를 자동 재시도합니다. 진행 중인 요청 때문에 변경을 미뤄야 하면 상태에 이유가 표시됩니다.
 자동 계정 전환을 끄면 해당 요청이 끝난 뒤 Codex 직접 연결로 복원합니다.
 
-앱을 제거하기 전에 Codex 클라이언트를 종료하고 다음을 실행하세요.
+안전한 업데이트를 설정한 설치에서는 Codex 클라이언트와 CodexMulti 메뉴 막대 앱을 종료한 뒤 다음을 실행하세요.
 
 ```sh
-"/Applications/CodexMulti.app/Contents/Helpers/codexmulti-maintenance" prepare-uninstall
+"/Applications/CodexMulti.app/Contents/Helpers/codexmulti-update-agent" prepare-removal \
+  --app "/Applications/CodexMulti.app" \
+  --config "$HOME/.config/codexmulti/proxy.json"
 brew uninstall --cask codexmulti
 ```
 
-내장 도구는 앱이 관리하는 연결 설정 두 개만 복원하고, 정상 처리 중인 요청이 끝나기를 기다립니다.
-LaunchAgent의 정확한 실행 인자를 확인한 뒤 plist와 서비스 설치 기록을 제거합니다.
-계정 인증 정보, 사용량 이력, 리셋 기록은 재설치할 때 사용할 수 있도록 보존합니다.
-Homebrew는 제거 시 이 도구를 자동 실행합니다. 설정 충돌이나 사용 중인 서비스가 보고되면 문제를 해결하고 재시도한 뒤 앱을 삭제하세요.
-Homebrew 업데이트와 재설치 때도 정리 작업을 실행하므로 이후 CodexMulti를 열고 자동 계정 전환을 다시 켜세요.
-`--zap`을 사용하면 저장된 계정 데이터도 추가로 삭제됩니다.
+프록시 설정 경로를 바꿨다면 실제 경로를 지정하세요. 준비 과정은 요청이 끝나기를 기다리고, CodexMulti가 관리하는 연결 설정만 복원한 뒤 자동 시작 등록을 제거합니다. `proxy_busy`가 나오면 에이전트가 계속 기다리므로 클라이언트가 종료된 뒤 준비 명령을 다시 실행하세요. 계정 인증 정보, 사용량 이력, 리셋 기록은 재설치를 위해 보존합니다.
+
+Homebrew cask는 앱을 삭제하기 전에 명시적인 제거 준비가 완료됐는지 확인합니다. `auto_updates`로 등록되어 있으므로 일반 업데이트는 앱 내 업데이트를 사용하세요. Homebrew는 제거 스크립트에 업데이트와 삭제를 확실히 구분해 전달하지 않으므로, 준비되지 않은 `--greedy` 업데이트나 재설치는 앱 교체 전에 중단됩니다. 자동 계정 전환을 몰래 끄지 않습니다. `--zap`은 저장된 계정 데이터도 삭제합니다. 네이티브 업데이트 도구가 없는 구버전은 제거 전에 기존의 `codexmulti-maintenance prepare-uninstall` 절차를 사용하세요.
 
 앱이나 내장 도구가 실행되지 않으면 `~/.codex/config.toml`을 텍스트 편집기로 여세요.
 최상위에 다음 항목이 있는 경우에만 정확히 해당 두 항목을 제거하고 나머지 설정은 보존하세요.
@@ -216,6 +236,8 @@ Homebrew 업데이트와 재설치 때도 정리 작업을 실행하므로 이�
 chatgpt_base_url = "http://127.0.0.1:8787/backend-api/"
 openai_base_url = "http://127.0.0.1:8787/backend-api/codex"
 ```
+
+다음 서비스 제거 확인은 Node를 직접 실행하는 구버전 LaunchAgent에만 해당합니다. 별도 실행 환경을 사용하는 설치는 `codexmulti-runtime-launcher`로 시작하므로 앞에서 설명한 네이티브 도구와 복구 기능을 사용하세요. 요청을 처리 중인 실행 환경을 강제로 종료하지 마세요.
 
 이후 `launchctl print "gui/$(id -u)/dev.codexmulti.app.proxy"`로 실행 인자를 확인하세요.
 CodexMulti 앱의 `Contents/Helpers/node`, `Contents/Resources/proxy/src/server.mjs`, `--config`와

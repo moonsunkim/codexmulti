@@ -5,7 +5,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
 PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd -P)"
 REPO_ROOT="$(cd "$PROJECT_DIR/.." && pwd -P)"
-BUNDLE="$PROJECT_DIR/dist/staging/CodexMulti.app"
+BUNDLE="${CODEXMULTI_SCREENSHOT_BUNDLE:-$PROJECT_DIR/dist/staging/CodexMulti.app}"
 EXECUTABLE="$BUNDLE/Contents/MacOS/CodexMulti"
 FIXTURE="$REPO_ROOT/core/fixtures/bridge/viewstate-proxy-reachable-mapped.json"
 EXPANDED_FIXTURE="$PROJECT_DIR/fixtures/showcase/accounts-expanded.json"
@@ -41,6 +41,7 @@ validate_synthetic_fixture "$FIXTURE"
 validate_synthetic_fixture "$EXPANDED_FIXTURE"
 
 if test ! -x "$EXECUTABLE"; then
+    test -z "${CODEXMULTI_SCREENSHOT_BUNDLE:-}" || die "screenshot bundle is missing: $BUNDLE"
     printf 'Staging bundle not found; building %s\n' "$BUNDLE"
     "$SCRIPT_DIR/build-app.sh"
 fi
@@ -55,20 +56,8 @@ fi
 
 mkdir -p "$OUTPUT_DIR"
 lifecycle_log="$(mktemp "${TMPDIR:-/private/tmp}/codexmulti-screenshots-lifecycle.XXXXXX")"
-runner_root="$(mktemp -d "$PROJECT_DIR/dist/staging/.screenshot-runner.XXXXXX")"
-runner="$runner_root/CodexMulti"
-
-
-
-
-/bin/cp -f "$EXECUTABLE" "$runner"
-/bin/ln -s "$BUNDLE/Contents/Frameworks/Sparkle.framework" "$runner_root/Sparkle.framework"
-chmod 0755 "$runner"
 cleanup() {
     /bin/rm -f -- "$lifecycle_log"
-    case "$runner_root" in
-        "$PROJECT_DIR"/dist/staging/.screenshot-runner.*) /bin/rm -rf -- "$runner_root" ;;
-    esac
 }
 trap cleanup EXIT
 
@@ -86,7 +75,7 @@ capture_one() {
     printf 'Rendering %s (%s, %s)\n' "$output" "$appearance" "$tab"
     CODEXMULTI_LIFECYCLE_LOG="$lifecycle_log" \
     CODEXMULTI_CAPTURE_VERSION_TEXT="$version_text" \
-    "$runner" \
+    "$EXECUTABLE" \
         "--fixture=$fixture" \
         "--capture=$output" \
         "--frame=$frame" \
@@ -99,10 +88,10 @@ capture_one() {
 
 capture_one accounts-expanded-light.png light accounts "$EXPANDED_FIXTURE" 0,0,1000,780
 capture_one accounts-expanded-dark.png dark accounts "$EXPANDED_FIXTURE" 0,0,1000,780
-capture_one accounts-light.png light accounts "$FIXTURE" 0,0,1000,700
-capture_one accounts-dark.png dark accounts "$FIXTURE" 0,0,1000,700
-capture_one settings-light.png light settings "$FIXTURE" 0,0,1000,780
-capture_one settings-dark.png dark settings "$FIXTURE" 0,0,1000,780
+capture_one accounts-light.png light accounts "$FIXTURE" 0,0,1000,580
+capture_one accounts-dark.png dark accounts "$FIXTURE" 0,0,1000,580
+capture_one settings-light.png light settings "$FIXTURE" 0,0,1000,600
+capture_one settings-dark.png dark settings "$FIXTURE" 0,0,1000,600
 
 front_after="$($LSAPPINFO front)"
 printf 'Front application after:  %s\n' "$front_after"

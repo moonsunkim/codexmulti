@@ -8,15 +8,16 @@
 
 **When one Codex account hits its limit, keep going with the next.**
 
-CodexMulti puts your Codex accounts in one macOS menu-bar app. See what each account has left,
+CodexMulti puts your Codex accounts in one macOS menu-bar app. Track each account’s usage and reset times,
 choose their order, and let automatic failover handle confirmed usage-limit errors.
 
 [Download](https://github.com/moonsunkim/codexmulti/releases/latest) · [Changelog](CHANGELOG.md) · [Security](SECURITY.md) · [Contributing](CONTRIBUTING.md)
 
+[![Latest release](https://img.shields.io/github/v/release/moonsunkim/codexmulti)](https://github.com/moonsunkim/codexmulti/releases/latest)
 [![CI](https://github.com/moonsunkim/codexmulti/actions/workflows/ci.yml/badge.svg)](https://github.com/moonsunkim/codexmulti/actions/workflows/ci.yml)
 
 
-- **See your whole pool.** Remaining usage, reset times and account availability are together in one window. The menu bar keeps the pool total close by; **Accounts…** opens the full list in one click.
+- **See your whole pool.** Account usage, reset times and failover states are together in one window. The menu bar keeps the pool summary close by; **Accounts…** opens the full list in one click.
 - **Set the order once.** Drag accounts into your preferred order. When an eligible request hits a confirmed usage limit, the proxy tries the next available account.
 - **Turn on one switch.** Failover setup includes the local proxy and its Node runtime. Added or reconnected accounts are picked up automatically while the app is open.
 - **Keep credentials local.** Each account has its own Codex directory and Keychain backup. There is no CodexMulti account to create or hosted service to connect to.
@@ -50,7 +51,7 @@ See [when account switching happens](#when-will-it-switch-accounts) for the exac
 
 ## Install
 
-You need **an Apple Silicon Mac running macOS 26 or later**, Codex CLI with ChatGPT sign-in,
+You need **an Apple Silicon Mac running macOS 26 or later**, **Codex CLI 0.146.0 or later** with ChatGPT sign-in,
 and at least two accounts for failover to be useful.
 
 ```sh
@@ -82,6 +83,8 @@ Move the verified `CodexMulti.app` into `/Applications` and open it.
 
 </details>
 
+For an existing installation, use **Settings → Software update → Check for updates** for normal upgrades. If **Set up safe updates** appears, close Codex clients and complete that one-time setup first. Checks and installation are started by you; see [in-app updates](#in-app-updates).
+
 ## Two steps to get going
 
 1. **Add your accounts.** Click **+**, give the account a name, and complete the official browser sign-in. Repeat for the accounts you want in the pool.
@@ -100,16 +103,20 @@ In an account's **…** menu, **Use in failover…** selects that account for ne
 **Pause in failover** excludes it from receiving new requests; **Resume in failover** includes it again.
 Requests already in flight continue on their current account.
 
+Account rows show **used** capacity for the displayed period: **100% means that limit is exhausted**. **Pool** shows the average weekly capacity remaining across included accounts with reported weekly usage. Paused and invalid accounts are excluded; cooling accounts still contribute to this average. It is not a combined token allowance or a count of accounts ready to accept a request.
+
+Usage is a saved snapshot. Refresh one account from its **…** menu, or use **Refresh All Accounts**. Scheduled refresh is **Off** by default; Settings offers **15 min, 30 min or 1 hour**. Refresh also updates the local proxy status. **Rename…** changes the name displayed in CodexMulti, not the account’s OpenAI email.
+
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/accounts-dark.png">
   <source media="(prefers-color-scheme: light)" srcset="assets/screenshots/accounts-light.png">
-  <img alt="CodexMulti account pool with remaining usage, reset times and active, ready, cooling and paused states" src="assets/screenshots/accounts-light.png">
+  <img alt="CodexMulti account pool with used percentages, reset times and active, ready, cooling and paused states" src="assets/screenshots/accounts-light.png">
 </picture>
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/settings-dark.png">
   <source media="(prefers-color-scheme: light)" srcset="assets/screenshots/settings-light.png">
-  <img alt="Current settings with one Failover switch and a wide language selector aligned to the right" src="assets/screenshots/settings-light.png">
+  <img alt="Refresh, appearance, language, usage-window and Failover settings in CodexMulti" src="assets/screenshots/settings-light.png">
 </picture>
 
 Choose your usage refresh interval, preferred usage window and theme. The language menu supports
@@ -123,6 +130,8 @@ See [i18n maintenance](docs/i18n.md) to add or update translations.
 
 Expand an account to see its usage windows, authentication and failover status, last refresh,
 and reported reset credits.
+
+When the provider reports an available credit, the account menu can offer **Use one reset…**. A fresh preflight and two confirmations are required before spending one existing credit. **Clear cooldown…** is a separate action for a limit already reset elsewhere; it does not redeem a credit.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/accounts-expanded-dark.png">
@@ -144,6 +153,7 @@ account is tried at most once for the request.
 Manual switching applies to the next request even when Codex reuses an existing WebSocket.
 Responses already running finish on their original account. Conversation context is carried
 forward when an account changes; independent streams can continue without being interrupted.
+If the complete continuation is no longer cached, the client must resend full context; the proxy does not silently omit conversation history.
 
 Network failures, `5xx`, interrupted streams, plan mismatches, `usage_not_included` and unrecognized
 `429` responses stop the request. A response that has already started is not replayed on another account.
@@ -189,6 +199,7 @@ Tests:
 (cd core && zig build test && zig build test-bridge)
 (cd app && CODEXMULTI_TEST_HEADLESS=1 swift test)   # never plain `swift test`: it opens windows
 (cd proxy && npm test)
+(cd updater && CODEXMULTI_TEST_HEADLESS=1 swift test)
 ```
 
 CI checks the Zig core, Node proxy, SwiftUI shell and distribution scripts on macOS.
@@ -228,7 +239,7 @@ A live but unreachable process requires recovery rather than being forcibly stop
 app** opens the retained signed app when app installation needs manual recovery.
 
 Update checking is enabled in release builds with an HTTPS feed and pinned Sparkle public key.
-Local unsigned builds show that distribution configuration is unavailable. See the
+Local builds without an update feed show that distribution configuration is unavailable. See the
 [update design and implementation constraints](docs/update-design.md) and
 [release configuration](docs/updater-release.md).
 
@@ -265,6 +276,8 @@ If the app or helper cannot run, open `~/.codex/config.toml` in a text editor. R
 chatgpt_base_url = "http://127.0.0.1:8787/backend-api/"
 openai_base_url = "http://127.0.0.1:8787/backend-api/codex"
 ```
+
+The following service-removal check is for legacy agents that launch Node directly. Managed-runtime installations use `codexmulti-runtime-launcher`; use the native helper or the recovery controls described above for those installations. Do not force-stop a managed runtime with active requests.
 
 Then inspect `launchctl print "gui/$(id -u)/dev.codexmulti.app.proxy"`. Only if its program arguments point to your CodexMulti app's `Contents/Helpers/node`, `Contents/Resources/proxy/src/server.mjs`, `--config`, and your proxy config, stop it with `launchctl bootout "gui/$(id -u)/dev.codexmulti.app.proxy"` and remove `~/Library/LaunchAgents/dev.codexmulti.app.proxy.plist`. Restart Codex clients so they reread the direct-connection configuration. Do not replace the whole shared config with an old backup.
 

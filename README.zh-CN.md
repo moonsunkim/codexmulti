@@ -8,13 +8,14 @@
 
 **一个 Codex 账户达到限额时，继续使用下一个。**
 
-CodexMulti 将你的 Codex 账户集中在一个 macOS 菜单栏应用中。查看各账户的剩余用量，调整使用顺序，并在确认遇到用量限额错误时自动切换账户。
+CodexMulti 将你的 Codex 账户集中在一个 macOS 菜单栏应用中。查看各账户的用量和重置时间，调整使用顺序，并在确认遇到用量限额错误时自动切换账户。
 
 [下载](https://github.com/moonsunkim/codexmulti/releases/latest) · [更新日志](CHANGELOG.md) · [安全](SECURITY.md) · [参与贡献](CONTRIBUTING.md)
 
+[![Latest release](https://img.shields.io/github/v/release/moonsunkim/codexmulti)](https://github.com/moonsunkim/codexmulti/releases/latest)
 [![CI](https://github.com/moonsunkim/codexmulti/actions/workflows/ci.yml/badge.svg)](https://github.com/moonsunkim/codexmulti/actions/workflows/ci.yml)
 
-- **查看整个账户池。** 剩余用量、重置时间和账户可用状态集中在一个窗口中。菜单栏显示账户池汇总，点击“账户…”即可打开完整列表。
+- **查看整个账户池。** 各账户用量、重置时间和自动切换状态集中在一个窗口中。菜单栏显示账户池汇总，点击“账户…”即可打开完整列表。
 - **设置使用顺序。** 拖动账户调整优先顺序。符合条件的请求遇到已确认的用量限额时，代理会尝试下一个可用账户。
 - **一个开关即可启用。** 自动切换所需的本地代理和 Node 运行时均已内置。应用打开时，新添加或重新登录的账户会自动加入。
 - **凭据留在本机。** 每个账户都有独立的 Codex 目录和钥匙串备份。无需注册 CodexMulti 账户，也无需连接托管服务。
@@ -23,10 +24,10 @@ CodexMulti 将你的 Codex 账户集中在一个 macOS 菜单栏应用中。查�
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/menu-bar-dark.png">
     <source media="(prefers-color-scheme: light)" srcset="assets/screenshots/menu-bar-light.png">
-    <img src="assets/screenshots/menu-bar-light.png" width="440" alt="使用示例账户的 CodexMulti 菜单：总剩余额度、各账户用量、重置时间和当前账户">
+    <img src="assets/screenshots/menu-bar-light.png" width="440" alt="使用示例账户的 CodexMulti 菜单：平均剩余比例、各账户用量、重置时间和当前账户">
   </picture>
 </p>
-<p align="center"><sub>从菜单栏即可查看总剩余额度、各账户用量和重置时间。图中使用示例账户。</sub></p>
+<p align="center"><sub>从菜单栏即可查看平均剩余比例、各账户用量和重置时间。图中使用示例账户。</sub></p>
 
 ## 什么是自动切换，为什么要使用它？
 
@@ -40,7 +41,7 @@ CodexMulti 将你的 Codex 账户集中在一个 macOS 菜单栏应用中。查�
 
 ## 安装
 
-需要**运行 macOS 26 或更高版本的 Apple Silicon Mac**，以及使用 ChatGPT 登录的 Codex CLI。至少有两个账户时，自动切换才有实际作用。
+需要**运行 macOS 26 或更高版本的 Apple Silicon Mac**，以及使用 ChatGPT 登录的 **Codex CLI 0.146.0 或更高版本**。至少有两个账户时，自动切换才有实际作用。
 
 ```sh
 brew install --cask moonsunkim/tap/codexmulti
@@ -67,6 +68,8 @@ shasum -a 256 -c CodexMulti-<version>.zip.sha256
 
 </details>
 
+已安装的用户请使用**设置 → 软件更新 → 检查更新**。若显示“设置安全更新”，请先关闭 Codex 客户端并完成一次性设置。更新检查和安装由用户启动。详见[应用内更新](#应用内更新)。
+
 ## 两步开始使用
 
 1. **添加账户。** 点击“+”，为账户命名，并在官方浏览器页面完成登录。重复此步骤，添加要放入账户池的其他账户。
@@ -78,10 +81,14 @@ shasum -a 256 -c CodexMulti-<version>.zip.sha256
 
 从菜单栏打开“账户…”可查看整个账户池。在账户的“…”菜单中，“用于自动切换…”会将该账户用于新请求。“暂停参与自动切换”会停止向该账户发送新请求；“恢复参与自动切换”会重新将其纳入。正在处理的请求继续使用原账户。
 
+账户行显示所选周期内**已使用的比例**：**100% 表示该限额已用完**。“账户池”显示已报告周用量的纳入账户的平均剩余比例，排除已暂停和无效账户，但仍包括冷却中的账户。它不是令牌额度总和，也不表示当前可立即接收请求的账户数量。
+
+用量是上次查询的快照。可从账户的“…”菜单单独刷新，或选择“刷新所有账户”。自动刷新默认**关闭**，可在设置中选择 **15 分钟、30 分钟或 1 小时**。刷新也会更新本地代理状态。“重命名…”只更改 CodexMulti 中的显示名称，不更改 OpenAI 账户邮箱。
+
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/accounts-dark.png">
   <source media="(prefers-color-scheme: light)" srcset="assets/screenshots/accounts-light.png">
-  <img alt="账户池：剩余用量、重置时间，以及使用中、就绪、冷却和暂停状态" src="assets/screenshots/accounts-light.png">
+  <img alt="账户池：已用比例、重置时间，以及使用中、就绪、冷却和暂停状态" src="assets/screenshots/accounts-light.png">
 </picture>
 
 <picture>
@@ -98,6 +105,8 @@ shasum -a 256 -c CodexMulti-<version>.zip.sha256
 
 展开账户可查看用量周期、认证和自动切换状态、上次刷新时间，以及服务商报告的可用重置次数。
 
+提供者报告有可用重置额度时，账户菜单可提供“使用一次重置…”。操作会先检查最新状态，经两步确认后消耗已有的一次重置额度。“清除冷却状态…”仅用于已在其他地方重置限额的账户，不会兑换重置额度。
+
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/accounts-expanded-dark.png">
   <source media="(prefers-color-scheme: light)" srcset="assets/screenshots/accounts-expanded-light.png">
@@ -113,6 +122,7 @@ shasum -a 256 -c CodexMulti-<version>.zip.sha256
 仅在收到已确认的用量限额响应后切换：流式响应开始前，HTTP `429` 的错误类型为 `usage_limit_reached`；WebSocket 握手期间返回同样的错误；或 Responses WebSocket 内部在任何响应事件送达客户端之前出现 `usage_limit_reached`。每个符合条件的账户在同一请求中最多尝试一次。
 
 即使 Codex 复用现有 WebSocket，手动切换也会作用于下一个请求。已开始的响应会使用原账户完成。账户切换时会保留对话上下文，独立的流式响应可以继续，不受干扰。
+若缓存中已没有完整的对话上下文，客户端必须重新发送完整上下文；代理不会悄悄省略历史内容。
 
 网络故障、`5xx`、流中断、订阅不匹配、`usage_not_included` 和无法识别的 `429` 会终止请求。已开始的响应不会在其他账户上重放。若没有符合条件的账户，请求会失败，不会无限重试。
 
@@ -146,6 +156,7 @@ shasum -a 256 -c CodexMulti-<version>.zip.sha256
 (cd core && zig build test && zig build test-bridge)
 (cd app && CODEXMULTI_TEST_HEADLESS=1 swift test)   # 不要直接运行 swift test，否则会打开窗口
 (cd proxy && npm test)
+(cd updater && CODEXMULTI_TEST_HEADLESS=1 swift test)
 ```
 
 CI 在 macOS 上检查 Zig 核心、Node 代理、SwiftUI 界面和分发脚本。SwiftUI 检查使用 macOS 26 SDK。
@@ -171,7 +182,7 @@ CI 在 macOS 上检查 Zig 核心、Node 代理、SwiftUI 界面和分发脚本�
 
 更新期间会暂停账户更改。设置界面显示待处理的更新，在停止操作正式提交前可取消，也可选择“请求结束后关闭”。菜单栏应用退出后，更新代理仍会继续运行。若新运行时无法启动，会恢复之前兼容的版本。仍存活但无法连接的进程需要恢复处理，不会被强制停止。若应用安装需要手动恢复，“显示旧版应用”可打开保留的已签名应用。
 
-正式版本配置 HTTPS 更新源和固定的 Sparkle 公钥后可检查更新。本地未签名构建会显示分发配置不可用。详见[更新设计与实现约束](docs/update-design.md)和[发布配置](docs/updater-release.md)。
+正式版本配置 HTTPS 更新源和固定的 Sparkle 公钥后可检查更新。没有更新源的本地构建会显示分发配置不可用。详见[更新设计与实现约束](docs/update-design.md)和[发布配置](docs/updater-release.md)。
 
 <details>
 <summary>恢复、卸载和手动修复路由</summary>
@@ -197,6 +208,8 @@ Homebrew cask 会在删除应用前确认卸载准备已完成。它标记为 `a
 chatgpt_base_url = "http://127.0.0.1:8787/backend-api/"
 openai_base_url = "http://127.0.0.1:8787/backend-api/codex"
 ```
+
+以下服务移除检查仅适用于直接启动 Node 的旧版 LaunchAgent。托管运行时使用 `codexmulti-runtime-launcher`，应使用前述原生辅助程序或恢复功能；不要强制终止仍在处理请求的运行时。
 
 接着检查 `launchctl print "gui/$(id -u)/dev.codexmulti.app.proxy"`。只有其程序参数指向你的 CodexMulti 应用中的 `Contents/Helpers/node`、`Contents/Resources/proxy/src/server.mjs`、`--config` 和你的代理配置时，才使用 `launchctl bootout "gui/$(id -u)/dev.codexmulti.app.proxy"` 停止它，并移除 `~/Library/LaunchAgents/dev.codexmulti.app.proxy.plist`。重启 Codex 客户端，使其重新读取直接连接配置。不要用旧备份替换整个共享配置文件。
 

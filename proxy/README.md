@@ -1,6 +1,6 @@
 # codexmulti-proxy
 
-`codexmulti-proxy` is a local failover proxy that sits in front of multiple Codex ChatGPT OAuth accounts. It is single-user and loopback-only. The proxy keeps an ordered pool of account-specific `auth.json` files, replaces only the two identity headers, and moves to the next account only after a pre-stream `429` whose JSON error type is `usage_limit_reached`.
+`codexmulti-proxy` is a local failover proxy that sits in front of multiple Codex ChatGPT OAuth accounts. It runs as a per-user service and listens only on loopback. The proxy keeps an ordered pool of account-specific `auth.json` files, substitutes the account's identity headers, and switches only after a confirmed `usage_limit_reached`: an HTTP `429` before streaming, a rejected WebSocket handshake, or a Responses WebSocket error before any response event reaches the client.
 
 WebSocket Upgrades to upstream routes use the active account's identity headers. Responses WebSockets select an account for each `response.create`, honor manual switches on existing client connections, and retry a definitive usage-limit error before any response event is delivered. Other WebSocket routes remain opaque byte tunnels. The `/_proxy` control API continues to reject Upgrades with `426 Upgrade Required`. The local control API is version 2. This project is not a general forward proxy, TLS MITM, account creator, or `codex cloud` proxy.
 
@@ -216,4 +216,8 @@ Do not delete, copy, or otherwise modify CodexMulti account directories during r
 
 ## Version boundary
 
-The transport behavior is guarded by local raw WebSocket pass-through tests plus an upstream-426 → POST/SSE fallback smoke against the installed compatible Codex CLI. If the CLI is unavailable, that smoke is skipped with its reason. Version 1 does not implement round-robin or WebSocket frame termination.
+Transport coverage includes HTTP/SSE failover, Responses WebSocket frame handling, continued
+conversations, manual switching, independent streams and opaque pass-through for other WebSocket
+routes. An upstream-426 → POST/SSE fallback smoke runs against a compatible installed Codex CLI;
+if the CLI is unavailable, that smoke is skipped with its reason. Selection uses the ordered sticky
+cursor, not round-robin. See [Failover behavior](#failover-behavior) for retry and context-cache limits.
