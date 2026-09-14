@@ -6,6 +6,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.2.9]
+
+### Fixed
+
+- Fix a critical regression in 0.2.8 where healthy Responses WebSocket connections could show "Proxy unreachable" and hide the manual account-switching menu.
+- Accept independent client and upstream connection counts when reading proxy status or switching accounts, including idle sockets and sockets retaining peers on multiple accounts. Preserve each count for its own status and drain checks.
+
+Users on 0.2.8 should update from Settings or install this release.
+
 ## [0.2.8]
 
 ### Fixed

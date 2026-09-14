@@ -393,7 +393,10 @@ fn validateStatusLinks(status: *const Status) ParseError!void {
     }
     if (!cursor_found) return error.InvalidCursor;
     if (!active_found) return error.InvalidActiveAccount;
-    if (total != status.in_flight) return error.InvalidInFlight;
+    // V2 counts admitted client requests globally and upstream connections per
+    // account. A Responses WebSocket can retain zero or multiple upstream peers,
+    // so those counts are independent. Preserve the legacy V1 invariant only.
+    if (status.version == 1 and total != status.in_flight) return error.InvalidInFlight;
 }
 
 fn proxyName(value: []const u8) ParseError!BoundedText(max_proxy_name_bytes) {

@@ -118,6 +118,33 @@ test "status v2 parses bounded states and maps exact auth paths" {
     try testing.expectEqual(@as(?usize, 0), mapped.active_index);
 }
 
+test "status and switch accept independent client and upstream connection counts" {
+    const cases = [_]struct { clients: u32, primary: u32, secondary: u32 }{
+        // Idle client sockets can survive after their upstream peer closes.
+        .{ .clients = 16, .primary = 10, .secondary = 0 },
+        .{ .clients = 1, .primary = 0, .secondary = 0 },
+        // One client can retain peers on both accounts after switching.
+        .{ .clients = 1, .primary = 1, .secondary = 1 },
+    };
+    const layout = try runtime_paths.Layout.fromAppDataDir(fixture_root);
+    for (cases) |case| {
+        const body = try std.fmt.allocPrint(testing.allocator, "{{\"version\":2,\"config_path\":\"{s}\",\"active\":\"codex-2\",\"cursor\":\"codex-2\",\"in_flight\":{d},\"accounts\":[" ++
+            "{{\"name\":\"codex-1\",\"label\":null,\"auth_file\":\"{s}\",\"state\":\"READY\",\"cooldown_until\":null,\"reason\":null,\"token_expires_at\":null,\"in_flight\":{d}}}," ++
+            "{{\"name\":\"codex-2\",\"label\":null,\"auth_file\":\"{s}\",\"state\":\"READY\",\"cooldown_until\":null,\"reason\":null,\"token_expires_at\":null,\"in_flight\":{d}}}]}}", .{ fixture_config, case.clients, fixture_auth_a, case.primary, fixture_auth_b, case.secondary });
+        defer testing.allocator.free(body);
+        var fake: FakeExchange = .{ .response_body = body };
+        var client = try proxy.Client.init(testing.allocator, fake.exchange(), "http://127.0.0.1:8787");
+        const status = try client.status();
+        const mapped = try proxy.mapStatus(status, &layout, &.{});
+        try testing.expectEqual(case.clients, mapped.in_flight);
+        try testing.expectEqual(case.primary, mapped.accountAt(0).?.in_flight);
+        try testing.expectEqual(case.secondary, mapped.accountAt(1).?.in_flight);
+        const switched = try client.switchAccount("codex-2");
+        try testing.expectEqualStrings("codex-2", switched.active.slice());
+        try testing.expectEqual(case.clients, switched.in_flight);
+    }
+}
+
 test "F15 status parser carries proactive token renewal health without credential values" {
     const body =
         "{\"version\":2,\"config_path\":\"" ++ fixture_config ++
