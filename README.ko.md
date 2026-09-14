@@ -20,6 +20,15 @@ CodexMulti는 여러 Codex 계정을 한곳에서 관리하는 macOS 메뉴 막�
 - **스위치 하나로 시작.** 필요한 로컬 프록시와 Node 런타임이 앱에 포함되어 있습니다. 앱이 열려 있으면 계정 추가와 재연결도 자동으로 반영됩니다.
 - **인증 정보는 내 Mac에.** 계정마다 별도의 Codex 디렉터리와 키체인 백업을 사용합니다. CodexMulti 회원가입이나 별도 서버 연결은 필요하지 않습니다.
 
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/menu-bar-dark.png">
+    <source media="(prefers-color-scheme: light)" srcset="assets/screenshots/menu-bar-light.png">
+    <img src="assets/screenshots/menu-bar-light.png" width="440" alt="예시용 계정으로 표시한 CodexMulti 메뉴: 전체 잔여 용량, 계정별 사용량과 재설정 시간, 활성 계정">
+  </picture>
+</p>
+<p align="center"><sub>메뉴 막대에서 전체 잔여 용량과 계정별 사용량·재설정 시간을 바로 확인합니다. 예시용 계정입니다.</sub></p>
+
 ## Failover는 어떤 문제를 해결하나요?
 
 코딩 작업 중 한 계정의 사용 한도에 도달하면, 다른 계정에 사용량이 남아 있어도 작업이 멈출 수 있습니다.

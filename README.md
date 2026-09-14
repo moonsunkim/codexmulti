@@ -21,6 +21,15 @@ choose their order, and let automatic failover handle confirmed usage-limit erro
 - **Turn on one switch.** Failover setup includes the local proxy and its Node runtime. Added or reconnected accounts are picked up automatically while the app is open.
 - **Keep credentials local.** Each account has its own Codex directory and Keychain backup. There is no CodexMulti account to create or hosted service to connect to.
 
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/menu-bar-dark.png">
+    <source media="(prefers-color-scheme: light)" srcset="assets/screenshots/menu-bar-light.png">
+    <img src="assets/screenshots/menu-bar-light.png" width="440" alt="CodexMulti menu with pooled capacity, account usage, reset times and the active account, using demo accounts">
+  </picture>
+</p>
+<p align="center"><sub>Your pool, account usage and reset times — one click from the menu bar. Demo accounts shown.</sub></p>
+
 ## What is Failover, and why use it?
 
 A coding task can stop when one Codex account reaches its usage limit, even if another account
