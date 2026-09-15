@@ -69,8 +69,13 @@ final class DialogsTests: XCTestCase {
         XCTAssertEqual(busy.add_account.progress_text, "Add account in progress · Codex")
 
         let emptySpec = DialogModel.spec(.addAccount, shell: empty, addAccountDraft: "Owner Work")
-        XCTAssertFalse(emptySpec.button(.confirm)?.enabled ?? true,
-                       "the button follows the core projection, not a shell validity guess")
+        XCTAssertTrue(emptySpec.button(.confirm)?.enabled ?? false,
+                      "typing a valid draft enables the same action as Return")
+        for draft in ["", " \t\n "] {
+            XCTAssertFalse(DialogModel.spec(.addAccount, shell: valid, addAccountDraft: draft)
+                .button(.confirm)?.enabled ?? true)
+            XCTAssertNil(DialogModel.addAccountCommitIntent(valid.add_account, draft: draft))
+        }
         XCTAssertEqual(emptySpec.button(.cancel)?.label, empty.add_account.cancel_label)
         XCTAssertEqual(emptySpec.button(.confirm)?.label, empty.add_account.confirm_label)
 

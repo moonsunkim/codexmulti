@@ -466,6 +466,10 @@ export async function createProxy(configInput, options = {}) {
     inFlight: options.initialInFlight ?? new Map(initialConfig.accounts.map((account) => [account.name, 0])),
     tokenRefresh: initialTokenRefreshStates(initialConfig.accounts),
     activeRequests: 0,
+    responseSockets: 0,
+    responsePending: 0,
+    responsePeers: new Map(),
+    responseWork: new Map(),
   };
   let reconfiguring = false;
   const reloadMutex = new Mutex();
@@ -662,7 +666,7 @@ export async function createProxy(configInput, options = {}) {
       config_path: configPath,
       active,
       cursor: state.cursor,
-      in_flight: totalInFlight(current),
+      in_flight: totalInFlight(current) - current.responseSockets + current.responsePending,
       accounts: config.accounts.map(({ name, label, auth_file: authFile }) => ({
         name,
         label: label ?? null,
@@ -672,7 +676,7 @@ export async function createProxy(configInput, options = {}) {
         reason: state.accounts[name].reason,
         token_expires_at: registry.tokenExpiresAt(name) === null
           ? null : new Date(registry.tokenExpiresAt(name) * 1000).toISOString(),
-        in_flight: inFlight.get(name) ?? 0,
+        in_flight: (inFlight.get(name) ?? 0) - (current.responsePeers.get(name) ?? 0) + (current.responseWork.get(name) ?? 0),
         token_refresh: tokenRefreshPayload(tokenRefresh.get(name)),
       })),
     };
@@ -760,6 +764,10 @@ export async function createProxy(configInput, options = {}) {
           inFlight: new Map(candidateConfig.accounts.map((account) => [account.name, 0])),
           tokenRefresh: migrateTokenRefreshStates(current, candidateConfig.accounts),
           activeRequests: 0,
+          responseSockets: 0,
+          responsePending: 0,
+          responsePeers: new Map(),
+          responseWork: new Map(),
         };
         try {
           logger({
@@ -1238,6 +1246,13 @@ export async function createProxy(configInput, options = {}) {
               selectAccount: (excluded) => failover.selectReady(excluded),
               connectAccount,
               markUsageLimit,
+              onPendingChange: (delta) => { current.responsePending += delta; },
+              onPeerChange: (name, delta) => {
+                current.responsePeers.set(name, (current.responsePeers.get(name) ?? 0) + delta);
+              },
+              onWorkChange: (name, delta) => {
+                current.responseWork.set(name, (current.responseWork.get(name) ?? 0) + delta);
+              },
               onRetry: (_previous, name, attempt) => logger({
                 timestamp: new Date().toISOString(), level: 'info', event: 'ws_failover',
                 request_id: request.proxyRequestId, method: request.method, route: route.route,
@@ -1341,6 +1356,8 @@ export async function createProxy(configInput, options = {}) {
       endUpgradeError(socket, 503, 'proxy_reconfiguring');
       return;
     }
+    const responseSocket = isResponsesTarget(route.target);
+    if (responseSocket) current.responseSockets += 1;
     try {
       await proxyUpgradeAdmitted(current, request, socket, head, route);
     } catch (error) {
@@ -1358,6 +1375,7 @@ export async function createProxy(configInput, options = {}) {
       });
     } finally {
       current.activeRequests -= 1;
+      if (responseSocket) current.responseSockets -= 1;
       releaseWork();
       socket.off('close', cancel);
       socket.off('end', cancel);

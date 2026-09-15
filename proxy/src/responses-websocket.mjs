@@ -81,6 +81,7 @@ class ContextCache {
 export function tunnelResponsesWebSocket({
   clientSocket, clientHead, initialPeer, handshake, maximumBytes,
   selectAccount, connectAccount, markUsageLimit, onRetry = () => {},
+  onPendingChange = () => {}, onPeerChange = () => {}, onWorkChange = () => {},
 }) {
   return new Promise((resolve) => {
     const peers = new Map();
@@ -99,6 +100,11 @@ export function tunnelResponsesWebSocket({
       if (stopped) return;
       stopped = true;
       clientSocket.destroy();
+      for (const lane of lanes.values()) {
+        if (lane.active) finishRequest(lane.active);
+        for (const pending of lane.queue) finishRequest(pending);
+        lane.queue = [];
+      }
       for (const peer of allPeers) {
         peer.socket.destroy();
         peer.release();
@@ -164,6 +170,8 @@ export function tunnelResponsesWebSocket({
     const finishRequest = (pending) => {
       if (pending.finished) return;
       pending.finished = true;
+      onPendingChange(-1);
+      if (pending.countedAccount) onWorkChange(pending.countedAccount, -1);
       pending.peer?.pending.delete(pending.lane);
       pendingBytes -= pending.bytes;
       const lane = lanes.get(pending.lane);
@@ -245,10 +253,12 @@ export function tunnelResponsesWebSocket({
     const attachPeer = (connected) => {
       const peer = { ...connected, pending: new Map(), retiredLanes: new Set(), closed: false };
       const release = connected.release;
+      onPeerChange(peer.name, 1);
       let released = false;
       peer.release = () => {
         if (released) return;
         released = true;
+        onPeerChange(peer.name, -1);
         release();
       };
       if (stopped) {
@@ -320,6 +330,9 @@ export function tunnelResponsesWebSocket({
           return true;
         }
       }
+      if (pending.countedAccount) onWorkChange(pending.countedAccount, -1);
+      pending.countedAccount = peer.name;
+      onWorkChange(peer.name, 1);
       pending.peer = peer;
       peer.retiredLanes.delete(pending.lane);
       peer.pending.set(pending.lane, pending);
@@ -349,6 +362,7 @@ export function tunnelResponsesWebSocket({
         };
         if (pendingBytes + pending.bytes > maximumBytes) throw new Error('websocket_pending_input_too_large');
         pendingBytes += pending.bytes;
+        onPendingChange(1);
         if (lane.active) lane.queue.push(pending);
         else {
           lane.active = pending;

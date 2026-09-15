@@ -6,6 +6,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.2.13]
+
+### Fixed
+
+- Count pending Responses WebSocket requests in the account status instead of idle connections, and clear counts on completion, failure, or disconnect. Keep connection-based protection for proxy updates and reconfiguration.
+- Enable the account sign-in button from the current typed name, using the same validation as Return; blank names and in-progress logins stay disabled.
+
 ## [0.2.12]
 
 ### Added

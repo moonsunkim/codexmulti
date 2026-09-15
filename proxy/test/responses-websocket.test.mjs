@@ -319,3 +319,75 @@ test('closing a client releases all upstream connections after a replacement han
   }
   assert.equal(inFlight, 0);
 });
+
+
+test('status counts response work rather than idle WebSocket connections', async (t) => {
+  let finish;
+  const fixture = await responsesFixture(t, ({ event, send }) => {
+    send({ type: 'response.created', response: { id: 'working' } });
+    finish = () => send(completed('working', event));
+  }, { accountNames: ['a'] });
+  const client = await fixture.connect();
+  const status = async () => JSON.parse((await request(fixture.origin, '/_proxy/status')).body);
+  assert.equal((await status()).in_flight, 0);
+  assert.equal((await status()).accounts[0].in_flight, 0);
+  client.send({ type: 'response.create', input: [] });
+  await client.next();
+  assert.equal((await status()).in_flight, 1);
+  assert.equal((await status()).accounts[0].in_flight, 1);
+  finish();
+  await client.next();
+  assert.equal((await status()).in_flight, 0);
+  assert.equal((await status()).accounts[0].in_flight, 0);
+  assert.equal(client.socket.destroyed, false);
+});
+
+test('status counts queued responses and clears all work when a client disconnects', async (t) => {
+  const fixture = await responsesFixture(t, ({ send }) => {
+    send({ type: 'response.created', response: { id: 'pending' } });
+  }, { accountNames: ['a'] });
+  const client = await fixture.connect();
+  const status = async () => JSON.parse((await request(fixture.origin, '/_proxy/status')).body);
+  client.send({ type: 'response.create', input: [] });
+  await client.next();
+  client.send({ type: 'response.create', input: [] });
+  for (let i = 0; i < 100 && (await status()).in_flight !== 2; i += 1) {
+    await new Promise((resolve) => setTimeout(resolve, 5));
+  }
+  assert.equal((await status()).in_flight, 2);
+  assert.equal((await status()).accounts[0].in_flight, 1);
+  client.socket.destroy();
+  for (let i = 0; i < 100 && (await status()).in_flight !== 0; i += 1) {
+    await new Promise((resolve) => setTimeout(resolve, 5));
+  }
+  assert.equal((await status()).in_flight, 0);
+  assert.equal((await status()).accounts[0].in_flight, 0);
+});
+
+test('failover retires completed work while retaining idle account connections', async (t) => {
+  const fixture = await responsesFixture(t, ({ name, event, send }) => {
+    send(name === 'a' ? usageLimit(event) : completed('done-b', event));
+  }, { accountNames: ['a', 'b'] });
+  const client = await fixture.connect();
+  client.send({ type: 'response.create', input: [] });
+  await client.next();
+  const status = JSON.parse((await request(fixture.origin, '/_proxy/status')).body);
+  assert.equal(status.in_flight, 0);
+  assert.deepEqual(status.accounts.map((account) => account.in_flight), [0, 0]);
+  assert.equal(fixture.connections.length, 2);
+});
+
+for (const type of ['error', 'response.failed', 'response.incomplete']) {
+  test(`${type} clears request counts without requiring the WebSocket to close`, async (t) => {
+    const fixture = await responsesFixture(t, ({ send }) => {
+      send(type === 'error' ? { type, status: 400, error: { type: 'invalid_request_error' } }
+        : { type, response: { id: 'failed' } });
+    }, { accountNames: ['a'] });
+    const client = await fixture.connect();
+    client.send({ type: 'response.create', input: [] });
+    assert.equal((await client.next()).type, type);
+    const status = JSON.parse((await request(fixture.origin, '/_proxy/status')).body);
+    assert.equal(status.in_flight, 0);
+    assert.equal(status.accounts[0].in_flight, 0);
+  });
+}

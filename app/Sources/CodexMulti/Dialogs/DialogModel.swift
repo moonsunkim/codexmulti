@@ -117,7 +117,8 @@ enum DialogModel {
             return Spec(kind: kind, leading: [.field], buttons: [
                 Button(.cancel, flow.cancel_label, .ghost, enabled: !flow.in_flight,
                        intent: .cancel_add_account),
-                Button(.confirm, flow.confirm_label, .primary, enabled: flow.confirm_enabled,
+                Button(.confirm, flow.confirm_label, .primary,
+                       enabled: addAccountCommitIntent(flow, draft: addAccountDraft) != nil,
                        intent: .commit_add_account(label: trimmedLabel(addAccountDraft))),
             ], initialFocus: .field, disabledLeading: flow.in_flight ? [.field] : [])
         case .failoverSwitch:
