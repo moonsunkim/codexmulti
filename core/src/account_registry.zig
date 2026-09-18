@@ -50,6 +50,7 @@ pub const Account = struct {
     access_expires_at_unix_s: ?i64 = null,
     created_at_unix_s: i64,
     enabled: bool = true,
+    auto_select_enabled: ?bool = null,
 
     pub fn profile(self: Account) domain.AccountProfile {
         return .{
@@ -82,6 +83,7 @@ pub const Draft = struct {
     access_expires_at_unix_s: ?i64 = null,
     created_at_unix_s: i64,
     enabled: bool = true,
+    auto_select_enabled: ?bool = null,
 };
 
 pub const ValidationError = error{
@@ -223,6 +225,7 @@ const Entry = struct {
     access_expires_at_unix_s: ?i64 = null,
     created_at_unix_s: i64 = 0,
     enabled: bool = true,
+    auto_select_enabled: ?bool = null,
 };
 
 pub const Registry = struct {
@@ -316,6 +319,7 @@ pub const Registry = struct {
             .access_expires_at_unix_s = draft.access_expires_at_unix_s,
             .created_at_unix_s = draft.created_at_unix_s,
             .enabled = draft.enabled,
+            .auto_select_enabled = draft.auto_select_enabled,
         });
     }
 
@@ -378,6 +382,13 @@ pub const Registry = struct {
         }
 
         if (changed) self.revision +%= 1;
+    }
+
+    pub fn setAutoSelect(self: *Registry, id: []const u8, enabled: ?bool) LookupError!void {
+        const index = self.indexOf(id) orelse return error.UnknownAccount;
+        if (self.entries[index].auto_select_enabled == enabled) return;
+        self.entries[index].auto_select_enabled = enabled;
+        self.revision +%= 1;
     }
 
     pub fn setEnabled(self: *Registry, id: []const u8, enabled: bool) LookupError!void {
@@ -528,6 +539,7 @@ pub const Registry = struct {
             .access_expires_at_unix_s = entry.access_expires_at_unix_s,
             .created_at_unix_s = entry.created_at_unix_s,
             .enabled = entry.enabled,
+            .auto_select_enabled = entry.auto_select_enabled,
         };
     }
 
@@ -576,6 +588,7 @@ pub const Registry = struct {
             .access_expires_at_unix_s = account.access_expires_at_unix_s,
             .created_at_unix_s = account.created_at_unix_s,
             .enabled = account.enabled,
+            .auto_select_enabled = account.auto_select_enabled,
         };
         self.count += 1;
         self.revision +%= 1;

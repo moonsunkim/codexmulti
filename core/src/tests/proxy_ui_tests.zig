@@ -33,6 +33,47 @@ fn proxyFact(reachability: ui_model.ProxyReachability) ui_model.ProxyFact {
     };
 }
 
+test "manual-only remains selectable and excluded from pool while pending policies are explicit" {
+    const model = try support.newModel();
+    defer testing.allocator.destroy(model);
+    var rows = mapped_ready;
+    rows[0].auto_select_enabled = false;
+    rows[0].policy_supported = true;
+    var accounts = [_]RecordingService.Account{.{ .fact = support.codexFact() }};
+    accounts[0].fact.auto_select_enabled = false;
+    var service: RecordingService = .{
+        .accounts = &accounts,
+        .capabilities = .{ .connected = true, .proxy_control = true, .accounts = true },
+        .proxy_fact = proxyFact(.reachable),
+    };
+    service.proxy_fact.?.accounts = &rows;
+    model.service = service.port();
+    shell.reproject(model);
+    const manual = model.view.unifiedRowSlice()[0];
+    try testing.expect(manual.show_switch and manual.can_switch_proxy);
+    try testing.expect(manual.auto_select_can_change and !manual.auto_select_enabled);
+    try testing.expectEqualStrings("Manual only", manual.policy_label);
+    try testing.expect(!manual.failover_muted);
+    try testing.expectEqual(@as(u32, 0), model.view.pool_total_count);
+    try testing.expectEqual(@as(?u8, null), model.view.pool_remaining_percent);
+    rows[0].active = true;
+    rows[0].manually_selected = true;
+    shell.reproject(model);
+    try testing.expect(model.view.unifiedRowSlice()[0].show_return_automatic);
+    var effects: shell.Effects = .{};
+    shell.update(model, .{ .set_account_auto_select = .{ .account_id = accounts[0].fact.account_id, .enabled = true } }, &effects);
+    try testing.expect(service.last.?.proxy_set_auto_select.enabled);
+    try testing.expectEqualStrings(accounts[0].fact.account_id, service.last.?.proxy_set_auto_select.account_id);
+    service.proxy_fact.?.reachability = .@"unreachable";
+    shell.reproject(model);
+    try testing.expectEqualStrings("Automatic switching setting pending", model.view.unifiedRowSlice()[0].policy_label);
+    try testing.expect(model.view.unifiedRowSlice()[0].auto_select_can_change);
+    service.proxy_fact.?.reachability = .reachable;
+    rows[0].policy_supported = false;
+    shell.reproject(model);
+    try testing.expectEqualStrings("Update the proxy to apply this setting.", model.view.unifiedRowSlice()[0].auto_select_detail);
+}
+
 test "failover menu visibility survives polling while commands remain blocked" {
     const model = try support.newModel();
     defer testing.allocator.destroy(model);
@@ -49,7 +90,7 @@ test "failover menu visibility survives polling while commands remain blocked" {
         service.proxy_fact.?.work = work;
         shell.reproject(model);
         const row = model.view.unifiedRowSlice()[0];
-        try testing.expect(row.show_switch and row.show_pause);
+        try testing.expect(row.show_switch and !row.show_pause);
         try testing.expect(!row.show_resume and !row.show_clear_cooldown);
         try testing.expectEqual(work == .idle, row.can_switch_proxy);
         try testing.expectEqual(work == .idle, row.can_pause_proxy);
@@ -129,7 +170,7 @@ test "proxy cockpit actions emit one exact service command each" {
     service.proxy_fact.?.accounts = &rows;
     shell.reproject(model);
     shell.update(model, .{ .resume_proxy_account = 0 }, &effects);
-    try testing.expectEqualStrings("acct-codex-personal", service.last.?.proxy_reload_account);
+    try testing.expectEqualStrings("acct-codex-personal", service.last.?.proxy_resume_account);
     shell.update(model, .{ .save_proxy_settings = .{
         .base_url = "http://127.0.0.1:49999",
         .cli_path = proxy.cli_path,

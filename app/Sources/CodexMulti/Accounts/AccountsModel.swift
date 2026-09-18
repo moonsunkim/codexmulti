@@ -12,13 +12,15 @@ enum AccountsModel {
         let label: String
         let enabled: Bool
         let destructive: Bool
+        let checked: Bool?
         let intent: Intent
 
-        init(_ id: String, _ label: String, enabled: Bool = true, destructive: Bool = false, intent: Intent) {
+        init(_ id: String, _ label: String, enabled: Bool = true, destructive: Bool = false, checked: Bool? = nil, intent: Intent) {
             self.id = id
             self.label = label
             self.enabled = enabled
             self.destructive = destructive
+            self.checked = checked
             self.intent = intent
         }
     }

@@ -122,6 +122,9 @@ pub const RawAccount = struct {
     auth_file: BoundedText(runtime_paths.max_path_bytes) = .{},
     has_auth_file: bool = false,
     state: AccountState = .ready,
+    auto_select_enabled: bool = true,
+    manually_selected: bool = false,
+    policy_supported: bool = false,
     cooldown_until_unix_s: ?i64 = null,
     token_expires_at_unix_s: ?i64 = null,
     token_refresh_last_ok_at_unix_s: ?i64 = null,
@@ -133,6 +136,7 @@ pub const RawAccount = struct {
 
 pub const Status = struct {
     version: u8,
+    routing_policy_version: u8 = 0,
     config_path: BoundedText(runtime_paths.max_path_bytes) = .{},
     has_config_path: bool = false,
     active: BoundedText(max_proxy_name_bytes) = .{},
@@ -175,6 +179,9 @@ pub const MappedAccount = struct {
     storage_key: BoundedText(account_registry.max_storage_key_bytes) = .{},
     label: BoundedText(max_label_bytes) = .{},
     state: AccountState = .ready,
+    auto_select_enabled: bool = true,
+    manually_selected: bool = false,
+    policy_supported: bool = false,
     cooldown_until_unix_s: ?i64 = null,
     token_expires_at_unix_s: ?i64 = null,
     token_refresh_last_ok_at_unix_s: ?i64 = null,
@@ -262,6 +269,8 @@ const AccountV2Wire = struct {
     token_expires_at: ?[]const u8,
     in_flight: u32,
     token_refresh: ?TokenRefreshWire = null,
+    auto_select_enabled: bool = true,
+    manually_selected: bool = false,
 };
 const TokenRefreshWire = struct {
     last_ok_at: ?[]const u8,
@@ -277,6 +286,7 @@ const StatusV1Wire = struct {
 };
 const StatusV2Wire = struct {
     version: u8,
+    routing_policy_version: u8 = 0,
     config_path: []const u8,
     active: ?[]const u8,
     cursor: []const u8,
@@ -340,6 +350,7 @@ fn parseStatusV2(allocator: std.mem.Allocator, bytes: []const u8) ParseError!Sta
     try validateFilePath(wire.config_path, null, .config);
     var result: Status = .{
         .version = 2,
+        .routing_policy_version = wire.routing_policy_version,
         .config_path = BoundedText(runtime_paths.max_path_bytes).init(wire.config_path) catch return error.InvalidConfigPath,
         .has_config_path = true,
         .active = try optionalName(wire.active),
@@ -356,6 +367,9 @@ fn parseStatusV2(allocator: std.mem.Allocator, bytes: []const u8) ParseError!Sta
             .has_label = account.label != null,
             .auth_file = BoundedText(runtime_paths.max_path_bytes).init(account.auth_file) catch return error.InvalidAuthPath,
             .has_auth_file = true,
+            .auto_select_enabled = account.auto_select_enabled,
+            .manually_selected = account.manually_selected,
+            .policy_supported = wire.routing_policy_version == 1,
             .state = try parseState(account.state),
             .cooldown_until_unix_s = try optionalTimestamp(account.cooldown_until),
             .token_expires_at_unix_s = try optionalTimestamp(account.token_expires_at),
@@ -517,6 +531,9 @@ pub fn mapStatus(status: Status, layout: *const runtime_paths.Layout, app_accoun
         var mapped: MappedAccount = .{
             .proxy_name = raw.name,
             .label = BoundedText(max_label_bytes).init(label) catch return error.InvalidLabel,
+            .auto_select_enabled = raw.auto_select_enabled,
+            .manually_selected = raw.manually_selected,
+            .policy_supported = raw.policy_supported,
             .state = if (raw.has_token_refresh_last_error) .invalid else raw.state,
             .cooldown_until_unix_s = raw.cooldown_until_unix_s,
             .token_expires_at_unix_s = raw.token_expires_at_unix_s,
@@ -565,6 +582,32 @@ pub const Client = struct {
         var body_buffer: [max_request_body_bytes]u8 = undefined;
         const body = std.fmt.bufPrint(&body_buffer, "{{\"name\":\"{s}\"}}", .{name}) catch return error.RequestRejected;
         return self.v2StatusRequest(.post, "/_proxy/switch", body);
+    }
+
+    pub fn setAutoSelect(self: *Client, name: []const u8, enabled: bool) ClientError!Status {
+        _ = proxyName(name) catch return error.InvalidAccountName;
+        var path_buffer: [max_request_path_bytes]u8 = undefined;
+        const path = std.fmt.bufPrint(&path_buffer, "/_proxy/accounts/{s}/auto-select", .{name}) catch return error.RequestRejected;
+        const result = try self.v2StatusRequest(.post, path, if (enabled) "{\"enabled\":true}" else "{\"enabled\":false}");
+        if (result.routing_policy_version != 1) return error.IncompatibleVersion;
+        for (result.accountSlice()) |account| {
+            if (account.name.eql(name) and account.auto_select_enabled == enabled) return result;
+        }
+        return error.InvalidStatus;
+    }
+
+    pub fn returnToAutomatic(self: *Client) ClientError!Status {
+        const result = try self.v2StatusRequest(.post, "/_proxy/automatic", "{}");
+        if (result.routing_policy_version != 1) return error.IncompatibleVersion;
+        for (result.accountSlice()) |account| if (account.manually_selected) return error.InvalidStatus;
+        return result;
+    }
+
+    pub fn resumeAccount(self: *Client, name: []const u8) ClientError!Status {
+        _ = proxyName(name) catch return error.InvalidAccountName;
+        var path_buffer: [max_request_path_bytes]u8 = undefined;
+        const path = std.fmt.bufPrint(&path_buffer, "/_proxy/accounts/{s}/resume", .{name}) catch return error.RequestRejected;
+        return self.v2StatusRequest(.post, path, "{}");
     }
 
     pub fn pauseAccount(self: *Client, name: []const u8) ClientError!PauseReceipt {

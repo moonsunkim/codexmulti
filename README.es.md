@@ -17,6 +17,7 @@ CodexMulti reúne tus cuentas de Codex en una aplicación para la barra de menú
 
 - **Consulta todas tus cuentas.** El uso, las horas de restablecimiento y los estados del cambio automático aparecen en una sola ventana. La barra de menús muestra un resumen del conjunto; **Cuentas…** abre la lista completa con un clic.
 - **Configura el orden una vez.** Arrastra las cuentas para indicar el orden que prefieres. Cuando una solicitud apta encuentra un límite de uso confirmado, el proxy prueba la siguiente cuenta disponible.
+- **Elige las cuentas para el cambio automático.** Desactiva la opción de cambio automático en el menú de una cuenta para reservarla para uso manual. Aún puedes seleccionarla, pero queda fuera del cambio automático y de la capacidad del grupo. La preferencia se conserva al reiniciar.
 - **Activa un solo interruptor.** La configuración incluye el proxy local y su entorno Node. Las cuentas añadidas o reconectadas se incorporan automáticamente mientras la aplicación está abierta.
 - **Guarda las credenciales en tu Mac.** Cada cuenta tiene su propio directorio de Codex y una copia en el Llavero. No hace falta crear una cuenta de CodexMulti ni conectarse a un servicio alojado.
 

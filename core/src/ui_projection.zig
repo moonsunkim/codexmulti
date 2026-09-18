@@ -236,6 +236,7 @@ pub const ViewState = struct {
             .plan_label = self.internName(fact.plan_label orelse ""),
             .provider = fact.provider,
             .enabled = fact.enabled,
+            .auto_select_enabled = fact.auto_select_enabled,
             .auth_state = fact.auth_state,
             .freshness = fact.freshness,
             .snapshot_status = fact.snapshot_status,
@@ -297,6 +298,9 @@ pub const ViewState = struct {
                 .proxy_name = self.internName(account.proxy_name),
                 .label = self.internName(account.label),
                 .state = account.state,
+                .auto_select_enabled = account.auto_select_enabled,
+                .manually_selected = account.manually_selected,
+                .policy_supported = account.policy_supported,
                 .cooldown_until_unix_s = account.cooldown_until_unix_s,
                 .token_expires_at_unix_s = account.token_expires_at_unix_s,
                 .in_flight = account.in_flight,
@@ -571,7 +575,7 @@ pub const ViewState = struct {
             const state_text: []const u8 = if (!account.mapped)
                 copy.text(.not_mapped)
             else if (account.active)
-                copy.text(.active)
+                copy.text(if (account.manually_selected) .manual_active else .active)
             else
                 self.proxyStateText(account.state);
 
@@ -608,6 +612,9 @@ pub const ViewState = struct {
                 .label_local = if (label_at) |at| account.label[0..at] else account.label,
                 .label_domain = if (label_at) |at| account.label[at..] else "",
                 .state = account.state,
+                .auto_select_enabled = account.auto_select_enabled,
+                .manually_selected = account.manually_selected,
+                .policy_supported = account.policy_supported,
                 .in_flight = account.in_flight,
                 .state_text = self.internText(state_text),
                 .state_accent = state_accent,
@@ -710,6 +717,17 @@ pub const ViewState = struct {
                 self.internText(""),
             .unknown => self.internText(""),
         };
+        if (controllable and self.proxy_account_count != 0) {
+            var any_automatic = false;
+            var any_active = false;
+            var all_known = true;
+            for (self.proxy_accounts[0..self.proxy_account_count]) |account| {
+                all_known = all_known and account.mapped and account.policy_supported;
+                any_automatic = any_automatic or (account.mapped and account.auto_select_enabled);
+                any_active = any_active or account.active;
+            }
+            if (all_known and !any_automatic and !any_active) self.proxy_banner_text = self.internText(copy.text(.no_automatic_accounts));
+        }
         self.proxy_node_hint_text = if (self.proxy_node_path.len != 0)
             self.fmtText(.node_path, .{self.proxy_node_path})
         else if (self.proxy_node_resolved.len != 0)
@@ -949,6 +967,9 @@ pub const ViewState = struct {
             self.inspector.index
         else
             null;
+        const desired = self.rows[account.index].auto_select_enabled;
+        const auto_enabled = desired orelse if (proxy) |row| row.auto_select_enabled else true;
+        const pending = desired != null and (!show_proxy_actions or !proxy.?.policy_supported or proxy.?.auto_select_enabled != auto_enabled);
         self.unified_rows[self.unified_row_count] = .{
             .key = @intCast(self.unified_row_count + 1),
             .account_index = account.index,
@@ -982,7 +1003,14 @@ pub const ViewState = struct {
             .action_busy = account.action_busy,
             .busy_label = account.busy_label,
             .show_switch = show_proxy_actions and proxy.?.state == .ready and !proxy.?.active,
-            .show_pause = show_proxy_actions and proxy.?.state != .paused,
+            .auto_select_enabled = auto_enabled,
+            .auto_select_can_change = self.capabilities.accounts and self.proxy_work == .idle,
+            .auto_select_label = copy.text(.auto_select_label),
+            .policy_label = if (pending) copy.text(.auto_select_pending) else if (!auto_enabled) copy.text(.manual_only) else "",
+            .auto_select_detail = if (show_proxy_actions and !proxy.?.policy_supported) copy.text(.auto_select_update_required) else if (pending) copy.text(.auto_select_pending) else if (!auto_enabled) copy.text(.manual_only_detail) else "",
+            .return_automatic_label = copy.text(.return_automatic),
+            .show_return_automatic = show_proxy_actions and proxy.?.policy_supported and proxy.?.manually_selected,
+            .show_pause = false,
             .show_resume = show_proxy_actions and (proxy.?.state == .paused or proxy.?.state == .invalid),
             .show_clear_cooldown = show_proxy_actions and proxy.?.state == .cooldown,
             .can_switch_proxy = account.can_switch_proxy,
@@ -1104,8 +1132,8 @@ pub const ViewState = struct {
             var ready: u32 = 0;
             var soonest_cooldown_until: ?i64 = null;
             for (self.proxy_accounts[0..self.proxy_account_count]) |account| {
-                if (!account.mapped) continue;
-                if (account.active or account.state == .ready) ready += 1;
+                if (!account.mapped or !account.auto_select_enabled) continue;
+                if (account.state == .ready) ready += 1;
                 if (account.state == .cooldown) {
                     const until = account.cooldown_until_unix_s orelse continue;
                     if (until <= self.now_unix_s) continue;
@@ -1117,7 +1145,9 @@ pub const ViewState = struct {
             if (std.mem.eql(u8, self.proxy_active_label, copy.text(.none_lower))) {
                 writer.writeAll(copy.text(.no_cursor_separator)) catch {};
             }
-            if (ready == 0) {
+            if (self.proxy_in_flight != 0) {
+                copy.write(&writer, .toolbar_ready_in_flight, .{ ready, self.proxy_in_flight });
+            } else if (ready == 0) {
                 if (soonest_cooldown_until) |until| {
                     var reset_scratch: [max_line_bytes]u8 = undefined;
                     copy.write(&writer, .toolbar_none_ready_reset, .{
@@ -1126,8 +1156,6 @@ pub const ViewState = struct {
                 } else {
                     copy.write(&writer, .toolbar_none_ready, .{ago});
                 }
-            } else if (self.proxy_in_flight != 0) {
-                copy.write(&writer, .toolbar_ready_in_flight, .{ ready, self.proxy_in_flight });
             } else {
                 copy.write(&writer, .toolbar_ready, .{ ready, ago });
             }
@@ -1138,13 +1166,18 @@ pub const ViewState = struct {
         }
         if (self.pool_remaining_percent) |remaining| {
             copy.write(&writer, .toolbar_pool_suffix, .{remaining});
+        } else if (self.pool_total_count == 0 and self.row_count != 0) {
+            writer.writeAll(copy.text(.pool_unavailable)) catch {};
         }
         if (self.error_count != 0) copy.write(&writer, .toolbar_failed_suffix, .{self.error_count});
         self.toolbar_status_text = self.internText(writer.buffered());
     }
 
     fn renderPool(self: *ViewState) void {
-        self.pool_total_count = @intCast(self.row_count);
+        self.pool_total_count = 0;
+        for (self.rows[0..self.row_count]) |*row| {
+            if (self.automaticParticipation(row)) self.pool_total_count += 1;
+        }
         if (self.row_count == 0) return;
 
         var remaining_sum: u32 = 0;
@@ -1170,7 +1203,16 @@ pub const ViewState = struct {
         });
     }
 
+    fn automaticParticipation(self: *const ViewState, row: *const AccountView) bool {
+        if (row.auto_select_enabled) |enabled| return enabled;
+        for (self.proxy_accounts[0..self.proxy_account_count]) |account| {
+            if (account.app_id) |id| if (std.mem.eql(u8, id, row.account_id)) return account.auto_select_enabled;
+        }
+        return true;
+    }
+
     fn poolAccountUsable(self: *const ViewState, row: *const AccountView) bool {
+        if (!self.automaticParticipation(row)) return false;
         if (self.proxy_service_state == .not_installed) return true;
         for (self.proxy_accounts[0..self.proxy_account_count]) |account| {
             const app_id = account.app_id orelse continue;

@@ -477,6 +477,7 @@ pub const Service = struct {
                 .plan_label = row.plan_label,
                 .provider = row.provider,
                 .enabled = row.enabled,
+                .auto_select_enabled = self.core.accountAt(index).?.auto_select_enabled,
                 .auth_state = row.auth_state,
                 .freshness = row.freshness,
                 .snapshot_status = row.snapshot_status,
@@ -538,6 +539,9 @@ pub const Service = struct {
             .redeem_reset => |request| self.submitRedeemReset(request),
             .retry_reset => |account_id| self.submitRetryReset(account_id),
             .proxy_refresh_status => self.startProxy(.refresh_status, null),
+            .proxy_set_auto_select => |request| self.submitAutoSelect(request.account_id, request.enabled),
+            .proxy_return_automatic => self.startProxy(.return_automatic, null),
+            .proxy_resume_account => |account_id| self.startProxy(.resume_account, account_id),
             .proxy_switch_account => |account_id| self.startProxy(.switch_account, account_id),
             .proxy_pause_account => |account_id| self.startProxy(.pause_account, account_id),
             .proxy_reload_account => |account_id| self.startProxy(.reload_account, account_id),
@@ -905,6 +909,50 @@ pub const Service = struct {
         return .accepted_pending;
     }
 
+    fn submitAutoSelect(self: *Service, account_id: []const u8, enabled: bool) ui_model.CommandOutcome {
+        const live = self.live orelse return .service_unavailable;
+        if (self.proxy.busy()) return .rejected_busy;
+        const account = self.core.account(account_id) orelse return .rejected_unknown_account;
+        if (account.provider != .codex) return .rejected_not_allowed;
+        const previous = account.auto_select_enabled;
+        self.core.registry.setAutoSelect(account_id, enabled) catch return .rejected_unknown_account;
+        self.core.persistRegistry(live.sink) catch {
+            self.core.registry.setAutoSelect(account_id, previous) catch {};
+            self.recordCode(coordinator.public_code_persist_failed);
+            return .failed;
+        };
+        if (self.proxy.state.reachability == .reachable and self.proxy.state.config_path_matches) {
+            if (self.proxy.state.last_success) |status| {
+                const mapped = status.requireMapped(account_id) catch return .accepted_pending;
+                if (mapped.policy_supported) return self.startProxy(if (enabled) .enable_auto_select else .disable_auto_select, account_id);
+            }
+        }
+        return .accepted_pending;
+    }
+
+    fn reconcileAutoSelect(self: *Service) void {
+        const live = self.live orelse return;
+        if (self.proxy.busy() or self.proxy.state.reachability != .reachable or !self.proxy.state.config_path_matches) return;
+        const status = self.proxy.state.last_success orelse return;
+        for (status.accountSlice()) |mapped| {
+            if (!mapped.mapped or !mapped.policy_supported) continue;
+            const account = self.core.account(mapped.app_id.slice()) orelse continue;
+            if (account.auto_select_enabled) |enabled| {
+                if (enabled != mapped.auto_select_enabled) {
+                    _ = self.startProxy(if (enabled) .enable_auto_select else .disable_auto_select, account.id);
+                    return;
+                }
+            } else {
+                self.core.registry.setAutoSelect(account.id, mapped.auto_select_enabled) catch continue;
+                self.core.persistRegistry(live.sink) catch {
+                    self.core.registry.setAutoSelect(account.id, null) catch {};
+                    self.recordCode(coordinator.public_code_persist_failed);
+                    return;
+                };
+            }
+        }
+    }
+
     fn submitMoveAccount(self: *Service, request: ui_model.MoveAccount) ui_model.CommandOutcome {
         const live = self.live orelse return .service_unavailable;
         const account = self.core.account(request.account_id) orelse return .rejected_unknown_account;
@@ -1269,7 +1317,10 @@ pub const Service = struct {
         const success_revision = self.proxy.state.success_revision;
         const completion_serial = self.proxy.last_completion.serial;
         self.proxy.drain(self.core, proxyDrivers(live), now_unix_s);
-        if (self.proxy.state.success_revision != success_revision) self.synchronizeCodexAuthBackups();
+        if (self.proxy.state.success_revision != success_revision) {
+            self.synchronizeCodexAuthBackups();
+            self.reconcileAutoSelect();
+        }
         if (self.proxy.last_completion.serial == completion_serial) return;
         if (self.currentProxyServiceLive(live)) |service_live| self.proxy_service.refreshRouting(service_live);
         if (self.proxy.last_completion.kind == .sync_config) {

@@ -19,6 +19,7 @@ choose their order, and let automatic failover handle confirmed usage-limit erro
 
 - **See your whole pool.** Account usage, reset times and failover states are together in one window. The menu bar keeps the pool summary close by; **Accounts…** opens the full list in one click.
 - **Set the order once.** Drag accounts into your preferred order. When an eligible request hits a confirmed usage limit, the proxy tries the next available account.
+- **Choose automatic participants.** Turn off **Include in automatic switching** in an account menu to make it **Manual only**. You can still select it yourself; automatic failover and pool capacity exclude it. The setting survives restarts.
 - **Turn on one switch.** Failover setup includes the local proxy and its Node runtime. Added or reconnected accounts are picked up automatically while the app is open.
 - **Keep credentials local.** Each account has its own Codex directory and Keychain backup. There is no CodexMulti account to create or hosted service to connect to.
 

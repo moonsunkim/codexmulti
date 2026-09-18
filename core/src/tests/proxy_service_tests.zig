@@ -166,6 +166,7 @@ const RecordingSink = struct {
     kinds: [32]runtime_paths.DocumentKind = @splat(.registry),
     count: usize = 0,
     fail_proxy_status: bool = false,
+    fail_registry: bool = false,
 
     const vtable: coordinator.DocumentSink.VTable = .{ .write = write };
 
@@ -176,6 +177,7 @@ const RecordingSink = struct {
     fn write(context: *anyopaque, kind: runtime_paths.DocumentKind, _: []const u8) coordinator.SinkError!void {
         const self: *RecordingSink = @ptrCast(@alignCast(context));
         if (self.fail_proxy_status and kind == .proxy_status) return error.Io;
+        if (self.fail_registry and kind == .registry) return error.Io;
         self.kinds[self.count] = kind;
         self.count += 1;
     }
@@ -188,6 +190,53 @@ const RecordingSink = struct {
         return result;
     }
 };
+
+test "automatic participation saves offline without starting usage refresh and rolls back failed storage" {
+    const harness = try Harness.create(&.{});
+    defer harness.destroy();
+    try harness.addCodex();
+    harness.attach();
+    const previous_interval = harness.service.auto_refresh_minutes;
+    try testing.expectEqual(ui_model.CommandOutcome.accepted_pending, harness.service.submit(.{ .proxy_set_auto_select = .{
+        .account_id = account_id,
+        .enabled = false,
+    } }));
+    try testing.expectEqual(@as(?bool, false), harness.core.account(account_id).?.auto_select_enabled);
+    try testing.expectEqual(@as(usize, 1), harness.sink.countOf(.registry));
+    harness.service.pump(now + 120);
+    try testing.expectEqual(@as(usize, 0), harness.exchange.calls);
+    try testing.expectEqual(previous_interval, harness.service.auto_refresh_minutes);
+    try testing.expect(harness.core.schedulerIsIdle());
+    harness.sink.fail_registry = true;
+    try testing.expectEqual(ui_model.CommandOutcome.failed, harness.service.submit(.{ .proxy_set_auto_select = .{
+        .account_id = account_id,
+        .enabled = true,
+    } }));
+    try testing.expectEqual(@as(?bool, false), harness.core.account(account_id).?.auto_select_enabled);
+}
+
+test "reconnection applies saved participation through the narrow control route without config reload" {
+    const capable = try std.mem.replaceOwned(u8, testing.allocator, status_v2, "\"version\":2", "\"version\":2,\"routing_policy_version\":1");
+    defer testing.allocator.free(capable);
+    const excluded = try std.mem.replaceOwned(u8, testing.allocator, capable, "\"state\":\"READY\"", "\"state\":\"READY\",\"auto_select_enabled\":false");
+    defer testing.allocator.free(excluded);
+    const replies = [_]FakeExchange.Reply{
+        .{ .response = .{ .status = 200, .body = capable } },
+        .{ .response = .{ .status = 200, .body = excluded } },
+    };
+    const harness = try Harness.create(&replies);
+    defer harness.destroy();
+    try harness.addCodex();
+    harness.attach();
+    try harness.saveSettings();
+    _ = harness.service.submit(.{ .proxy_set_auto_select = .{ .account_id = account_id, .enabled = false } });
+    _ = harness.service.submit(.proxy_refresh_status);
+    try harness.drainProxy();
+    try testing.expectEqual(@as(usize, 2), harness.exchange.calls);
+    try testing.expectEqualStrings("/_proxy/accounts/codex-1/auto-select", harness.exchange.lastPath());
+    try testing.expectEqual(@as(usize, 0), harness.import_runner.calls);
+    try testing.expect(!harness.service.proxyState().last_success.?.accountAt(0).?.auto_select_enabled);
+}
 
 const Harness = struct {
     core: *coordinator.Coordinator,

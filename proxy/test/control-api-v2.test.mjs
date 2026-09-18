@@ -27,6 +27,138 @@ async function replaceConfig(started, change) {
   return next;
 }
 
+test('live automatic policy permits manual HTTP use and survives config reload', async (t) => {
+  const calls = [];
+  let limitB = false;
+  const upstream = await startHttpServer(t, (req, res) => {
+    const name = req.headers['chatgpt-account-id'].replace('synthetic-account-', '');
+    calls.push(name);
+    if (name === 'b' && limitB) {
+      res.writeHead(429, { 'content-type': 'application/json' });
+      res.end(JSON.stringify({ error: { type: 'usage_limit_reached' } }));
+    } else res.writeHead(200, { 'content-type': 'text/event-stream' }).end(sseOk(name));
+  });
+  const started = await startTestProxy(t, { upstreamOrigin: upstream.origin, accountNames: ['a', 'b', 'c'] });
+  const policy = await post(started.origin, '/_proxy/accounts/b/auto-select', '{"enabled":false}');
+  assert.equal(policy.statusCode, 200);
+  assert.equal(JSON.parse(policy.body).accounts[1].auto_select_enabled, false);
+  assert.equal(JSON.parse(await readFile(started.configPath, 'utf8')).accounts[1].auto_select_enabled, false);
+  assert.equal((await post(started.origin, '/_proxy/reload-config')).statusCode, 200);
+  assert.equal((await post(started.origin, '/_proxy/switch', '{"name":"b"}')).statusCode, 200);
+  await request(started.origin, '/backend-api/codex/responses', { method: 'POST', body: '{}' });
+  limitB = true;
+  await request(started.origin, '/backend-api/codex/responses', { method: 'POST', body: '{}' });
+  assert.deepEqual(calls, ['b', 'b', 'c']);
+  await post(started.origin, '/_proxy/accounts/b/reload');
+  const status = JSON.parse((await request(started.origin, '/_proxy/status')).body);
+  assert.equal(status.active, 'c');
+  assert.equal(status.selection_source, 'automatic');
+  assert.equal(status.accounts[1].auto_select_enabled, false);
+  assert.equal(status.accounts[1].state, 'COOLDOWN');
+});
+
+test('all manual-only accounts require an explicit selection and automatic return disables it', async (t) => {
+  let calls = 0;
+  const upstream = await startHttpServer(t, (_req, res) => { calls += 1; res.writeHead(204).end(); });
+  const started = await startTestProxy(t, { upstreamOrigin: upstream.origin, accountNames: ['a'] });
+  await post(started.origin, '/_proxy/accounts/a/auto-select', '{"enabled":false}');
+  const send = () => request(started.origin, '/backend-api/codex/responses', { method: 'POST', body: '{}' });
+  assert.equal((await send()).statusCode, 503);
+  assert.equal(calls, 0);
+  assert.equal((await post(started.origin, '/_proxy/switch', '{"name":"a"}')).statusCode, 200);
+  assert.equal((await send()).statusCode, 204);
+  assert.equal(calls, 1);
+  assert.equal((await post(started.origin, '/_proxy/automatic')).statusCode, 200);
+  assert.equal((await send()).statusCode, 503);
+  assert.equal(calls, 1);
+});
+
+for (const action of ['exclude', 'manual']) {
+  test(`request admission rechecks a stale candidate after ${action} control completes`, { timeout: 5000 }, async (t) => {
+    const calls = [];
+    const upstream = await startHttpServer(t, (req, res) => {
+      calls.push(req.headers['chatgpt-account-id']);
+      res.writeHead(204).end();
+    });
+    const started = await startTestProxy(t, { upstreamOrigin: upstream.origin, accountNames: ['a', 'b'] });
+    const selected = Promise.withResolvers();
+    const release = Promise.withResolvers();
+    const selectReady = started.proxy.failover.selectReady.bind(started.proxy.failover);
+    let hold = true;
+    started.proxy.failover.selectReady = async (excluded) => {
+      const candidate = await selectReady(excluded);
+      if (hold) {
+        hold = false;
+        selected.resolve();
+        await release.promise;
+      }
+      return candidate;
+    };
+    const pending = request(started.origin, '/backend-api/codex/responses', { method: 'POST', body: '{}' });
+    try {
+      await selected.promise;
+      const changed = action === 'exclude'
+        ? await post(started.origin, '/_proxy/accounts/a/auto-select', '{"enabled":false}')
+        : await post(started.origin, '/_proxy/switch', '{"name":"b"}');
+      assert.equal(changed.statusCode, 200);
+    } finally {
+      release.resolve();
+    }
+    assert.equal((await pending).statusCode, 204);
+    assert.deepEqual(calls, ['synthetic-account-b']);
+  });
+}
+
+test('excluding an account preserves its started response and routes subsequent work elsewhere', { timeout: 5000 }, async (t) => {
+  const first = Promise.withResolvers();
+  const upstream = await startHttpServer(t, (req, res) => {
+    if (req.headers['chatgpt-account-id'] === 'synthetic-account-a') {
+      res.writeHead(200, { 'content-type': 'text/event-stream' });
+      res.write('event: response.created\ndata: {"type":"response.created"}\n\n');
+      first.resolve(res);
+    } else res.writeHead(200, { 'content-type': 'text/event-stream' }).end(sseOk('b'));
+  });
+  const started = await startTestProxy(t, { upstreamOrigin: upstream.origin, accountNames: ['a', 'b'] });
+  const pending = request(started.origin, '/backend-api/codex/responses', { method: 'POST', body: '{}' });
+  const response = await first.promise;
+  try {
+    const changed = await post(started.origin, '/_proxy/accounts/a/auto-select', '{"enabled":false}');
+    assert.equal(changed.statusCode, 200);
+    const status = JSON.parse(changed.body);
+    assert.equal(status.active, 'b');
+    assert.equal(status.accounts[0].in_flight, 1);
+    const next = await request(started.origin, '/backend-api/codex/responses', { method: 'POST', body: '{}' });
+    assert.match(next.body.toString(), /"id":"b"/);
+    assert.equal(response.destroyed, false);
+  } finally {
+    response.end(sseOk('a-finished'));
+  }
+  assert.match((await pending).body.toString(), /"id":"a-finished"/);
+});
+
+for (const legacyConfig of [false, true]) {
+test(`startup applies saved registry policy with ${legacyConfig ? 'legacy' : 'explicit'} registry config before traffic`, async (t) => {
+  const root = path.join(await makeTempDir(t), 'CodexMulti');
+  const storageKey = `codex-${'1'.repeat(32)}`;
+  const authFile = await writeAccountAuth(path.join(root, 'accounts', storageKey), 'codex', syntheticAuth('a', 4_102_444_800));
+  const registryFile = path.join(root, 'accounts.json');
+  await writeFile(registryFile, JSON.stringify({ schema_version: 1, accounts: [{
+    id: 'stable-a', provider: 'codex', storage_key: storageKey, auto_select_enabled: false,
+  }] }), { mode: 0o600 });
+  let calls = 0;
+  const upstream = await startHttpServer(t, (_req, res) => { calls += 1; res.writeHead(204).end(); });
+  const started = await startTestProxy(t, { upstreamOrigin: upstream.origin, temp: root, config: {
+    ...(legacyConfig ? {} : { account_registry_file: registryFile }),
+    accounts: [{ name: 'renamed-a', auth_file: authFile, auto_select_enabled: true }],
+  } });
+  const status = JSON.parse((await request(started.origin, '/_proxy/status')).body);
+  assert.equal(status.active, null);
+  assert.equal(status.accounts[0].auto_select_enabled, false);
+  assert.equal((await request(started.origin, '/backend-api/codex/responses', { method: 'POST', body: '{}' })).statusCode, 503);
+  assert.equal(calls, 0);
+});
+}
+
 test('status v2 exposes labels, normalized auth paths, and fixed config path without credentials', async (t) => {
   const upstream = await startHttpServer(t, (_req, res) => res.writeHead(204).end());
   const started = await startTestProxy(t, {
@@ -103,8 +235,8 @@ test('reload-config reorder keeps cooldown and cursor with the exact auth file o
   const started = await startTestProxy(t, {
     upstreamOrigin: upstream.origin, accountNames: ['a', 'b'], now,
   });
-  await started.proxy.failover.markCooldown('a', now + 60_000);
   await started.proxy.failover.switchTo('a');
+  await started.proxy.failover.markCooldown('a', now + 60_000);
   await replaceConfig(started, (config) => ({
     ...config,
     accounts: [
@@ -128,8 +260,8 @@ test('reload-config migrates pause, cooldown, INVALID, and cursor by auth_file a
   });
   await started.proxy.failover.markCooldown('a', now + 60_000);
   await started.proxy.failover.pause('b');
-  await started.proxy.failover.markInvalid('c');
   await started.proxy.failover.switchTo('c');
+  await started.proxy.failover.markInvalid('c');
   await replaceConfig(started, (config) => ({
     ...config,
     accounts: [

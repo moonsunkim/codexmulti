@@ -77,6 +77,9 @@ struct MenuLine: View {
     var body: some View {
         Button(action: action) {
             HStack {
+                if let checked = item.checked {
+                    Image(systemName: "checkmark").opacity(checked ? 1 : 0)
+                }
                 Text(verbatim: item.label)
                     .font(Face.menu)
                     .foregroundStyle(item.enabled ? (item.destructive ? tone.destructive : tone.text) : tone.text3)
@@ -92,6 +95,7 @@ struct MenuLine: View {
         .disabled(!item.enabled)
         .onHover(perform: onHover)
         .accessibilityLabel(item.label)
+        .accessibilityAddTraits(item.checked == true ? .isSelected : [])
     }
 }
 

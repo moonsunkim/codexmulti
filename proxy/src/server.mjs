@@ -9,6 +9,7 @@ import { pipeline } from 'node:stream/promises';
 import { isDeepStrictEqual } from 'node:util';
 import {
   AccountRegistry,
+  atomicWriteJson,
   ACCOUNT_NAME_RE,
   DEFAULT_REFRESH_SKEW_SECONDS,
   Mutex,
@@ -145,7 +146,9 @@ export function validateConfig(input, options = {}) {
   const names = new Set();
   for (const account of config.accounts) {
     if (!account || !ACCOUNT_NAME_RE.test(account.name) || typeof account.auth_file !== 'string'
-        || (account.label !== undefined && typeof account.label !== 'string')) {
+        || (account.label !== undefined && typeof account.label !== 'string')
+        || (account.auto_select_enabled !== undefined && typeof account.auto_select_enabled !== 'boolean')
+        || (account.app_id !== undefined && typeof account.app_id !== 'string')) {
       throw new Error('invalid_account');
     }
     assertSafeAuthPath(account.auth_file);
@@ -187,10 +190,45 @@ export function validateConfig(input, options = {}) {
       name: account.name,
       ...(account.label === undefined ? {} : { label: account.label }),
       auth_file: authFile,
+      ...(account.app_id === undefined ? {} : { app_id: account.app_id }),
+      ...(account.auto_select_enabled === undefined ? {} : { auto_select_enabled: account.auto_select_enabled }),
     };
   });
   if (authFiles.has(config.state_file) || (config.log_file && authFiles.has(config.log_file))) {
     throw new Error('runtime_file_conflicts_with_auth');
+  }
+  if (config.account_registry_file !== undefined
+      && (typeof config.account_registry_file !== 'string' || !path.isAbsolute(config.account_registry_file))) {
+    throw new Error('invalid_account_registry_file');
+  }
+  return config;
+}
+
+async function applyRegistryPolicy(config) {
+  if (!config.account_registry_file) {
+    const roots = config.accounts.map((account) => {
+      const codexHome = path.dirname(account.auth_file);
+      const accountHome = path.dirname(codexHome);
+      const accountsHome = path.dirname(accountHome);
+      const root = path.dirname(accountsHome);
+      return path.basename(codexHome) === 'codex' && /^codex-[0-9a-f]{32}$/.test(path.basename(accountHome))
+        && path.basename(accountsHome) === 'accounts' && path.basename(root) === 'CodexMulti' ? root : null;
+    });
+    if (roots[0] && roots.every((root) => root === roots[0])) config.account_registry_file = path.join(roots[0], 'accounts.json');
+  }
+  if (!config.account_registry_file) return config;
+  const document = JSON.parse(await readFile(config.account_registry_file, 'utf8'));
+  if (document.schema_version !== 1 || !Array.isArray(document.accounts)) throw new Error('invalid_account_registry');
+  const root = path.dirname(config.account_registry_file);
+  for (const account of config.accounts) {
+    const source = document.accounts.find((value) => value.provider === 'codex'
+      && typeof value.storage_key === 'string' && /^codex-[0-9a-f]{32}$/.test(value.storage_key)
+      && path.join(root, 'accounts', value.storage_key, 'codex', 'auth.json') === account.auth_file);
+    if (!source) throw new Error('account_registry_mismatch');
+    if (source.auto_select_enabled != null) {
+      if (typeof source.auto_select_enabled !== 'boolean') throw new Error('invalid_auto_select_enabled');
+      account.auto_select_enabled = source.auto_select_enabled;
+    }
   }
   return config;
 }
@@ -419,6 +457,7 @@ function tokenExpiryIso(expiresAt) {
 export async function createProxy(configInput, options = {}) {
   const initialConfig = options.validated
     ? configInput : validateConfig(configInput, { allowPortZero: true, home: options.home });
+  await applyRegistryPolicy(initialConfig);
   const configPath = options.configPath ? path.resolve(options.configPath) : null;
   initialConfig.control_token_file = configPath ? controlTokenPath(configPath) : null;
   const updateGate = new UpdateGate({ context: options.updateContext, now: options.updateNow });
@@ -480,7 +519,11 @@ export async function createProxy(configInput, options = {}) {
   let renewalRun = Promise.resolve();
   if (options.updateContext) {
     options.updateContext.beforeActivate = async () => {
+      await applyRegistryPolicy(generation.config);
       await generation.failover.initialize();
+      for (const account of generation.config.accounts) {
+        if (account.auto_select_enabled !== undefined) await generation.failover.setAutoSelect(account.name, account.auto_select_enabled);
+      }
       scheduleTokenRenewal();
     };
   }
@@ -663,6 +706,8 @@ export async function createProxy(configInput, options = {}) {
     return {
       version: 2,
       update_protocol: 1,
+      routing_policy_version: 1,
+      selection_source: state.selection_source,
       config_path: configPath,
       active,
       cursor: state.cursor,
@@ -672,6 +717,8 @@ export async function createProxy(configInput, options = {}) {
         label: label ?? null,
         auth_file: authFile,
         state: failover.stateOf(name),
+        auto_select_enabled: state.accounts[name].auto_select_enabled,
+        manually_selected: state.manual_account === name,
         cooldown_until: state.accounts[name].cooldown_until,
         reason: state.accounts[name].reason,
         token_expires_at: registry.tokenExpiresAt(name) === null
@@ -683,7 +730,7 @@ export async function createProxy(configInput, options = {}) {
   }
 
   function immutableConfig(config) {
-    const { accounts: _accounts, ...immutable } = config;
+    const { accounts: _accounts, account_registry_file: _registryFile, ...immutable } = config;
     return immutable;
   }
 
@@ -726,6 +773,7 @@ export async function createProxy(configInput, options = {}) {
       if (!isDeepStrictEqual(immutableConfig(current.config), immutableConfig(candidateConfig))) {
         return { status: 409, body: { error: 'restart_required' } };
       }
+      await applyRegistryPolicy(candidateConfig);
       const candidateFailover = new FailoverManager(candidateConfig.accounts, {
         stateFile: candidateConfig.state_file,
         now: options.now,
@@ -830,7 +878,40 @@ export async function createProxy(configInput, options = {}) {
     if (request.method === 'POST' && route === '/_proxy/switch') {
       const body = await readControlJson(request);
       if (typeof body.name !== 'string') return json(response, 400, { error: 'name_required' });
-      await failover.switchTo(body.name);
+      try {
+        await admissionMutex.run(() => failover.switchTo(body.name));
+      } catch (error) {
+        if (error.message === 'account_not_ready' || error.message === 'unknown_account') {
+          return json(response, 409, { error: error.message });
+        }
+        throw error;
+      }
+      return json(response, 200, await statusPayload(current));
+    }
+    if (request.method === 'POST' && route === '/_proxy/automatic') {
+      await readControlJson(request, { requireBody: true });
+      await admissionMutex.run(() => failover.returnToAutomatic());
+      return json(response, 200, await statusPayload(current));
+    }
+    const policyMatch = route.match(/^\/_proxy\/accounts\/([A-Za-z0-9._-]+)\/auto-select$/);
+    if (request.method === 'POST' && policyMatch) {
+      const body = await readControlJson(request, { requireBody: true });
+      if (typeof body?.enabled !== 'boolean') return json(response, 400, { error: 'enabled_required' });
+      const name = policyMatch[1];
+      const account = current.config.accounts.find((value) => value.name === name);
+      if (!account) return json(response, 404, { error: 'unknown_account' });
+      await reloadMutex.run(() => admissionMutex.run(async () => {
+        if (generation !== current || reconfiguring) throw new Error('proxy_reconfiguring');
+        if (configPath) {
+          const disk = JSON.parse(await readFile(configPath, 'utf8'));
+          const target = disk.accounts.find((value) => path.resolve(expandHome(value.auth_file, options.home ?? os.homedir())) === account.auth_file);
+          if (!target) throw new Error('account_registry_mismatch');
+          target.auto_select_enabled = body.enabled;
+          await atomicWriteJson(configPath, disk);
+        }
+        await failover.setAutoSelect(name, body.enabled);
+        account.auto_select_enabled = body.enabled;
+      }));
       return json(response, 200, await statusPayload(current));
     }
     const clearCooldownMatch = route.match(/^\/_proxy\/accounts\/([A-Za-z0-9._-]+)\/clear-cooldown$/);
@@ -850,7 +931,7 @@ export async function createProxy(configInput, options = {}) {
         throw error;
       }
     }
-    const match = route.match(/^\/_proxy\/accounts\/([A-Za-z0-9._-]+)\/(pause|reload|refresh)$/);
+    const match = route.match(/^\/_proxy\/accounts\/([A-Za-z0-9._-]+)\/(pause|resume|reload|refresh)$/);
     if (request.method === 'POST' && match) {
       await readControlJson(request);
       const [, name, action] = match;
@@ -862,6 +943,8 @@ export async function createProxy(configInput, options = {}) {
           state: AccountState.PAUSED,
           in_flight: inFlight.get(name) ?? 0,
         });
+      } else if (action === 'resume') {
+        await admissionMutex.run(() => failover.resume(name));
       } else if (action === 'reload') {
         try {
           await registry.reload(name);
@@ -899,9 +982,12 @@ export async function createProxy(configInput, options = {}) {
     return json(response, 404, { error: 'control_not_found' });
   }
 
-  async function attemptUpstream(current, request, body, target, name) {
+  async function attemptUpstream(current, request, body, target, name, cooldownProbe = false) {
+    let selectionRevision;
     const admitted = await admissionMutex.run(async () => {
       if (reconfiguring || generation !== current) return false;
+      if (!current.failover.isSelectable(name, { cooldownProbe })) throw new Error('proxy_selection_changed');
+      selectionRevision = current.failover.state.selection_revision;
       changeInFlight(current, name, 1);
       return true;
     });
@@ -919,7 +1005,7 @@ export async function createProxy(configInput, options = {}) {
         signal: request.proxySignal,
         headersTimeoutMs: current.config.upstream_headers_timeout_ms,
       });
-      return { ...opened, credentials };
+      return { ...opened, credentials, selectionRevision };
     } catch (error) {
       changeInFlight(current, name, -1);
       throw error;
@@ -927,8 +1013,11 @@ export async function createProxy(configInput, options = {}) {
   }
 
   async function attemptUpstreamUpgrade(current, request, target, name) {
+    let selectionRevision;
     const admitted = await admissionMutex.run(async () => {
       if (reconfiguring || generation !== current) return false;
+      if (!current.failover.isSelectable(name)) throw new Error('proxy_selection_changed');
+      selectionRevision = current.failover.state.selection_revision;
       changeInFlight(current, name, 1);
       return true;
     });
@@ -942,7 +1031,7 @@ export async function createProxy(configInput, options = {}) {
         new URL(target),
         { inspectMessages: isResponsesTarget(target) },
       );
-      return await openUpstreamUpgrade({
+      const opened = await openUpstreamUpgrade({
         method: request.method,
         target,
         headers,
@@ -950,6 +1039,7 @@ export async function createProxy(configInput, options = {}) {
         signal: request.proxySignal,
         headersTimeoutMs: current.config.upstream_headers_timeout_ms,
       });
+      return { ...opened, selectionRevision };
     } catch (error) {
       changeInFlight(current, name, -1);
       throw error;
@@ -981,8 +1071,15 @@ export async function createProxy(configInput, options = {}) {
       const started = Date.now();
       let opened;
       try {
-        opened = await attemptUpstream(current, request, body, route.target, accountName);
+        opened = await attemptUpstream(current, request, body, route.target, accountName, cooldownProbe);
       } catch (error) {
+        if (error?.message === 'proxy_selection_changed') {
+          attempted.delete(accountName);
+          accountName = await failover.selectReady(attempted);
+          cooldownProbe = false;
+          if (accountName) continue;
+          return json(response, 503, { error: 'proxy_no_eligible_account' });
+        }
         if (error?.message === 'proxy_reconfiguring') {
           return json(response, 503, { error: 'proxy_reconfiguring' });
         }
@@ -1079,7 +1176,7 @@ export async function createProxy(configInput, options = {}) {
           marginSeconds: config.cooldown_safety_margin_seconds,
         });
         if (classification.usageLimit) {
-          await failover.markCooldown(accountName, classification.cooldownUntil);
+          await failover.markCooldown(accountName, classification.cooldownUntil, opened.selectionRevision);
           logger({ timestamp: new Date().toISOString(), level: 'info', event: 'account_cooldown',
             request_id: request.proxyRequestId, method: request.method, route: route.route,
             status, duration_ms: Date.now() - started, account_name: accountName, attempt: attemptNumber,
@@ -1120,14 +1217,14 @@ export async function createProxy(configInput, options = {}) {
       return;
     }
     let attemptNumber = 0;
-    const markUsageLimit = async (name, event, headers = {}) => {
+    const markUsageLimit = async (name, event, selectionRevision, headers = {}) => {
       const classification = classify429(Buffer.from(JSON.stringify(event)), { ...headers, 'content-encoding': 'identity' }, {
         now: options.now ? options.now() : Date.now(),
         defaultSeconds: config.default_cooldown_seconds,
         marginSeconds: config.cooldown_safety_margin_seconds,
       });
       if (!classification.usageLimit) return false;
-      await failover.markCooldown(name, classification.cooldownUntil);
+      await failover.markCooldown(name, classification.cooldownUntil, selectionRevision);
       logger({
         timestamp: new Date().toISOString(), level: 'info', event: 'account_cooldown',
         request_id: request.proxyRequestId, method: request.method, route: route.route,
@@ -1139,7 +1236,15 @@ export async function createProxy(configInput, options = {}) {
     const connectAccount = async (name, excluded) => {
       while (name) {
         excluded.add(name);
-        const connected = await attemptUpstreamUpgrade(current, request, route.target, name);
+        let connected;
+        try {
+          connected = await attemptUpstreamUpgrade(current, request, route.target, name);
+        } catch (error) {
+          if (error?.message !== 'proxy_selection_changed') throw error;
+          excluded.delete(name);
+          name = await failover.selectReady(excluded);
+          continue;
+        }
         const owner = name;
         let released = false;
         const release = () => {
@@ -1161,7 +1266,7 @@ export async function createProxy(configInput, options = {}) {
             ? classify429(buffered.raw, connected.response.headers)
             : { usageLimit: false };
           if (connected.response.statusCode === 429 && classification.usageLimit
-              && await markUsageLimit(name, classification.body, connected.response.headers)) {
+              && await markUsageLimit(name, classification.body, connected.selectionRevision, connected.response.headers)) {
             name = await failover.selectReady(excluded);
             continue;
           }
@@ -1181,6 +1286,13 @@ export async function createProxy(configInput, options = {}) {
       try {
         opened = await attemptUpstreamUpgrade(current, request, route.target, accountName);
       } catch (error) {
+        if (error?.message === 'proxy_selection_changed') {
+          attempted.delete(accountName);
+          accountName = await failover.selectReady(attempted);
+          if (accountName) continue;
+          endUpgradeError(socket, 503, 'proxy_no_eligible_account');
+          return;
+        }
         if (error?.message === 'proxy_reconfiguring') {
           endUpgradeError(socket, 503, 'proxy_reconfiguring');
           return;
@@ -1245,6 +1357,11 @@ export async function createProxy(configInput, options = {}) {
               maximumBytes: config.request_body_limit_bytes,
               selectAccount: (excluded) => failover.selectReady(excluded),
               connectAccount,
+              admitAccount: (name, send) => admissionMutex.run(async () => {
+                if (!failover.isSelectable(name)) return false;
+                await send(failover.state.selection_revision);
+                return true;
+              }),
               markUsageLimit,
               onPendingChange: (delta) => { current.responsePending += delta; },
               onPeerChange: (name, delta) => {
@@ -1290,7 +1407,7 @@ export async function createProxy(configInput, options = {}) {
             })
             : { usageLimit: false };
           if (classification.usageLimit) {
-            await failover.markCooldown(currentAccount, classification.cooldownUntil);
+            await failover.markCooldown(currentAccount, classification.cooldownUntil, opened.selectionRevision);
             logger({
               timestamp: new Date().toISOString(),
               level: 'info',

@@ -685,6 +685,8 @@ const all_intents = [_]IntentCase{
     .{ .name = "confirm_failover_switch", .json = "{\"intent\":\"confirm_failover_switch\"}" },
     .{ .name = "cancel_failover_switch", .json = "{\"intent\":\"cancel_failover_switch\"}" },
     .{ .name = "pause_failover_account", .json = "{\"intent\":\"pause_failover_account\",\"row\":0}" },
+    .{ .name = "set_account_auto_select", .json = "{\"intent\":\"set_account_auto_select\",\"account_id\":\"acct-codex-one\",\"on\":false}" },
+    .{ .name = "return_automatic", .json = "{\"intent\":\"return_automatic\"}" },
     .{ .name = "begin_clear_cooldown_account", .json = "{\"intent\":\"begin_clear_cooldown_account\",\"row\":0}" },
     .{ .name = "reauthenticate", .json = "{\"intent\":\"reauthenticate\",\"row\":0}" },
     .{ .name = "add_claude_account", .json = "{\"intent\":\"add_claude_account\"}" },

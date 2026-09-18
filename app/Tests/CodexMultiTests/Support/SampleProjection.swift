@@ -33,7 +33,7 @@ enum SampleProjection {
 
     static var accountView: [String: Any] { [
         "account_id": "acct-codex-0001", "label": "user1@example.com", "provider_email": "user1@example.com",
-        "plan_label": "Pro", "provider": "codex", "enabled": true, "auth_state": "connected", "freshness": "as_of",
+        "plan_label": "Pro", "provider": "codex", "enabled": true, "auto_select_enabled": NSNull(), "auth_state": "connected", "freshness": "as_of",
         "snapshot_status": "fresh", "has_snapshot": true, "snapshot_captured_at_unix_s": 1784948000,
         "last_attempt_at_unix_s": 1784948000, "last_success_at_unix_s": 1784948000, "last_attempt_code": "",
         "reset_credit_count": 2, "credit_detail_status": "count_only", "credit_detail_count": 0,
@@ -88,14 +88,14 @@ enum SampleProjection {
     static var proxyAccountFact: [String: Any] { [
         "app_id": "acct-codex-0001", "storage_key": NSNull(), "proxy_name": "user1", "label": "user1@example.com",
         "state": "ready", "cooldown_until_unix_s": NSNull(), "token_expires_at_unix_s": 1785640000,
-        "in_flight": 0, "active": false, "mapped": true,
+        "in_flight": 0, "active": false, "auto_select_enabled": true, "manually_selected": false, "policy_supported": false, "mapped": true,
     ] }
 
     static var proxyAccountView: [String: Any] { [
         "index": 0, "order_text": "1", "app_id": "acct-codex-0001", "label": "user1@example.com",
         "label_local": "user1", "label_domain": "@example.com", "state": "ready", "in_flight": 0,
         "state_text": "Ready", "state_accent": false, "state_ok": true, "state_info": false, "state_neutral": false,
-        "state_destructive": false, "detail_text": "d", "in_flight_text": "", "active": false, "mapped": true,
+        "state_destructive": false, "detail_text": "d", "in_flight_text": "", "active": false, "auto_select_enabled": true, "manually_selected": false, "policy_supported": false, "mapped": true,
         "can_switch": true, "can_pause": true, "can_resume": false, "can_reload": false, "can_clear_cooldown": false,
         "has_actions": true, "menu_open": false, "label_muted": false, "divider_below": false,
     ] }

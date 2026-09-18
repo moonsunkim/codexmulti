@@ -704,7 +704,7 @@ test('control pause returns 202 immediately, blocks new selection, and exposes d
   const paused = JSON.parse((await request(started.origin, '/_proxy/status')).body);
   assert.equal(paused.accounts.find((account) => account.name === 'a').state, 'PAUSED');
   assert.equal(paused.accounts.find((account) => account.name === 'a').in_flight, 0);
-  const reloaded = await request(started.origin, '/_proxy/accounts/a/reload', {
+  const reloaded = await request(started.origin, '/_proxy/accounts/a/resume', {
     method: 'POST', body: '{}', headers: { 'content-type': 'application/json' },
   });
   assert.equal(reloaded.statusCode, 200);

@@ -17,7 +17,7 @@ function normalizeAccounts(accounts) {
   return accounts.map((account) => {
     const normalized = typeof account === 'string'
       ? { name: account, auth_file: null }
-      : { name: account?.name, auth_file: account?.auth_file ?? null };
+      : { name: account?.name, auth_file: account?.auth_file ?? null, auto_select_enabled: account?.auto_select_enabled };
     if (typeof normalized.name !== 'string' || !normalized.name || names.has(normalized.name)) {
       throw new Error('invalid_account');
     }
@@ -34,6 +34,7 @@ function normalizeAccounts(accounts) {
 function accountState(account) {
   return {
     ...(account.auth_file === null ? {} : { auth_file: account.auth_file }),
+    auto_select_enabled: account.auto_select_enabled ?? true,
     paused: false,
     cooldown_until: null,
     reason: null,
@@ -44,6 +45,9 @@ function initialState(accounts, now) {
   return {
     version: 1,
     cursor: accounts[0].name,
+    selection_source: 'automatic',
+    manual_account: null,
+    selection_revision: 0,
     accounts: Object.fromEntries(accounts.map((account) => [account.name, accountState(account)])),
     updated_at: new Date(now).toISOString(),
   };
@@ -54,6 +58,11 @@ function validateState(state) {
       || state.accounts === null || Array.isArray(state.accounts)
       || typeof state.cursor !== 'string' || !Object.hasOwn(state.accounts, state.cursor)
       || typeof state.updated_at !== 'string' || !Number.isFinite(Date.parse(state.updated_at))) {
+    throw new Error('invalid_state_file');
+  }
+  if ((state.selection_source !== undefined && !['automatic', 'manual'].includes(state.selection_source))
+      || (state.manual_account != null && !Object.hasOwn(state.accounts, state.manual_account))
+      || (state.selection_revision !== undefined && (!Number.isSafeInteger(state.selection_revision) || state.selection_revision < 0))) {
     throw new Error('invalid_state_file');
   }
   const entries = Object.entries(state.accounts);
@@ -72,7 +81,8 @@ function validateState(state) {
       throw new Error('invalid_state_file');
     }
     if (hasAuthFile) authFiles.add(value.auth_file);
-    if (!value || typeof value.paused !== 'boolean'
+    if ((value.auto_select_enabled !== undefined && typeof value.auto_select_enabled !== 'boolean')
+        || !value || typeof value.paused !== 'boolean'
         || !(value.cooldown_until === null || typeof value.cooldown_until === 'string')
         || !(value.reason === null || typeof value.reason === 'string')) {
       throw new Error('invalid_state_file');
@@ -98,6 +108,7 @@ function migrateState(previous, accounts, now, { legacy = false } = {}) {
     if (!source) continue;
     migrated.accounts[account.name] = {
       ...(account.auth_file === null ? {} : { auth_file: account.auth_file }),
+      auto_select_enabled: account.auto_select_enabled ?? source.value.auto_select_enabled ?? !source.value.paused,
       paused: source.value.paused,
       cooldown_until: source.value.cooldown_until,
       reason: source.value.reason,
@@ -108,6 +119,18 @@ function migrateState(previous, accounts, now, { legacy = false } = {}) {
     ? accounts.find(({ name }) => name === previous.cursor)
     : accounts.find(({ auth_file }) => auth_file === previousCursor.auth_file);
   migrated.cursor = cursorOwner?.name ?? accounts[0].name;
+  const manualOwner = accounts.find((account) => legacy
+    ? account.name === previous.manual_account
+    : account.auth_file === previous.accounts[previous.manual_account]?.auth_file);
+  if (previous.selection_source === 'manual' && manualOwner) {
+    const value = migrated.accounts[manualOwner.name];
+    if (!value.paused && value.reason !== 'invalid_credentials'
+        && (!value.cooldown_until || Date.parse(value.cooldown_until) <= now)) {
+      migrated.selection_source = 'manual';
+      migrated.manual_account = manualOwner.name;
+    }
+  }
+  migrated.selection_revision = previous.selection_revision ?? 0;
   migrated.updated_at = previous.updated_at;
   return migrated;
 }
@@ -205,34 +228,85 @@ export class FailoverManager {
     return !value.cooldown_until || Date.parse(value.cooldown_until) <= this.now();
   }
 
+  isSelectable(name, { cooldownProbe = false } = {}) {
+    const value = this.state.accounts[name];
+    if (!value || this.invalid.has(name) || value.paused) return false;
+    const manual = this.state.manual_account;
+    if (manual && this.#readyForSelection(manual) && manual !== name) return false;
+    if (cooldownProbe) return value.auto_select_enabled && this.stateOf(name) === AccountState.COOLDOWN;
+    return this.#readyForSelection(name)
+      && (value.auto_select_enabled || this.state.manual_account === name);
+  }
+
   async selectReady(excluded = new Set()) {
     await this.expireCooldowns();
-    return this.#orderedFromCursor().find((name) => !excluded.has(name)
-      && this.#readyForSelection(name)) ?? null;
+    return this.peekActive(excluded);
   }
 
   async active() {
     return await this.selectReady();
   }
 
-  peekActive() {
-    return this.#orderedFromCursor().find((name) => this.#readyForSelection(name)) ?? null;
+  peekActive(excluded = new Set()) {
+    const manual = this.state.manual_account;
+    if (manual && !excluded.has(manual) && this.#readyForSelection(manual)) return manual;
+    return this.#orderedFromCursor().find((name) => !excluded.has(name)
+      && this.state.accounts[name].auto_select_enabled && this.#readyForSelection(name)) ?? null;
+  }
+
+  #clearManual(name, revision = this.state.selection_revision) {
+    if (this.state.manual_account !== name || revision !== this.state.selection_revision) return;
+    this.state.manual_account = null;
+    this.state.selection_source = 'automatic';
+    this.state.selection_revision += 1;
+  }
+
+  async setAutoSelect(name, enabled) {
+    if (!this.names.includes(name)) throw new Error('unknown_account');
+    if (typeof enabled !== 'boolean') throw new Error('invalid_auto_select_enabled');
+    await this.mutex.run(async () => {
+      const previous = this.snapshot();
+      this.state.accounts[name].auto_select_enabled = enabled;
+      try { await this.#saveLocked(); } catch (error) { this.state = previous; throw error; }
+    });
+  }
+
+  async returnToAutomatic() {
+    await this.mutex.run(async () => {
+      const previous = this.snapshot();
+      this.state.manual_account = null;
+      this.state.selection_source = 'automatic';
+      this.state.selection_revision += 1;
+      try { await this.#saveLocked(); } catch (error) { this.state = previous; throw error; }
+    });
+    return await this.active();
+  }
+
+  async resume(name) {
+    await this.mutex.run(async () => {
+      const value = this.state.accounts[name];
+      if (!value) throw new Error('unknown_account');
+      value.paused = false;
+      if (value.reason === 'operator_paused') value.reason = null;
+      await this.#saveLocked();
+    });
   }
 
   async earliestCooldown() {
     await this.expireCooldowns();
     const candidates = this.names
-      .filter((name) => this.stateOf(name) === AccountState.COOLDOWN)
+      .filter((name) => this.state.accounts[name].auto_select_enabled && this.stateOf(name) === AccountState.COOLDOWN)
       .map((name) => ({ name, at: Date.parse(this.state.accounts[name].cooldown_until) }))
       .sort((a, b) => a.at - b.at || this.names.indexOf(a.name) - this.names.indexOf(b.name));
     return candidates[0]?.name ?? null;
   }
 
-  async markCooldown(name, until) {
+  async markCooldown(name, until, selectionRevision = this.state.selection_revision) {
     await this.mutex.run(async () => {
       const value = this.state.accounts[name];
       value.cooldown_until = new Date(until).toISOString();
       value.reason = 'usage_limit_reached';
+      this.#clearManual(name, selectionRevision);
       await this.#saveLocked();
     });
   }
@@ -262,9 +336,10 @@ export class FailoverManager {
     });
   }
 
-  async markInvalid(name) {
+  async markInvalid(name, selectionRevision = this.state.selection_revision) {
     await this.mutex.run(async () => {
       this.invalid.add(name);
+      this.#clearManual(name, selectionRevision);
       this.state.accounts[name].reason = 'invalid_credentials';
       await this.#saveLocked();
     });
@@ -283,9 +358,7 @@ export class FailoverManager {
     await this.mutex.run(async () => {
       this.invalid.delete(name);
       const value = this.state.accounts[name];
-      value.paused = false;
-      value.cooldown_until = null;
-      value.reason = null;
+      if (value.reason === 'invalid_credentials') value.reason = null;
       await this.#saveLocked();
     });
   }
@@ -296,6 +369,7 @@ export class FailoverManager {
       if (!value) throw new Error('unknown_account');
       value.paused = true;
       value.reason = 'operator_paused';
+      this.#clearManual(name);
       await this.#saveLocked();
     });
   }
@@ -303,8 +377,13 @@ export class FailoverManager {
   async switchTo(name) {
     if (!this.names.includes(name)) throw new Error('unknown_account');
     await this.mutex.run(async () => {
+      if (!this.#readyForSelection(name)) throw new Error('account_not_ready');
+      const previous = this.snapshot();
       this.state.cursor = name;
-      await this.#saveLocked();
+      this.state.manual_account = name;
+      this.state.selection_source = 'manual';
+      this.state.selection_revision += 1;
+      try { await this.#saveLocked(); } catch (error) { this.state = previous; throw error; }
     });
     return await this.active();
   }

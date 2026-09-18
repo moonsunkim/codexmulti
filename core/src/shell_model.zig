@@ -106,6 +106,8 @@ pub const Intent = union(enum) {
     confirm_failover_switch,
     cancel_failover_switch,
     pause_failover_account: u32,
+    set_account_auto_select: struct { account_id: []const u8, enabled: bool },
+    return_automatic,
     begin_clear_cooldown_account: u32,
     reauthenticate: u32,
     add_claude_account,
@@ -829,7 +831,7 @@ pub fn update(model: *Model, intent: Intent, effects: *Effects) void {
             if (index >= model.view.proxy_row_count) return;
             const row = model.view.proxy_rows[index];
             if (!row.can_resume or row.app_id.len == 0) return;
-            model.notice.setOutcome("Proxy resume", row.label, model.service.submit(.{ .proxy_reload_account = row.app_id }));
+            model.notice.setOutcome("Proxy resume", row.label, model.service.submit(if (row.state == .paused) .{ .proxy_resume_account = row.app_id } else .{ .proxy_reload_account = row.app_id }));
             reproject(model);
         },
         .begin_proxy_switch => |index| {
@@ -962,6 +964,21 @@ pub fn update(model: *Model, intent: Intent, effects: *Effects) void {
             reproject(model);
         },
         .cancel_failover_switch => model.failover_switch = .{},
+        .set_account_auto_select => |request| {
+            model.row_menu = null;
+            const index = model.view.indexOfAccount(request.account_id) orelse return;
+            if (!model.view.unified_rows[index].auto_select_can_change) return;
+            model.notice.setOutcome(strings.catalog(model.view.resolved_language).text(.auto_select_label), model.view.rows[index].label, model.service.submit(.{ .proxy_set_auto_select = .{
+                .account_id = request.account_id,
+                .enabled = request.enabled,
+            } }));
+            reproject(model);
+        },
+        .return_automatic => {
+            model.row_menu = null;
+            model.notice.setOutcome(strings.catalog(model.view.resolved_language).text(.return_automatic), model.view.proxy_active_label, model.service.submit(.proxy_return_automatic));
+            reproject(model);
+        },
         .pause_failover_account => |index| {
             model.row_menu = null;
             const proxy_index = proxyRowForAccount(model, index) orelse {
@@ -1147,7 +1164,7 @@ pub fn trimmedLabel(value: []const u8) []const u8 {
 }
 
 comptime {
-    if (@typeInfo(Intent).@"union".fields.len != 68) {
+    if (@typeInfo(Intent).@"union".fields.len != 70) {
         @compileError("Intent must have exactly every cm.bridge/1 table arm");
     }
 }

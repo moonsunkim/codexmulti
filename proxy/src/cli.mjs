@@ -9,7 +9,7 @@ import { DEFAULT_CODEXMULTI_STORE, formatImportTable, importCodexMulti } from '.
 
 function usage() {
   return [
-    'usage: codexmulti-proxy [--config PATH] <serve|status|switch|pause|reload|refresh|login> [name]',
+    'usage: codexmulti-proxy [--config PATH] <serve|status|switch|pause|resume|reload|refresh|login> [name]',
     '       codexmulti-proxy status [--labels] [--config PATH]',
     '       codexmulti-proxy pause <name> [--wait [seconds]] [--config PATH]',
     '       codexmulti-proxy clear-cooldown <name> [--config PATH]',
@@ -157,9 +157,11 @@ async function runLogin(config, name, dependencies = {}) {
   const account = config.accounts.find((candidate) => candidate.name === name);
   if (!account) throw new Error('unknown_account');
   let proxyOnline = false;
+  let previouslyPaused = false;
   const requestControl = dependencies.controlRequest ?? controlRequest;
   try {
-    await requestControl(config, 'GET', '/_proxy/status');
+    const status = await requestControl(config, 'GET', '/_proxy/status');
+    previouslyPaused = status.accounts.find((value) => value.name === name)?.state === 'PAUSED';
     proxyOnline = true;
   } catch (error) {
     if (error.message !== 'proxy_unreachable' && error.code !== 'ECONNREFUSED') throw error;
@@ -179,7 +181,8 @@ async function runLogin(config, name, dependencies = {}) {
   });
   if (code !== 0) throw new Error('codex_login_failed');
   if (proxyOnline) {
-    return await requestControl(config, 'POST', `/_proxy/accounts/${encodeURIComponent(name)}/reload`, {});
+    const reloaded = await requestControl(config, 'POST', `/_proxy/accounts/${encodeURIComponent(name)}/reload`, {});
+    return previouslyPaused ? reloaded : await requestControl(config, 'POST', `/_proxy/accounts/${encodeURIComponent(name)}/resume`, {});
   }
   return { login: 'complete', account: name };
 }
@@ -221,7 +224,7 @@ export async function main(argv = process.argv.slice(2), dependencies = {}) {
   } else if (command === 'switch' && name) {
     if (labels) throw new Error('invalid_arguments');
     result = await requestControl(config, 'POST', '/_proxy/switch', { name });
-  } else if ((command === 'pause' || command === 'reload' || command === 'clear-cooldown') && name) {
+  } else if ((command === 'pause' || command === 'resume' || command === 'reload' || command === 'clear-cooldown') && name) {
     if (labels) throw new Error('invalid_arguments');
     result = await requestControl(config, 'POST', `/_proxy/accounts/${encodeURIComponent(name)}/${command}`, {});
     if (command === 'pause' && waitSeconds !== null) {

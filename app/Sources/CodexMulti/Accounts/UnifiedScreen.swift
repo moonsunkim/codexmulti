@@ -29,9 +29,14 @@ enum UnifiedModel {
             actions.append(Item("switch", row.switch_label, enabled: row.can_switch_proxy || row.can_switch,
                                 intent: .begin_failover_switch(row: account)))
         }
-        if row.show_pause ?? (row.has_actions && (row.can_pause_proxy || row.can_pause)) {
-            actions.append(Item("pause", Copy.pauseInFailover, enabled: row.can_pause_proxy || row.can_pause,
-                                intent: .pause_failover_account(row: account)))
+        if let label = row.auto_select_label {
+            actions.append(Item("auto_select", label, enabled: row.auto_select_can_change == true,
+                                checked: row.auto_select_enabled ?? true,
+                                intent: .set_account_auto_select(account_id: accountID, on: !(row.auto_select_enabled ?? true))))
+        }
+        if row.show_return_automatic == true, let label = row.return_automatic_label {
+            actions.append(Item("automatic", label, enabled: shell.proxy_can_refresh,
+                                intent: .return_automatic))
         }
         if row.show_resume ?? (row.has_actions && row.can_resume), let proxy = row.proxy_index {
             actions.append(Item("resume", Copy.resumeInFailover, enabled: row.can_resume,
@@ -233,6 +238,12 @@ struct UnifiedRowHeader: View {
                         .foregroundStyle(tone.text)
                         .lineLimit(1)
                         .truncationMode(.tail)
+                    if let label = row.policy_label, !label.isEmpty {
+                        Text(verbatim: label)
+                            .font(Face.secondary)
+                            .foregroundStyle(tone.text)
+                            .help(row.auto_select_detail ?? "")
+                    }
                     if row.has_plan {
                         Text(verbatim: row.plan)
                             .font(Face.secondary)

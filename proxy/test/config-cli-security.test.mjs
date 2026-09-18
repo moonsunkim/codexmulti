@@ -249,7 +249,7 @@ test('CLI status, switch, pause, and reload commands call the live control API',
   assert.equal(Object.hasOwn(labelled.accounts[0], 'auth_file'), false);
   assert.equal((await invoke(['switch', 'b'])).active, 'b');
   assert.deepEqual(await invoke(['pause', 'b']), { name: 'b', state: 'PAUSED', in_flight: 0 });
-  assert.equal((await invoke(['reload', 'b'])).accounts.find(({ name }) => name === 'b').state, 'READY');
+  assert.equal((await invoke(['resume', 'b'])).accounts.find(({ name }) => name === 'b').state, 'READY');
 });
 
 test('CLI pause --wait polls status until the account drains', async (t) => {

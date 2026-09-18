@@ -6,6 +6,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.2.14]
+
+### Added
+
+- Make individual accounts manual-only with the account menu's **Include in automatic switching** option. Excluded accounts remain available when explicitly selected, and their policy survives restarts, renames, and sign-in.
+- Keep explicit account selections until another selection, a return to automatic selection, or an account availability failure. If a manually selected account reaches its usage limit, fail over only to accounts included in automatic switching.
+- Show manual-only and manual-use states separately from paused accounts, and count only automatic participants in pool capacity and automatic availability.
+
+### Fixed
+
+- Apply saved account policy before proxy startup and recheck policy when admitting HTTP or Responses WebSocket work, while preserving responses already in progress.
+- Keep automatic participation, pause, cooldown, and credential refresh independent. Existing paused accounts remain paused and migrate to manual-only.
+
 ## [0.2.13]
 
 ### Fixed

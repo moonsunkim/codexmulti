@@ -137,7 +137,7 @@ test "band status counts every mapped account that can serve including active" {
     var view: projection.ViewState = .{};
     try renderBand(&view, &accounts, 0);
 
-    try testing.expectEqualStrings("2 ready · 10m ago", view.toolbar_status_text);
+    try testing.expectEqualStrings("Auto: 2 ready · 10m ago", view.toolbar_status_text);
     try testing.expect(std.mem.indexOf(u8, view.toolbar_status_text, "private") == null);
 }
 
@@ -153,7 +153,7 @@ test "band status replaces freshness with the authoritative in-flight total" {
     var view: projection.ViewState = .{};
     try renderBand(&view, &accounts, 7);
 
-    try testing.expectEqualStrings("1 ready · 7 in flight", view.toolbar_status_text);
+    try testing.expectEqualStrings("Auto: 1 ready · 7 in flight", view.toolbar_status_text);
 }
 
 test "band status says No accounts before proxy lifecycle state" {
@@ -215,7 +215,7 @@ test "band status with none ready reports the soonest known cooldown reset" {
     var view: projection.ViewState = .{};
     try renderBand(&view, &accounts, 0);
 
-    try testing.expectEqualStrings("no cursor · None ready · next reset in 30m", view.toolbar_status_text);
+    try testing.expectEqualStrings("no cursor · Auto: none ready · reset in 30m", view.toolbar_status_text);
 }
 
 test "band status keeps the no-cursor prefix when ready accounts have no active cursor" {
@@ -228,5 +228,5 @@ test "band status keeps the no-cursor prefix when ready accounts have no active 
     var view: projection.ViewState = .{};
     try renderBand(&view, &accounts, 0);
 
-    try testing.expectEqualStrings("no cursor · 1 ready · 10m ago", view.toolbar_status_text);
+    try testing.expectEqualStrings("no cursor · Auto: 1 ready · 10m ago", view.toolbar_status_text);
 }

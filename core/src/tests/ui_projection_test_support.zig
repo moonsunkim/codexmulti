@@ -58,7 +58,7 @@ pub const RecordingService = struct {
         self.tags[self.submissions] = std.meta.activeTag(command);
         self.submissions += 1;
         self.last = switch (command) {
-            .set_appearance, .set_language, .set_codex_usage_window, .refresh_all, .add_account, .proxy_refresh_status, .proxy_sync_config, .install_proxy_service, .repair_proxy_service, .stop_proxy_service, .disable_codex_routing => command,
+            .set_appearance, .set_language, .set_codex_usage_window, .refresh_all, .add_account, .proxy_refresh_status, .proxy_sync_config, .install_proxy_service, .repair_proxy_service, .stop_proxy_service, .disable_codex_routing, .proxy_return_automatic => command,
             .set_codex_show_model_limits => |v| .{ .set_codex_show_model_limits = v },
             .set_launch_at_login => |v| .{ .set_launch_at_login = v },
             .report_launch_at_login_registration_failure => |v| .{ .report_launch_at_login_registration_failure = v },
@@ -69,6 +69,8 @@ pub const RecordingService = struct {
             .reauthenticate => |v| .{ .reauthenticate = self.keep(0, v) },
             .remove_account => |v| .{ .remove_account = self.keep(0, v) },
             .retry_reset => |v| .{ .retry_reset = self.keep(0, v) },
+            .proxy_resume_account => |v| .{ .proxy_resume_account = self.keep(0, v) },
+            .proxy_set_auto_select => |v| .{ .proxy_set_auto_select = .{ .account_id = self.keep(0, v.account_id), .enabled = v.enabled } },
             .proxy_switch_account => |v| .{ .proxy_switch_account = self.keep(0, v) },
             .proxy_pause_account => |v| .{ .proxy_pause_account = self.keep(0, v) },
             .proxy_reload_account => |v| .{ .proxy_reload_account = self.keep(0, v) },

@@ -238,6 +238,7 @@ test "the registry document round trips order, labels, and auth facts" {
         .created_at_unix_s = fixture_now,
     });
     _ = try registry.markConnected(codex_account_id, canary_identity);
+    try registry.setAutoSelect(codex_account_id, false);
     _ = try registry.markAuthState(claude_account_id, .reauth_required);
     try registry.setAccessExpiry(claude_account_id, fixture_now + 3600);
 
@@ -263,6 +264,13 @@ test "the registry document round trips order, labels, and auth facts" {
     try testing.expectEqual(account_registry.AuthState.reauth_required, restored.at(1).?.auth_state);
     try testing.expectEqual(@as(?i64, fixture_now + 3600), restored.at(1).?.access_expires_at_unix_s);
     try testing.expectEqualStrings(canary_identity, restored.at(0).?.provider_account_key.?);
+    try testing.expectEqual(@as(?bool, false), restored.at(0).?.auto_select_enabled);
+    try restored.setLabel(codex_account_id, "Renamed manual account");
+    _ = try restored.markAuthState(codex_account_id, .reauth_required);
+    _ = try restored.markConnected(codex_account_id, canary_identity);
+    try restored.move(codex_account_id, 1);
+    try testing.expectEqual(@as(?bool, false), restored.get(codex_account_id).?.auto_select_enabled);
+    try testing.expect(restored.get(codex_account_id).?.isRefreshable());
 
     const colliding = [_]account_registry.Account{
         .{ .id = "acct-a", .provider = .codex, .label = "A", .storage_key = "shared-key", .created_at_unix_s = 0 },

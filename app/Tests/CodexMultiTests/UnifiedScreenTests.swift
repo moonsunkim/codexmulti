@@ -8,6 +8,21 @@ final class UnifiedScreenTests: XCTestCase {
         try JSONDecoder().decode(Projection.self, from: Data(contentsOf: Fixtures.exported(name)))
     }
 
+    func testManualOnlyMenuKeepsSwitchEnabledAndSendsStableAccountPolicy() throws {
+        let p = try projection("manual-only-accounts")
+        let reserved = p.view.unified_rows[1]
+        let menu = UnifiedModel.rowMenu(reserved, shell: p.shell).flatMap { $0 }
+        XCTAssertEqual(reserved.policy_label, "Manual only")
+        XCTAssertFalse(reserved.failover_muted)
+        XCTAssertEqual(menu.first { $0.id == "switch" }?.enabled, true)
+        let policy = try XCTUnwrap(menu.first { $0.id == "auto_select" })
+        XCTAssertEqual(policy.checked, false)
+        XCTAssertEqual(policy.intent, .set_account_auto_select(account_id: reserved.account_id, on: true))
+        XCTAssertFalse(menu.contains { $0.id == "pause" })
+        let active = UnifiedModel.rowMenu(p.view.unified_rows[0], shell: p.shell).flatMap { $0 }
+        XCTAssertEqual(active.first { $0.id == "automatic" }?.intent, .return_automatic)
+    }
+
     func testOrderAndRegistryNoteFollowCore() throws {
         for name in ["unified-proxy-order", "unified-registry-order"] {
             let view = try projection(name).view
@@ -30,7 +45,7 @@ final class UnifiedScreenTests: XCTestCase {
         let shell = try projection("unified-proxy-order").shell
         var expectedIDs: [String]?
         for available in [true, false, true, false, true] {
-            for key in ["has_actions", "can_switch_proxy", "can_pause_proxy", "can_switch", "can_pause"] {
+            for key in ["has_actions", "can_switch_proxy", "can_pause_proxy", "can_switch", "can_pause", "auto_select_can_change"] {
                 row[key] = available
             }
             let decoded = try JSONDecoder().decode(UnifiedRowView.self, from: Fixtures.data(from: row))
@@ -38,7 +53,7 @@ final class UnifiedScreenTests: XCTestCase {
             if expectedIDs == nil { expectedIDs = menu.map(\.id) }
             XCTAssertEqual(menu.map(\.id), expectedIDs)
             XCTAssertEqual(menu.first { $0.id == "switch" }?.enabled, available)
-            XCTAssertEqual(menu.first { $0.id == "pause" }?.enabled, available)
+            XCTAssertEqual(menu.first { $0.id == "auto_select" }?.enabled, available)
         }
     }
 
@@ -64,7 +79,7 @@ final class UnifiedScreenTests: XCTestCase {
             let groups = UnifiedModel.rowMenu(row, shell: p.shell, topAccountID: top)
             let menu = groups.flatMap { $0 }
             XCTAssertTrue(UnifiedModel.menuShown(row, shell: p.shell, topAccountID: top), row.identity_label)
-            XCTAssertEqual(groups.map { $0.map(\.id) }, [["refresh", "reset"], ["move_to_top", "rename", "remove"]])
+            XCTAssertEqual(groups.map { $0.map(\.id) }, [["refresh", "auto_select", "reset"], ["move_to_top", "rename", "remove"]])
             XCTAssertTrue(menu.contains { $0.id == "refresh" && $0.label == "Refresh" }, row.identity_label)
             XCTAssertTrue(menu.contains { $0.id == "rename" && $0.label == "Rename…" }, row.identity_label)
             XCTAssertTrue(menu.contains { $0.id == "remove" && $0.label == "Remove…" }, row.identity_label)
@@ -332,7 +347,7 @@ final class UnifiedScreenTests: XCTestCase {
         func decode() throws -> UnifiedRowView { try JSONDecoder().decode(UnifiedRowView.self, from: Fixtures.data(from: row)) }
         let shell = try projection("unified-proxy-order").shell
         let accountOnly = UnifiedModel.rowMenu(try decode(), shell: shell, topAccountID: "acct-codex-top").flatMap { $0 }
-        XCTAssertEqual(accountOnly.map(\.id), ["refresh", "move_to_top", "rename", "remove"])
+        XCTAssertEqual(accountOnly.map(\.id), ["refresh", "auto_select", "move_to_top", "rename", "remove"])
         row["has_actions"] = true
         for key in ["show_switch", "show_pause", "show_resume"] { row[key] = true }
         row["account_index"] = 8
@@ -344,7 +359,7 @@ final class UnifiedScreenTests: XCTestCase {
         let menu = UnifiedModel.rowMenu(try decode(), shell: shell, topAccountID: "acct-codex-top").flatMap { $0 }
         XCTAssertEqual(menu.first { $0.id == "resume" }?.intent, .resume_proxy_account(row: 3))
         XCTAssertEqual(menu.first { $0.id == "refresh" }?.intent, .refresh_account(row: 8))
-        XCTAssertEqual(menu.map(\.id), ["refresh", "switch", "pause", "resume", "move_to_top", "rename", "remove"])
+        XCTAssertEqual(menu.map(\.id), ["refresh", "switch", "auto_select", "resume", "move_to_top", "rename", "remove"])
         XCTAssertEqual(menu.filter { $0.id == "switch" }.count, 1)
         XCTAssertFalse(menu.contains { $0.id == "sign_in" }, "the owner-defined unified menu has no auth line")
         XCTAssertFalse(menu.contains { $0.id == "reload" })

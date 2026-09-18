@@ -88,8 +88,8 @@ test('state persists auth_file and restores all state by exact auth path after r
   await first.initialize();
   await first.markCooldown('a', now + 60_000);
   await first.pause('b');
-  await first.markInvalid('c');
   await first.switchTo('c');
+  await first.markInvalid('c');
   const persisted = JSON.parse(await readFile(stateFile, 'utf8'));
   assert.equal(persisted.accounts.a.auth_file, original[0].auth_file);
 

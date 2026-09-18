@@ -4,6 +4,32 @@ import { gzipSync } from 'node:zlib';
 import { request } from './helpers.mjs';
 import { completed, responsesFixture, serverFrame, usageLimit } from './responses-websocket-helpers.mjs';
 
+test('live policy excludes an existing WebSocket peer until manually selected', async (t) => {
+  let limitB = false;
+  const fixture = await responsesFixture(t, ({ name, event, send }) => {
+    send(name === 'b' && limitB ? usageLimit(event) : completed(`response-${name}`, event));
+  }, { accountNames: ['a', 'b', 'c'] });
+  const client = await fixture.connect();
+  const post = (route, body = '{}') => request(fixture.origin, route, {
+    method: 'POST', headers: { 'content-type': 'application/json' }, body,
+  });
+  const next = async () => {
+    client.send({ type: 'response.create', model: 'synthetic', input: [] });
+    return (await client.next()).response.id;
+  };
+  assert.equal(await next(), 'response-a');
+  await post('/_proxy/accounts/a/auto-select', '{"enabled":false}');
+  await post('/_proxy/accounts/b/auto-select', '{"enabled":false}');
+  assert.equal(await next(), 'response-c');
+  await post('/_proxy/switch', '{"name":"b"}');
+  assert.equal(await next(), 'response-b');
+  limitB = true;
+  assert.equal(await next(), 'response-c');
+  await fixture.proxy.failover.clearCooldown('b');
+  assert.equal(await next(), 'response-c');
+  assert.deepEqual(fixture.calls.map(({ name }) => name), ['a', 'c', 'b', 'b', 'c', 'c']);
+});
+
 test('an in-band WebSocket usage limit retries the next account without surfacing the rejected request', async (t) => {
   const fixture = await responsesFixture(t, ({ name, event, send }) => {
     send(name === 'a' ? usageLimit(event) : completed('response-b', event));

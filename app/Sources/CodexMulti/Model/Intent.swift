@@ -41,6 +41,8 @@ enum Intent: Sendable, Equatable {
     case confirm_failover_switch
     case cancel_failover_switch
     case pause_failover_account(row: UInt32)
+    case set_account_auto_select(account_id: String, on: Bool)
+    case return_automatic
     case begin_clear_cooldown_account(row: UInt32)
     case reauthenticate(row: UInt32)
     case add_claude_account
@@ -113,6 +115,8 @@ enum Intent: Sendable, Equatable {
         case .confirm_failover_switch: "confirm_failover_switch"
         case .cancel_failover_switch: "cancel_failover_switch"
         case .pause_failover_account: "pause_failover_account"
+        case .set_account_auto_select: "set_account_auto_select"
+        case .return_automatic: "return_automatic"
         case .begin_clear_cooldown_account: "begin_clear_cooldown_account"
         case .reauthenticate: "reauthenticate"
         case .add_claude_account: "add_claude_account"
@@ -168,6 +172,9 @@ extension Intent: Encodable {
              .pause_failover_account(let row), .begin_clear_cooldown_account(let row), .reauthenticate(let row),
              .begin_rename(let row), .begin_remove(let row), .begin_reset(let row):
             try container.encode(row, forKey: .row)
+        case .set_account_auto_select(let accountID, let on):
+            try container.encode(accountID, forKey: .account_id)
+            try container.encode(on, forKey: .on)
         case .move_account(let accountID, let targetAccountID):
             try container.encode(accountID, forKey: .account_id)
             try container.encode(targetAccountID, forKey: .target_account_id)
@@ -202,7 +209,7 @@ extension Intent: Encodable {
              .begin_add_account, .cancel_add_account,
              .cancel_rename, .confirm_remove, .finish_mapped_remove, .cancel_remove, .acknowledge_reset, .confirm_reset,
              .retry_reset, .cancel_reset, .install_proxy_service, .repair_proxy_service, .stop_proxy_service,
-             .disable_codex_routing:
+             .disable_codex_routing, .return_automatic:
             break
         }
     }

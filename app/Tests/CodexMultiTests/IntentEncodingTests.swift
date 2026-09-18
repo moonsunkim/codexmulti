@@ -50,6 +50,8 @@ final class IntentEncodingTests: XCTestCase {
         (.confirm_failover_switch, #"{"intent":"confirm_failover_switch"}"#),
         (.cancel_failover_switch, #"{"intent":"cancel_failover_switch"}"#),
         (.pause_failover_account(row: 9), #"{"intent":"pause_failover_account","row":9}"#),
+        (.set_account_auto_select(account_id: "acct-codex-one", on: false), #"{"account_id":"acct-codex-one","intent":"set_account_auto_select","on":false}"#),
+        (.return_automatic, #"{"intent":"return_automatic"}"#),
         (.begin_clear_cooldown_account(row: 10), #"{"intent":"begin_clear_cooldown_account","row":10}"#),
         (.reauthenticate(row: 11), #"{"intent":"reauthenticate","row":11}"#),
         (.add_claude_account, #"{"intent":"add_claude_account"}"#),
@@ -88,7 +90,7 @@ final class IntentEncodingTests: XCTestCase {
         "pause_proxy_account", "resume_proxy_account", "begin_proxy_switch", "begin_clear_cooldown",
         "confirm_clear_cooldown", "cancel_clear_cooldown", "save_proxy_settings", "refresh_all", "refresh_account",
         "refresh_account_id", "begin_failover_switch", "begin_failover_switch_id", "confirm_failover_switch",
-        "cancel_failover_switch", "pause_failover_account", "begin_clear_cooldown_account", "reauthenticate",
+        "cancel_failover_switch", "pause_failover_account", "set_account_auto_select", "return_automatic", "begin_clear_cooldown_account", "reauthenticate",
         "add_claude_account", "add_codex_account", "begin_add_account", "commit_add_account", "cancel_add_account",
         "begin_rename", "commit_rename", "cancel_rename",
         "begin_remove", "confirm_remove", "finish_mapped_remove", "cancel_remove",
@@ -120,7 +122,7 @@ final class IntentEncodingTests: XCTestCase {
 
     func testGoldenCoversTheContractTableExactlyOnce() {
         let names = Self.golden.map(\.0.name)
-        XCTAssertEqual(names.count, 68)
+        XCTAssertEqual(names.count, 70)
         XCTAssertEqual(names, Self.contractNames)
         XCTAssertEqual(Set(names).count, names.count)
     }

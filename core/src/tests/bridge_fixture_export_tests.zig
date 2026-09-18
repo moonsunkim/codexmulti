@@ -14,6 +14,7 @@ const projection_names = [_][]const u8{
     "viewstate-two-accounts-fresh",
     "viewstate-attention-states",
     "viewstate-proxy-reachable-mapped",
+    "viewstate-manual-only-accounts",
     "viewstate-proxy-unreachable",
     "viewstate-proxy-config-mismatch",
     "viewstate-expanded-codex",
@@ -362,6 +363,15 @@ fn makeProjectionLanguage(allocator: std.mem.Allocator, name: []const u8, langua
         attach(&model, &service);
     } else if (std.mem.eql(u8, name, "viewstate-proxy-reachable-mapped")) {
         addMapped(&service);
+        attach(&model, &service);
+    } else if (std.mem.eql(u8, name, "viewstate-manual-only-accounts")) {
+        addMapped(&service);
+        for (service.proxy_accounts[0..service.proxy_account_count]) |*account| account.policy_supported = true;
+        service.accounts[0].fact.auto_select_enabled = false;
+        service.accounts[1].fact.auto_select_enabled = false;
+        service.proxy_accounts[0].auto_select_enabled = false;
+        service.proxy_accounts[0].manually_selected = true;
+        service.proxy_accounts[1].auto_select_enabled = false;
         attach(&model, &service);
     } else if (std.mem.eql(u8, name, "viewstate-proxy-unreachable")) {
         addTwo(&service);
@@ -737,6 +747,8 @@ const valid_intent_documents = [_][]const u8{
     "{\"intent\":\"confirm_failover_switch\"}",
     "{\"intent\":\"cancel_failover_switch\"}",
     "{\"intent\":\"pause_failover_account\",\"row\":0}",
+    "{\"intent\":\"set_account_auto_select\",\"account_id\":\"acct-codex-one\",\"on\":false}",
+    "{\"intent\":\"return_automatic\"}",
     "{\"intent\":\"begin_clear_cooldown_account\",\"row\":0}",
     "{\"intent\":\"reauthenticate\",\"row\":0}",
     "{\"intent\":\"add_claude_account\"}",
@@ -1149,8 +1161,8 @@ fn scanCommittedFixture(path: []const u8) !void {
     for (forbidden) |pattern| try testing.expect(std.mem.indexOf(u8, bytes, pattern) == null);
 }
 
-test "all 57 committed fixtures are valid JSON and contain no credential-like material" {
-    try testing.expectEqual(@as(usize, 54), projection_names.len);
+test "all 58 committed fixtures are valid JSON and contain no credential-like material" {
+    try testing.expectEqual(@as(usize, 55), projection_names.len);
     for (projection_names) |name| {
         var path_buffer: [160]u8 = undefined;
         const path = try std.fmt.bufPrint(&path_buffer, "{s}/{s}.json", .{ fixture_dir, name });
@@ -1221,6 +1233,12 @@ test "every named projection fixture proves its distinguishing state" {
             try testing.expectEqual(ui_model.ProxyAccountState.paused, wire.view.proxy_rows[3].state);
             try testing.expectEqual(ui_model.ProxyAccountState.invalid, wire.view.proxy_rows[4].state);
             try testing.expect(!wire.view.proxy_rows[4].mapped);
+        } else if (std.mem.eql(u8, name, "viewstate-manual-only-accounts")) {
+            try testing.expect(wire.view.proxy_rows[0].active);
+            try testing.expect(wire.view.unified_rows[0].show_return_automatic);
+            try testing.expect(!wire.view.unified_rows[1].auto_select_enabled);
+            try testing.expect(wire.view.unified_rows[1].show_switch);
+            try testing.expectEqualStrings("Manual only", wire.view.unified_rows[1].policy_label);
         } else if (std.mem.eql(u8, name, "viewstate-proxy-unreachable")) {
             try testing.expectEqual(ui_model.ProxyReachability.@"unreachable", wire.view.proxy_reachability);
             try testing.expectEqual(ui_model.ProxySyncState.failed, wire.view.proxy_sync_state);

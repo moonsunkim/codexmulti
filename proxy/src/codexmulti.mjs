@@ -95,7 +95,8 @@ export async function importCodexMulti(options = {}) {
 
     }
     rows.push({ name, label, accessExpiresAt, validation });
-    accounts.push({ name, label, auth_file: authFile });
+    accounts.push({ name, label, auth_file: authFile, app_id: source.id,
+      ...(source.auto_select_enabled == null ? {} : { auto_select_enabled: source.auto_select_enabled }) });
   }
 
   const valid = rows.every((row) => row.validation === 'ok');
@@ -106,6 +107,7 @@ export async function importCodexMulti(options = {}) {
     if (accounts.some((account) => path.resolve(account.auth_file) === out)) {
       throw new Error('output_conflicts_with_auth');
     }
+    next.account_registry_file = path.join(store, 'accounts.json');
     validateConfig(next, { home });
     await (options.writer ?? atomicWriteJson)(out, next, { createDirectory: true });
     wrote = true;

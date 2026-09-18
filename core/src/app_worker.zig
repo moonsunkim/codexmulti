@@ -37,7 +37,7 @@ pub const LoginOptions = struct {
     max_output_bytes: usize = login_runtime.default_max_output_bytes,
 };
 
-pub const ProxyJobKind = enum { refresh_status, switch_account, pause_account, reload_account, clear_cooldown, sync_config };
+pub const ProxyJobKind = enum { refresh_status, enable_auto_select, disable_auto_select, return_automatic, resume_account, switch_account, pause_account, reload_account, clear_cooldown, sync_config };
 pub const ProxyFailure = enum { @"unreachable", timeout, protocol_error, incompatible, action_failed, import_failed, import_node_missing };
 
 pub const ProxyJobResult = union(enum) {
@@ -81,6 +81,10 @@ pub const ProxyWorker = struct {
         };
         self.result = switch (self.kind) {
             .refresh_status => statusResult(client.status()),
+            .enable_auto_select => statusResult(client.setAutoSelect(self.proxy_name.slice(), true)),
+            .disable_auto_select => statusResult(client.setAutoSelect(self.proxy_name.slice(), false)),
+            .return_automatic => statusResult(client.returnToAutomatic()),
+            .resume_account => statusResult(client.resumeAccount(self.proxy_name.slice())),
             .switch_account => statusResult(client.switchAccount(self.proxy_name.slice())),
             .pause_account => pauseResult(client.pauseAccount(self.proxy_name.slice())),
             .reload_account => statusResult(client.reloadAccount(self.proxy_name.slice())),

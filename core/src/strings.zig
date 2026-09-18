@@ -115,6 +115,15 @@ pub const StaticKey = enum {
     shell_refresh,
     shell_sign_in,
     shell_sign_in_again,
+    auto_select_label,
+    manual_only,
+    manual_active,
+    manual_only_detail,
+    auto_select_pending,
+    auto_select_update_required,
+    return_automatic,
+    no_automatic_accounts,
+    pool_unavailable,
     shell_pause_in_failover,
     shell_clear_cooldown,
     shell_move_to_top,
@@ -800,6 +809,15 @@ const English = struct {
     const shell_refresh = "Refresh";
     const shell_sign_in = "Sign in…";
     const shell_sign_in_again = "Sign in again…";
+    const auto_select_label = "Include in automatic switching";
+    const manual_only = "Manual only";
+    const manual_active = "Manual";
+    const manual_only_detail = "Not selected automatically. Select this account to use it.";
+    const auto_select_pending = "Automatic switching setting pending";
+    const auto_select_update_required = "Update the proxy to apply this setting.";
+    const return_automatic = "Return to automatic selection";
+    const no_automatic_accounts = "No automatic accounts. Select an account or enable automatic switching.";
+    const pool_unavailable = " · Pool —";
     const shell_pause_in_failover = "Pause in failover";
     const shell_clear_cooldown = "Clear cooldown…";
     const shell_move_to_top = "Move to top";
@@ -1196,10 +1214,10 @@ const EnglishFormat = struct {
     const failed_count = "{d} failed";
     const toolbar_proxy_off = "Proxy off · {s}";
     const toolbar_proxy_unreachable = "Proxy unreachable · {s}";
-    const toolbar_none_ready_reset = "None ready · next reset in {s}";
-    const toolbar_none_ready = "None ready · {s}";
-    const toolbar_ready_in_flight = "{d} ready · {d} in flight";
-    const toolbar_ready = "{d} ready · {s}";
+    const toolbar_none_ready_reset = "Auto: none ready · reset in {s}";
+    const toolbar_none_ready = "Auto: none ready · {s}";
+    const toolbar_ready_in_flight = "Auto: {d} ready · {d} in flight";
+    const toolbar_ready = "Auto: {d} ready · {s}";
     const toolbar_pool_suffix = " · pool {d}%";
     const toolbar_proxy_status = "{s} · {s}";
     const toolbar_failed_suffix = " · {d} failed";
@@ -1328,7 +1346,16 @@ const Korean = struct {
     const shell_refresh = "새로 고침";
     const shell_sign_in = "로그인…";
     const shell_sign_in_again = "다시 로그인…";
-    const shell_pause_in_failover = "자동 전환 대상에서 제외";
+    const auto_select_label = "자동 전환에 포함";
+    const manual_only = "수동 전용";
+    const manual_active = "수동 사용";
+    const manual_only_detail = "자동으로 선택되지 않습니다. 직접 선택하면 사용할 수 있습니다.";
+    const auto_select_pending = "자동 전환 설정 적용 대기";
+    const auto_select_update_required = "설정을 적용하려면 프록시 업데이트가 필요합니다.";
+    const return_automatic = "자동 선택으로 돌아가기";
+    const no_automatic_accounts = "자동 전환할 계정이 없습니다. 계정을 직접 선택하거나 자동 전환에 포함해 주세요.";
+    const pool_unavailable = " · 풀 —";
+    const shell_pause_in_failover = "프록시에서 일시 중지";
     const shell_clear_cooldown = "대기 해제…";
     const shell_move_to_top = "맨 위로 이동";
     const shell_rename = "이름 변경…";
@@ -1345,7 +1372,7 @@ const Korean = struct {
     const shell_use_in_failover = "이 계정으로 전환…";
     const shell_pause = "일시 중지";
     const shell_resume = "재개";
-    const shell_resume_in_failover = "자동 전환 대상에 포함";
+    const shell_resume_in_failover = "일시 중지 해제";
     const shell_in_flight_suffix = "개 진행 중";
     const shell_status_separator = " · ";
     const shell_use_failover_proxy = "자동 계정 전환 사용";
@@ -1571,7 +1598,7 @@ const Korean = struct {
     const turn_on_routing = "라우팅 켜기";
     const proxy_ready = "준비됨";
     const proxy_cooldown = "대기 중";
-    const proxy_paused = "제외됨";
+    const proxy_paused = "일시 중지";
     const proxy_invalid = "잘못됨";
     const proxy_refreshing = "새로 고치는 중";
     const proxy_unknown = "알 수 없음";
@@ -1596,7 +1623,7 @@ const Korean = struct {
     const proxy_sync_failed = "마지막 프록시 동기화 실패.";
     const proxy_checking = "프록시 상태 확인 중…";
     const proxy_switching = "새 요청에 사용할 계정을 바꾸는 중…";
-    const proxy_pausing = "자동 전환 대상에서 제외하는 중…";
+    const proxy_pausing = "프록시에서 일시 중지하는 중…";
     const proxy_reloading = "프록시 계정 하나 다시 불러오는 중…";
     const proxy_clearing_cooldown = "프록시 대기 하나 해제 중…";
     const proxy_importing = "저장된 계정 가져오는 중…";
@@ -1724,10 +1751,10 @@ const KoreanFormat = struct {
     const failed_count = "{d}개 실패";
     const toolbar_proxy_off = "프록시 꺼짐 · {s}";
     const toolbar_proxy_unreachable = "프록시 연결 불가 · {s}";
-    const toolbar_none_ready_reset = "준비된 계정 없음 · 다음 재설정까지 {s}";
-    const toolbar_none_ready = "준비된 계정 없음 · {s}";
-    const toolbar_ready_in_flight = "{d}개 준비됨 · {d}개 처리 중";
-    const toolbar_ready = "{d}개 준비됨 · {s}";
+    const toolbar_none_ready_reset = "자동 전환 가능 0개 · 재설정 {s} 후";
+    const toolbar_none_ready = "자동 전환 가능 0개 · {s}";
+    const toolbar_ready_in_flight = "자동 전환 가능 {d}개 · {d}개 처리 중";
+    const toolbar_ready = "자동 전환 가능 {d}개 · {s}";
     const toolbar_pool_suffix = " · 풀 {d}%";
     const toolbar_proxy_status = "{s} · {s}";
     const toolbar_failed_suffix = " · {d}개 실패";
@@ -1751,7 +1778,7 @@ const KoreanFormat = struct {
     const updated_freshness = "업데이트 {s} · {s}";
     const active_in_flight = "활성 · {d}개 처리 중";
     const cooldown_until = "{s}까지 대기 · {s}";
-    const paused_draining = "제외됨 · 기존 요청 {d}개 처리 중";
+    const paused_draining = "일시 중지 · 기존 요청 {d}개 처리 중";
     const credits_available = "{d}개 사용 가능";
     const evidence_deferred = "{s} 보류";
     const evidence_failed = "{s} 실패 · {s}";

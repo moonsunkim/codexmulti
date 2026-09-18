@@ -81,6 +81,7 @@ class ContextCache {
 export function tunnelResponsesWebSocket({
   clientSocket, clientHead, initialPeer, handshake, maximumBytes,
   selectAccount, connectAccount, markUsageLimit, onRetry = () => {},
+  admitAccount = async (_name, send) => { await send(); return true; },
   onPendingChange = () => {}, onPeerChange = () => {}, onWorkChange = () => {},
 }) {
   return new Promise((resolve) => {
@@ -222,7 +223,7 @@ export function tunnelResponsesWebSocket({
       const pending = peerForEvent(peer, event);
       if (!pending && peer.retiredLanes.has(laneOf(event))
           && (event.type === 'error' || event.type?.startsWith('response.'))) return;
-      if (event.type === 'error' && await markUsageLimit(peer.name, event)) {
+      if (event.type === 'error' && await markUsageLimit(peer.name, event, pending?.selectionRevision)) {
         if (pending && !pending.started && !pending.interrupted) {
           const next = await selectAccount(pending.attempted);
           if (next && !stopped) {
@@ -306,7 +307,8 @@ export function tunnelResponsesWebSocket({
       }
       pending.attempted.add(name);
       const peer = await getPeer(name, pending.attempted);
-      if (!peer || stopped) return false;
+      if (stopped) return false;
+      if (!peer) return await dispatch(pending);
       pending.attempted.add(peer.name);
       let event = pending.event;
       const previous = event.previous_response_id ? cache.get(event.previous_response_id) : null;
@@ -330,15 +332,23 @@ export function tunnelResponsesWebSocket({
           return true;
         }
       }
-      if (pending.countedAccount) onWorkChange(pending.countedAccount, -1);
-      pending.countedAccount = peer.name;
-      onWorkChange(peer.name, 1);
-      pending.peer = peer;
-      peer.retiredLanes.delete(pending.lane);
-      peer.pending.set(pending.lane, pending);
-      lanes.get(pending.lane).lastPeer = peer;
-      latestPeer = peer;
-      await sendPeer(peer, event === pending.event ? pending.raw : webSocketFrame(event, { masked: true }));
+      const admitted = await admitAccount(peer.name, async (selectionRevision) => {
+        pending.selectionRevision = selectionRevision;
+        if (pending.countedAccount) onWorkChange(pending.countedAccount, -1);
+        pending.countedAccount = peer.name;
+        onWorkChange(peer.name, 1);
+        pending.peer = peer;
+        peer.retiredLanes.delete(pending.lane);
+        peer.pending.set(pending.lane, pending);
+        lanes.get(pending.lane).lastPeer = peer;
+        latestPeer = peer;
+        await sendPeer(peer, event === pending.event ? pending.raw : webSocketFrame(event, { masked: true }));
+      });
+      if (!admitted) {
+        pending.attempted.delete(name);
+        pending.attempted.delete(peer.name);
+        return await dispatch(pending);
+      }
       return true;
     };
 

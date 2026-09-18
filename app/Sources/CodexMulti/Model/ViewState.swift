@@ -180,6 +180,13 @@ struct UnifiedRowView: Decodable, Sendable, Equatable {
     let action_sign_in_again: Bool
     let action_busy: Bool
     let busy_label: String
+    let auto_select_enabled: Bool?
+    let auto_select_can_change: Bool?
+    let auto_select_label: String?
+    let auto_select_detail: String?
+    let policy_label: String?
+    let return_automatic_label: String?
+    let show_return_automatic: Bool?
     let show_switch: Bool?
     let show_pause: Bool?
     let show_resume: Bool?
@@ -205,6 +212,8 @@ struct UnifiedRowView: Decodable, Sendable, Equatable {
         case failover_in_flight, failover_in_flight_text
         case expanded, inspector_index, account_menu_open, proxy_menu_open, menu_open
         case action_refresh, action_sign_in, action_sign_in_again, action_busy, busy_label
+        case auto_select_enabled, auto_select_can_change, auto_select_label, auto_select_detail, policy_label
+        case return_automatic_label, show_return_automatic
         case show_switch, show_pause, show_resume, show_clear_cooldown
         case can_switch_proxy, switch_label, can_pause_proxy, can_clear_cooldown, can_reset, reset_label
         case can_switch, can_pause, can_resume, can_reload, has_actions
@@ -314,6 +323,7 @@ struct AccountView: Decodable, Sendable, Equatable {
     let plan_label: String
     let provider: Provider
     let enabled: Bool
+    let auto_select_enabled: Bool?
     let auth_state: AuthState
     let freshness: Freshness
     let snapshot_status: SnapshotStatus?
@@ -360,7 +370,7 @@ struct AccountView: Decodable, Sendable, Equatable {
     let reset_is_offerable: Bool
 
     enum CodingKeys: String, CodingKey, CaseIterable {
-        case account_id, label, provider_email, plan_label, provider, enabled, auth_state, freshness
+        case account_id, label, provider_email, plan_label, provider, enabled, auto_select_enabled, auth_state, freshness
         case snapshot_status, has_snapshot, snapshot_captured_at_unix_s, last_attempt_at_unix_s, last_success_at_unix_s
         case last_attempt_code, reset_credit_count, credit_detail_status, credit_detail_count
         case operation_in_flight, queued, pending_reset_attempt, unsent_reset_attempt, reset_proxy_clear
@@ -475,10 +485,13 @@ struct ProxyAccountFact: Decodable, Sendable, Equatable {
     let token_expires_at_unix_s: Int64?
     let in_flight: UInt32
     let active: Bool
+    let auto_select_enabled: Bool?
+    let manually_selected: Bool?
+    let policy_supported: Bool?
     let mapped: Bool
 
     enum CodingKeys: String, CodingKey, CaseIterable {
-        case app_id, storage_key, proxy_name, label, state, cooldown_until_unix_s, token_expires_at_unix_s, in_flight, active, mapped
+        case app_id, storage_key, proxy_name, label, state, cooldown_until_unix_s, token_expires_at_unix_s, in_flight, active, auto_select_enabled, manually_selected, policy_supported, mapped
     }
 }
 
@@ -502,6 +515,9 @@ struct ProxyAccountView: Decodable, Sendable, Equatable {
     let detail_text: String
     let in_flight_text: String
     let active: Bool
+    let auto_select_enabled: Bool?
+    let manually_selected: Bool?
+    let policy_supported: Bool?
     let mapped: Bool
     let can_switch: Bool
     let can_pause: Bool
@@ -517,7 +533,7 @@ struct ProxyAccountView: Decodable, Sendable, Equatable {
     enum CodingKeys: String, CodingKey, CaseIterable {
         case index, order_text, app_id, label, label_local, label_domain, state, in_flight, state_text
         case state_accent, state_ok, state_info, state_neutral, state_destructive, detail_text, in_flight_text
-        case active, mapped, can_switch, can_pause, can_resume, can_reload, can_clear_cooldown, has_actions
+        case active, auto_select_enabled, manually_selected, policy_supported, mapped, can_switch, can_pause, can_resume, can_reload, can_clear_cooldown, has_actions
         case menu_open, label_muted, divider_below
     }
 }
