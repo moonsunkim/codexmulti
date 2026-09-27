@@ -32,6 +32,8 @@ CodexMultiは、複数のCodexアカウントをまとめて管理するmacOSメ
 <p align="center"><sub><a href="assets/screenshots/menu-bar-light.png">ライト</a> · <a href="assets/screenshots/menu-bar-dark.png">ダーク</a></sub></p>
 <p align="center"><sub>メニューバーから、平均残量と各アカウントの利用量・リセット時刻をすぐに確認できます。架空のアカウントを表示しています。</sub></p>
 
+0.2.15以降、Failoverはモデルへのリクエストだけをプロキシ経由にし、Codexのログインとワークスペース取得には元のChatGPTバックエンドを使います。以前のCodexMulti接続設定はプロキシがアイドル状態のときに移行します。移行後はCodexクライアントを再起動してください。独自のChatGPTバックエンドとオフ設定は保持します。
+
 ## Failoverは何を解決する機能ですか？
 
 コーディング中に1つのアカウントが利用上限に達すると、別のアカウントに利用枠が残っていても作業が止まることがあります。

@@ -66,11 +66,38 @@ async function prepareCodexHome(root) {
   return { home, work };
 }
 
+// Model requests and account bootstrap have distinct identities. The discovery
+// fixture uses HTTP only as a local test transport and returns a valid HTTPS
+// workspace origin, so the real Codex validation remains enabled.
+async function startAccountBootstrap(testContext) {
+  const requests = [];
+  const server = await startHttpServer(testContext, async (req, res) => {
+    await readIncoming(req);
+    const route = req.url.split('?')[0];
+    requests.push(route);
+    if (route === '/backend-api/wham/accounts/check') {
+      assert.equal(req.headers['chatgpt-account-id'], 'synthetic-account-codex-client');
+      assert.equal(selectedName(req), 'codex-client');
+      res.writeHead(200, { 'content-type': 'application/json' });
+      res.end(JSON.stringify({ accounts: [{
+        id: 'synthetic-account-codex-client',
+        workspace_backend_origin: 'https://chatgpt.com',
+        account_routing_override: 'NO_CONSTRAINT',
+      }] }));
+      return;
+    }
+    res.writeHead(404, { 'content-type': 'application/json' });
+    res.end('{}');
+  });
+  return { ...server, requests };
+}
+
 async function runCodex(testContext, { home, work, proxyOrigin, prompt = 'reply with the single word ok', extraConfig = [] }) {
+  const bootstrap = await startAccountBootstrap(testContext);
   const args = [
     'exec',
     '--ignore-user-config',
-    '-c', `chatgpt_base_url="${proxyOrigin}/backend-api/"`,
+    '-c', `chatgpt_base_url="${bootstrap.origin}/backend-api/"`,
     '-c', `openai_base_url="${proxyOrigin}/backend-api/codex"`,
     '-c', 'service_tier="priority"',
     '-c', 'model="gpt-5.6-sol"',
@@ -112,9 +139,10 @@ async function runAppServerTurns(testContext, {
   home, work, proxyOrigin, turnCount = 2, prompt = 'reply with the single word ok', beforeStop = async () => {},
   extraConfig = [], beforeTurn = async () => {},
 }) {
+  const bootstrap = await startAccountBootstrap(testContext);
   const args = [
     'app-server', '--listen', 'stdio://',
-    '-c', `chatgpt_base_url="${proxyOrigin}/backend-api/"`,
+    '-c', `chatgpt_base_url="${bootstrap.origin}/backend-api/"`,
     '-c', `openai_base_url="${proxyOrigin}/backend-api/codex"`,
     '-c', 'service_tier="priority"',
     '-c', 'model="gpt-5.6-sol"',
@@ -168,6 +196,12 @@ async function runAppServerTurns(testContext, {
   } });
   await waitFor((message) => message.id === 1 && message.result, 'initialize');
   send({ method: 'initialized' });
+  send({ id: 100, method: 'account/read', params: { refreshToken: false } });
+  const account = await waitFor((message) => message.id === 100, 'account_read');
+  assert.equal(account.error, undefined, JSON.stringify(account.error));
+  assert.equal(account.result.workspaceRouting.chatgptAccountId, 'synthetic-account-codex-client');
+  assert.equal(account.result.workspaceRouting.backendOrigin, 'https://chatgpt.com');
+  assert.ok(bootstrap.requests.includes('/backend-api/wham/accounts/check'));
   send({ id: 2, method: 'thread/start', params: {
     model: 'gpt-5.6-sol', serviceTier: 'priority', cwd: work,
     approvalPolicy: 'never', sandbox: 'read-only', ephemeral: true,

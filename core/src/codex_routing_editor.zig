@@ -4,11 +4,10 @@ const ui_model = @import("ui_model.zig");
 pub const max_config_bytes: usize = 1024 * 1024;
 pub const chatgpt_key = "chatgpt_base_url";
 pub const openai_key = "openai_base_url";
-pub const chatgpt_value = "http://127.0.0.1:8787/backend-api/";
+pub const legacy_chatgpt_value = "http://127.0.0.1:8787/backend-api/";
 pub const openai_value = "http://127.0.0.1:8787/backend-api/codex";
-pub const canonical_pair =
-    "chatgpt_base_url = \"" ++ chatgpt_value ++ "\"\n" ++
-    "openai_base_url = \"" ++ openai_value ++ "\"\n";
+// Account discovery must retain the client's ChatGPT identity and HTTPS backend.
+pub const canonical_config = "openai_base_url = \"" ++ openai_value ++ "\"\n";
 
 pub const Fingerprint = [std.crypto.hash.sha2.Sha256.digest_length]u8;
 
@@ -17,6 +16,7 @@ pub const Inspection = struct {
     fingerprint: Fingerprint = @splat(0),
     readable: bool = false,
     exists: bool = false,
+    needs_migration: bool = false,
 };
 
 pub const MutationStatus = enum { success, no_change, refused, raced, unsafe_file, too_large, io };
@@ -90,6 +90,7 @@ pub const Parsed = struct {
     openai_count: usize,
     first_table_offset: usize,
     first_managed_offset: ?usize,
+    needs_migration: bool = false,
 };
 
 pub fn fingerprint(bytes: []const u8) Fingerprint {
@@ -142,21 +143,22 @@ pub fn classifyBytes(bytes: []const u8) Parsed {
         }
         cursor = line.end;
     }
-    const state: ui_model.CodexRoutingState = if (!safe)
+    const state: ui_model.CodexRoutingState = if (!safe or chatgpt_count > 1 or openai_count > 1)
         .conflicting
-    else if (chatgpt_count == 0 and openai_count == 0)
+    else if (openai_count == 0 and !chatgpt_exact)
         .off
-    else if (chatgpt_count == 1 and openai_count == 1 and chatgpt_exact and openai_exact)
+    else if (openai_count == 1 and openai_exact)
         .on
     else
         .conflicting;
     return .{
         .state = state,
-        .safe = safe,
+        .safe = safe and chatgpt_count <= 1,
         .chatgpt_count = chatgpt_count,
         .openai_count = openai_count,
         .first_table_offset = first_table,
         .first_managed_offset = first_managed,
+        .needs_migration = state == .on and chatgpt_exact,
     };
 }
 
@@ -169,10 +171,12 @@ fn managedAssignment(trimmed: []const u8) ?Assignment {
     const raw_value = stripInlineComment(trimmed[equal + 1 ..]) orelse return .{ .managed = managed, .exact = false, .safe = false };
     const value = std.mem.trim(u8, raw_value, " \t");
     const expected = switch (managed) {
-        .chatgpt => "\"" ++ chatgpt_value ++ "\"",
-        .openai => "\"" ++ openai_value ++ "\"",
+        .chatgpt => legacy_chatgpt_value,
+        .openai => openai_value,
     };
-    return .{ .managed = managed, .exact = std.mem.eql(u8, value, expected), .safe = true };
+    const quoted = value.len >= 2 and ((value[0] == '"' and value[value.len - 1] == '"') or
+        (value[0] == '\'' and value[value.len - 1] == '\''));
+    return .{ .managed = managed, .exact = quoted and std.mem.eql(u8, value[1 .. value.len - 1], expected), .safe = true };
 }
 
 fn parseManagedKey(raw: []const u8) ?Managed {
@@ -243,7 +247,7 @@ fn preferredNewline(bytes: []const u8) []const u8 {
 
 pub fn enabledBytes(allocator: std.mem.Allocator, original: []const u8, replace: bool) ![]u8 {
     const parsed = classifyBytes(original);
-    if (parsed.state == .on) return allocator.dupe(u8, original);
+    if (parsed.state == .on and !parsed.needs_migration) return allocator.dupe(u8, original);
     if (parsed.state == .conflicting and !replace) return error.Conflict;
     if (!parsed.safe and parsed.state == .conflicting) return error.Ambiguous;
 
@@ -264,16 +268,12 @@ pub fn enabledBytes(allocator: std.mem.Allocator, original: []const u8, replace:
     if (parsed.state == .off) adjusted_insertion = parsed.first_table_offset;
 
     const nl = preferredNewline(original);
-    var pair = std.ArrayList(u8).empty;
-    defer pair.deinit(allocator);
-    try pair.appendSlice(allocator, "chatgpt_base_url = \"");
-    try pair.appendSlice(allocator, chatgpt_value);
-    try pair.appendSlice(allocator, "\"");
-    try pair.appendSlice(allocator, nl);
-    try pair.appendSlice(allocator, "openai_base_url = \"");
-    try pair.appendSlice(allocator, openai_value);
-    try pair.appendSlice(allocator, "\"");
-    try pair.appendSlice(allocator, nl);
+    var settings = std.ArrayList(u8).empty;
+    defer settings.deinit(allocator);
+    try settings.appendSlice(allocator, "openai_base_url = \"");
+    try settings.appendSlice(allocator, openai_value);
+    try settings.appendSlice(allocator, "\"");
+    try settings.appendSlice(allocator, nl);
 
     var result = std.ArrayList(u8).empty;
     errdefer result.deinit(allocator);
@@ -281,7 +281,7 @@ pub fn enabledBytes(allocator: std.mem.Allocator, original: []const u8, replace:
     const point = @min(adjusted_insertion, source.len);
     try result.appendSlice(allocator, source[0..point]);
     if (point > 0 and source[point - 1] != '\n') try result.appendSlice(allocator, nl);
-    try result.appendSlice(allocator, pair.items);
+    try result.appendSlice(allocator, settings.items);
     try result.appendSlice(allocator, source[point..]);
     return result.toOwnedSlice(allocator);
 }
@@ -298,7 +298,7 @@ pub fn disabledBytes(allocator: std.mem.Allocator, original: []const u8) ![]u8 {
         const line = nextLine(original, cursor);
         const trimmed = std.mem.trim(u8, original[line.start..line.content_end], " \t");
         if (root and trimmed.len != 0 and trimmed[0] != '#' and trimmed[0] == '[') root = false;
-        const remove = root and managedAssignment(trimmed) != null;
+        const remove = root and ownedAssignment(trimmed);
         if (!remove) try result.appendSlice(allocator, original[line.start..line.end]);
         cursor = line.end;
     }
@@ -314,7 +314,14 @@ fn parseManagedAtRoot(bytes: []const u8, target_start: usize, target_trimmed: []
         if (root and trimmed.len != 0 and trimmed[0] != '#' and trimmed[0] == '[') root = false;
         cursor = line.end;
     }
-    return root and managedAssignment(target_trimmed) != null;
+    return root and ownedAssignment(target_trimmed);
+}
+
+// Preserve custom ChatGPT backends even when replacing a model-provider override.
+// Only the exact backend written by older CodexMulti releases belongs to us.
+fn ownedAssignment(trimmed: []const u8) bool {
+    const assignment = managedAssignment(trimmed) orelse return false;
+    return assignment.managed == .openai or assignment.exact;
 }
 
 pub const FileEditor = struct {
@@ -347,6 +354,7 @@ pub const FileEditor = struct {
             .fingerprint = fingerprint(loaded.bytes),
             .readable = true,
             .exists = true,
+            .needs_migration = parsed.needs_migration,
         };
     }
 
@@ -396,7 +404,7 @@ pub const FileEditor = struct {
                     },
                     .state = .off,
                 };
-                return .{ .status = .success, .state = .on, .fingerprint = fingerprint(canonical_pair) };
+                return .{ .status = .success, .state = .on, .fingerprint = fingerprint(canonical_config) };
             }
             return .{
                 .status = switch (err) {
@@ -410,7 +418,7 @@ pub const FileEditor = struct {
         defer self.allocator.free(loaded.bytes);
         const parsed = classifyBytes(loaded.bytes);
         const before = fingerprint(loaded.bytes);
-        if (kind == .enable and parsed.state == .on) return .{ .status = .no_change, .state = .on, .fingerprint = before };
+        if (kind == .enable and parsed.state == .on and !parsed.needs_migration) return .{ .status = .no_change, .state = .on, .fingerprint = before };
         if (kind == .disable and parsed.state == .off) return .{ .status = .no_change, .state = .off, .fingerprint = before };
         if (!parsed.safe or (kind == .disable and parsed.state == .conflicting) or
             (kind == .enable and parsed.state == .conflicting and !replace))
@@ -451,7 +459,7 @@ pub const FileEditor = struct {
         var file = try parent.createFile(self.io, temp, .{ .exclusive = true, .permissions = .fromMode(0o600) });
         defer file.close(self.io);
         defer parent.deleteFile(self.io, temp) catch {};
-        try file.writeStreamingAll(self.io, canonical_pair);
+        try file.writeStreamingAll(self.io, canonical_config);
         try @import("durable_file.zig").syncFile(self.io, file);
         if (self.before_rename) |hook| hook(path);
         try parent.renamePreserve(temp, parent, name, self.io);

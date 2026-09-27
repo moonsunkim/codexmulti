@@ -33,6 +33,8 @@ choose their order, and let automatic failover handle confirmed usage-limit erro
 <p align="center"><sub><a href="assets/screenshots/menu-bar-light.png">Light</a> · <a href="assets/screenshots/menu-bar-dark.png">Dark</a></sub></p>
 <p align="center"><sub>Your pool, account usage and reset times — one click from the menu bar. Demo accounts shown.</sub></p>
 
+Since 0.2.15, Failover routes model requests through the proxy while keeping Codex login and workspace discovery on the original ChatGPT backend. Existing CodexMulti routing settings migrate when the proxy is idle; restart Codex clients afterward. Custom ChatGPT backends and Off settings are preserved.
+
 ## What is Failover, and why use it?
 
 A coding task can stop when one Codex account reaches its usage limit, even if another account

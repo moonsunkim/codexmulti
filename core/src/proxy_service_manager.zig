@@ -589,7 +589,7 @@ pub const Controller = struct {
     pub fn reconcile(self: *Controller, now_unix_s: i64, eligible_account: bool, live: Live) void {
         if (!self.initialized or self.busy()) return;
         const enabled = self.wantsEnabled();
-        if (enabled and self.discovery.state == .running and self.discovery.health.state == .healthy and self.discovery.routing.state == .on) return;
+        if (enabled and self.discovery.state == .running and self.discovery.health.state == .healthy and self.discovery.routing.state == .on and !self.discovery.routing.needs_migration) return;
         if (!enabled and (self.target_enabled == null or
             (self.discovery.routing.state == .off and self.discovery.new_presence == .not_loaded))) return;
         if (self.discovery.health.state == .healthy and self.discovery.health.in_flight != 0) return;

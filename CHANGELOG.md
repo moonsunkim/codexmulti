@@ -6,6 +6,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.2.15]
+
+### Fixed
+
+- Keep Codex login and workspace discovery on their original ChatGPT backend while routing model requests through Failover. This fixes startup and login failures in recent Codex versions when the proxy account differs from the signed-in account or the workspace backend requires HTTPS.
+- Migrate the previous two-URL proxy configuration when the proxy is idle, with a backup and without restarting a healthy proxy. Preserve custom ChatGPT backends and existing Off settings.
+- Recognize model-only proxy settings as enabled and preserve unrelated configuration when turning Failover off.
+
 ## [0.2.14]
 
 ### Added

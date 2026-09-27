@@ -5,9 +5,9 @@ const testing = std.testing;
 
 test "routing classification covers off on conflicts duplicate and table-local keys" {
     try testing.expectEqual(.off, editor_mod.classifyBytes("model = \"gpt\"\n[profile.a]\nchatgpt_base_url = \"local\"\n").state);
-    try testing.expectEqual(.on, editor_mod.classifyBytes(editor_mod.canonical_pair).state);
-    try testing.expectEqual(.conflicting, editor_mod.classifyBytes("chatgpt_base_url = \"other\"\n").state);
-    try testing.expectEqual(.conflicting, editor_mod.classifyBytes(editor_mod.canonical_pair ++ "chatgpt_base_url = \"http://127.0.0.1:8787/backend-api/\"\n").state);
+    try testing.expectEqual(.on, editor_mod.classifyBytes(editor_mod.canonical_config).state);
+    try testing.expectEqual(.conflicting, editor_mod.classifyBytes("openai_base_url = \"other\"\n").state);
+    try testing.expectEqual(.conflicting, editor_mod.classifyBytes(editor_mod.canonical_config ++ editor_mod.canonical_config).state);
     try testing.expectEqual(.conflicting, editor_mod.classifyBytes("chatgpt_base_url = \"\"\"multi\nline\"\"\"\n").state);
 }
 
@@ -76,7 +76,7 @@ test "conflict replacement requires the confirmed fingerprint and refuses a pre-
     defer testing.allocator.free(fixture.root);
     defer testing.allocator.free(fixture.path);
     defer std.Io.Dir.cwd().deleteTree(testing.io, fixture.root) catch {};
-    try std.Io.Dir.cwd().writeFile(testing.io, .{ .sub_path = fixture.path, .data = "chatgpt_base_url = \"other\"\n" });
+    try std.Io.Dir.cwd().writeFile(testing.io, .{ .sub_path = fixture.path, .data = "openai_base_url = \"other\"\n" });
 
     var backing = editor_mod.FileEditor.init(testing.io, testing.allocator);
     backing.fixed_timestamp_ns = 987654321;
@@ -147,4 +147,75 @@ test "first enable never overwrites a concurrently created config" {
     const bytes = try std.Io.Dir.cwd().readFileAlloc(testing.io, fixture.path, testing.allocator, .limited(1024));
     defer testing.allocator.free(bytes);
     try testing.expectEqualStrings(race_replacement, bytes);
+}
+
+const legacy_config = "chatgpt_base_url = \"http://127.0.0.1:8787/backend-api/\"\n" ++ editor_mod.canonical_config;
+
+test "legacy routing migrates once without altering unrelated settings" {
+    const original = "# keep\nmodel = \"gpt\"\n" ++ legacy_config ++ "[projects.work]\nchatgpt_base_url = \"project-local\"\n";
+    const before = editor_mod.classifyBytes(original);
+    try testing.expectEqual(.on, before.state);
+    try testing.expect(before.needs_migration);
+    const migrated = try editor_mod.enabledBytes(testing.allocator, original, false);
+    defer testing.allocator.free(migrated);
+    try testing.expectEqualStrings("# keep\nmodel = \"gpt\"\n" ++ editor_mod.canonical_config ++ "[projects.work]\nchatgpt_base_url = \"project-local\"\n", migrated);
+    try testing.expect(!editor_mod.classifyBytes(migrated).needs_migration);
+    const again = try editor_mod.enabledBytes(testing.allocator, migrated, false);
+    defer testing.allocator.free(again);
+    try testing.expectEqualStrings(migrated, again);
+    const disabled = try editor_mod.disabledBytes(testing.allocator, original);
+    defer testing.allocator.free(disabled);
+    try testing.expectEqualStrings("# keep\nmodel = \"gpt\"\n[projects.work]\nchatgpt_base_url = \"project-local\"\n", disabled);
+}
+
+test "custom ChatGPT backend survives enable disable and provider conflict replacement" {
+    const custom = "chatgpt_base_url = \"https://enterprise.example/backend-api/\" # keep\n";
+    try testing.expectEqual(.off, editor_mod.classifyBytes(custom).state);
+    const enabled = try editor_mod.enabledBytes(testing.allocator, custom, false);
+    defer testing.allocator.free(enabled);
+    try testing.expectEqual(.on, editor_mod.classifyBytes(enabled).state);
+    try testing.expect(!editor_mod.classifyBytes(enabled).needs_migration);
+    const disabled = try editor_mod.disabledBytes(testing.allocator, enabled);
+    defer testing.allocator.free(disabled);
+    try testing.expectEqualStrings(custom, disabled);
+    const replaced = try editor_mod.enabledBytes(testing.allocator, custom ++ "openai_base_url = \"https://other.example/\"\n", true);
+    defer testing.allocator.free(replaced);
+    try testing.expect(std.mem.indexOf(u8, replaced, custom) != null);
+    try testing.expectEqual(.on, editor_mod.classifyBytes(replaced).state);
+}
+
+test "literal quoted legacy settings migrate with CRLF and preserve commented settings" {
+    const original = "# chatgpt_base_url = \"http://127.0.0.1:8787/backend-api/\"\r\n" ++
+        "'chatgpt_base_url' = 'http://127.0.0.1:8787/backend-api/' # legacy\r\n" ++
+        "openai_base_url = 'http://127.0.0.1:8787/backend-api/codex'\r\n";
+    try testing.expect(editor_mod.classifyBytes(original).needs_migration);
+    const migrated = try editor_mod.enabledBytes(testing.allocator, original, false);
+    defer testing.allocator.free(migrated);
+    try testing.expectEqualStrings("# chatgpt_base_url = \"http://127.0.0.1:8787/backend-api/\"\r\nopenai_base_url = \"http://127.0.0.1:8787/backend-api/codex\"\r\n", migrated);
+}
+
+test "file migration backs up legacy bytes and does not repeat" {
+    const fixture = try setupRoot("routing-workspace-migration");
+    defer testing.allocator.free(fixture.root);
+    defer testing.allocator.free(fixture.path);
+    defer std.Io.Dir.cwd().deleteTree(testing.io, fixture.root) catch {};
+    try std.Io.Dir.cwd().writeFile(testing.io, .{ .sub_path = fixture.path, .data = legacy_config });
+    var backing = editor_mod.FileEditor.init(testing.io, testing.allocator);
+    backing.fixed_timestamp_ns = 456789;
+    const editor = backing.editor();
+    try testing.expect(editor.inspect(fixture.path).needs_migration);
+    try testing.expectEqual(.success, editor.enable(fixture.path, false, null).status);
+    try testing.expect(!editor.inspect(fixture.path).needs_migration);
+    const backup_path = try std.fmt.allocPrint(testing.allocator, "{s}.bak.456789", .{fixture.path});
+    defer testing.allocator.free(backup_path);
+    const backup = try std.Io.Dir.cwd().readFileAlloc(testing.io, backup_path, testing.allocator, .limited(1024));
+    defer testing.allocator.free(backup);
+    try testing.expectEqualStrings(legacy_config, backup);
+    try testing.expectEqual(.no_change, editor.enable(fixture.path, false, null).status);
+}
+
+test "duplicate ChatGPT backends are never rewritten even with replacement requested" {
+    const original = "chatgpt_base_url = \"https://one.example/\"\nchatgpt_base_url = \"https://two.example/\"\n" ++ editor_mod.canonical_config;
+    try testing.expectEqual(.conflicting, editor_mod.classifyBytes(original).state);
+    try testing.expectError(error.Ambiguous, editor_mod.enabledBytes(testing.allocator, original, true));
 }

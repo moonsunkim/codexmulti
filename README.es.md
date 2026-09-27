@@ -31,6 +31,8 @@ CodexMulti reúne tus cuentas de Codex en una aplicación para la barra de menú
 <p align="center"><sub><a href="assets/screenshots/menu-bar-light.png">Claro</a> · <a href="assets/screenshots/menu-bar-dark.png">Oscuro</a></sub></p>
 <p align="center"><sub>Consulta el porcentaje restante promedio, el uso de cada cuenta y los tiempos de reinicio desde la barra de menús. Se muestran cuentas de ejemplo.</sub></p>
 
+Desde la versión 0.2.15, Failover envía solo las solicitudes al modelo a través del proxy; el inicio de sesión y la consulta del espacio de trabajo de Codex conservan el backend original de ChatGPT. La configuración anterior se migra cuando el proxy está inactivo. Reinicia los clientes de Codex después de la migración. Se conservan los backends personalizados de ChatGPT y el estado desactivado.
+
 ## ¿Qué es el cambio automático y para qué sirve?
 
 Una tarea de programación puede detenerse cuando una cuenta de Codex llega a su límite, aunque otra todavía tenga capacidad. Sin el cambio automático, tendrías que elegir otra cuenta y volver a enviar la solicitud.

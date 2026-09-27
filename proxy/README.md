@@ -122,12 +122,13 @@ curl --fail-with-body -X POST \
 
 The daemon rereads only the config path fixed at startup. Any non-account setting change returns `409 restart_required`; an active upstream request returns `409 proxy_busy`. Candidate config and credentials are fully validated before commit. The commit gate returns `503 proxy_reconfiguring` to new upstream admission, atomically saves migrated state, and swaps the full account generation. Pause, cooldown, invalid state, and cursor ownership follow exact normalized `auth_file` matches; new files start `READY`, removed files disappear, and a removed cursor falls back to the new first account.
 
-To route Codex through the proxy, preserve the rest of `~/.codex/config.toml` and add only these top-level keys:
+To route Codex through the proxy, preserve the rest of `~/.codex/config.toml` and add this top-level key:
 
 ```toml
-chatgpt_base_url = "http://127.0.0.1:8787/backend-api/"
 openai_base_url = "http://127.0.0.1:8787/backend-api/codex"
 ```
+
+Leave `chatgpt_base_url` at its default, or preserve an existing custom ChatGPT backend. Recent Codex versions validate the signed-in workspace during startup and require an HTTPS workspace backend. Sending account discovery through the account-switching proxy can return a different workspace or fail HTTPS validation. Only model requests should use the proxy. CodexMulti 0.2.15 migrates its previous two-URL configuration when idle; restart Codex clients after migration. Codex's login and account views retain the signed-in account, while CodexMulti shows the proxy account and its usage.
 
 Codex WebSocket handshakes are relayed to the configured upstream. If the upstream rejects a handshake, that status and body are returned unchanged and Codex may choose its HTTP/SSE fallback.
 

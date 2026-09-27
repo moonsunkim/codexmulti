@@ -82,6 +82,8 @@ native runtime check also confirms that Off waits for a partial HTTP request and
 Cancellation and rollback retain a deferred build/runtime record across later service commands;
 GUI restart does not retry that build. Settings provides an explicit engine-apply action.
 
+Release 0.2.15 uses activation revision 2 so immutable runtimes pick up the maintenance helper's model-only routing migration and custom-backend preservation.
+
 `activation_revision` must increase for changes to maintenance behavior that affect runtime
 activation or its persisted artifacts. GUI copy, app version and signing time alone do not justify
 changing it. The pinned Developer ID requirement currently belongs to the CodexMulti release team;

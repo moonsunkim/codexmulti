@@ -1287,9 +1287,9 @@ test "refresh rereads external routing changes without extra proxy requests or s
     };
     harness.proxy_exchange.replies = &replies;
     const cases = [_]struct { bytes: []const u8, state: ui_model.CodexRoutingState }{
-        .{ .bytes = proxy_service_manager.codex_routing.canonical_pair, .state = .on },
+        .{ .bytes = proxy_service_manager.codex_routing.canonical_config, .state = .on },
         .{ .bytes = "# direct connection\n", .state = .off },
-        .{ .bytes = "chatgpt_base_url = \"https://example.invalid/\"\n", .state = .conflicting },
+        .{ .bytes = "openai_base_url = \"https://example.invalid/\"\n", .state = .conflicting },
     };
     for (cases, 0..) |case, index| {
         routing.bytes = case.bytes;

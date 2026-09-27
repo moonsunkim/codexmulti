@@ -31,6 +31,8 @@ CodexMulti 将你的 Codex 账户集中在一个 macOS 菜单栏应用中。查�
 <p align="center"><sub><a href="assets/screenshots/menu-bar-light.png">浅色</a> · <a href="assets/screenshots/menu-bar-dark.png">深色</a></sub></p>
 <p align="center"><sub>从菜单栏即可查看平均剩余比例、各账户用量和重置时间。图中使用示例账户。</sub></p>
 
+从 0.2.15 起，Failover 仅将模型请求发送到代理，Codex 登录和工作区查询仍使用原来的 ChatGPT 后端。旧版 CodexMulti 连接设置会在代理空闲时迁移；之后请重启 Codex 客户端。自定义 ChatGPT 后端和关闭状态会保留。
+
 ## 什么是自动切换，为什么要使用它？
 
 一个 Codex 账户达到用量限额时，即使其他账户仍有额度，编程任务也可能中断。没有自动切换时，你需要自行选择其他账户并重试请求。

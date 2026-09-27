@@ -32,6 +32,8 @@ CodexMulti는 여러 Codex 계정을 한곳에서 관리하는 macOS 메뉴 막�
 <p align="center"><sub><a href="assets/screenshots/menu-bar-light.png">라이트</a> · <a href="assets/screenshots/menu-bar-dark.png">다크</a></sub></p>
 <p align="center"><sub>메뉴 막대에서 풀의 평균 잔여율과 계정별 사용량·재설정 시간을 바로 확인합니다. 예시용 계정입니다.</sub></p>
 
+0.2.15부터 Failover는 모델 요청만 프록시로 보내고, Codex 로그인과 워크스페이스 조회는 원래 ChatGPT 서버로 보냅니다. 이전 CodexMulti 연결 설정은 프록시가 유휴 상태일 때 전환됩니다. 전환 후 Codex 클라이언트를 다시 시작하세요. 별도로 지정한 ChatGPT 서버와 꺼짐 설정은 보존합니다.
+
 ## Failover는 어떤 문제를 해결하나요?
 
 코딩 작업 중 한 계정의 사용 한도에 도달하면, 다른 계정에 사용량이 남아 있어도 작업이 멈출 수 있습니다.

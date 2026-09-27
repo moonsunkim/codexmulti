@@ -41,7 +41,8 @@ const manifest = {
   launcher_signed_sha256: await hashFile(launcher),
   agent_content_sha256: previous?.agent_content_sha256 ?? await hashFile(agent),
   agent_signed_sha256: await hashFile(agent),
-  activation_revision: 1,
+  // The maintenance helper now migrates login routing and preserves custom backends.
+  activation_revision: 2,
   update_protocol: 1,
   config_schema: 1,
   state_schema: 1,

@@ -130,6 +130,7 @@ const FakeRouting = struct {
     trace: *Trace,
     state: ui_model.CodexRoutingState = .off,
     fingerprint: routing.Fingerprint = @splat(7),
+    needs_migration: bool = false,
 
     const vtable: routing.Editor.VTable = .{ .inspect = inspect, .enable = enable, .disable = disable };
     fn editor(self: *FakeRouting) routing.Editor {
@@ -138,13 +139,14 @@ const FakeRouting = struct {
     fn inspect(context: *anyopaque, _: []const u8) routing.Inspection {
         const self: *FakeRouting = @ptrCast(@alignCast(context));
         self.trace.push(.routing_inspect);
-        return .{ .state = self.state, .fingerprint = self.fingerprint, .readable = true, .exists = true };
+        return .{ .state = self.state, .fingerprint = self.fingerprint, .readable = true, .exists = true, .needs_migration = self.needs_migration };
     }
     fn enable(context: *anyopaque, _: []const u8, replace: bool, expected: ?routing.Fingerprint) routing.Mutation {
         const self: *FakeRouting = @ptrCast(@alignCast(context));
         self.trace.push(.routing_enable);
         if (self.state == .conflicting and (!replace or expected == null or !std.mem.eql(u8, &expected.?, &self.fingerprint))) return .{ .status = .refused, .state = self.state };
         self.state = .on;
+        self.needs_migration = false;
         return .{ .status = .success, .state = .on, .fingerprint = self.fingerprint };
     }
     fn disable(context: *anyopaque, _: []const u8) routing.Mutation {
@@ -789,4 +791,28 @@ test "turning back on cancels a queued off request before any service mutation" 
     harness.controller.reconcile(103, true, harness.live());
     try testing.expect(harness.controller.fact(true, &harness.paths).enabled);
     try testing.expectEqual(@as(usize, 0), harness.trace.count(.bootout_new));
+}
+
+test "enabled legacy routing migrates when idle without restarting the healthy proxy" {
+    var harness = try Harness.init();
+    harness.rebind();
+    harness.launch.new_loaded = true;
+    harness.artifacts.value = .{ .plist_exists = true, .receipt_exists = true, .plist_matches = true, .receipt_matches = true, .bundle_matches = true };
+    harness.routing_editor.state = .on;
+    harness.routing_editor.needs_migration = true;
+    harness.health.set(&.{.{ .state = .healthy, .in_flight = 1 }});
+    harness.refresh();
+    harness.controller.reconcile(100, true, harness.live());
+    try testing.expectEqual(@as(usize, 0), harness.trace.count(.routing_enable));
+    harness.health.set(&.{.{ .state = .healthy, .in_flight = 0 }});
+    harness.controller.observeProxyHealth(.{ .state = .healthy, .in_flight = 0 });
+    harness.controller.reconcile(103, true, harness.live());
+    try harness.drain();
+    try testing.expectEqual(@as(usize, 1), harness.trace.count(.routing_enable));
+    try testing.expect(!harness.controller.discovery.routing.needs_migration);
+    try testing.expect(harness.controller.wantsEnabled());
+    try testing.expectEqual(@as(usize, 0), harness.trace.count(.bootout_new));
+    try testing.expectEqual(@as(usize, 0), harness.trace.count(.bootstrap_new));
+    harness.controller.reconcile(106, true, harness.live());
+    try testing.expectEqual(@as(usize, 1), harness.trace.count(.routing_enable));
 }

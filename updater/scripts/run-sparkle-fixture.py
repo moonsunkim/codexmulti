@@ -161,7 +161,7 @@ try:
                 assert auth_before == (runtime / 'auth.json').read_bytes()
                 assert json.loads((runtime / 'proxy-settings.json').read_text())['enabled'] is True
                 routing = tomllib.loads((root / 'Home/.codex/config.toml').read_text())
-                assert routing['chatgpt_base_url'] == 'http://127.0.0.1:8787/backend-api/'
+                assert 'chatgpt_base_url' not in routing
                 assert routing['openai_base_url'] == 'http://127.0.0.1:8787/backend-api/codex'
                 assert any(event['event'] == 'core-shutdown-joined' for event in events)
                 receipt = dict(success, actual_legacy_migration=True, authentication_preserved=True,
